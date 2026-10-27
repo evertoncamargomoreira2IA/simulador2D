@@ -77,3 +77,37 @@ describe('motor DES', () => {
     expect(k.taktCompliance).toBeGreaterThan(0);
   });
 });
+
+describe('modelos montados à mão', () => {
+  it('fonte sozinha ou ligada direto ao produto acabado não trava', () => {
+    const lone = buildLine([{ name: 'Raw Material', type: 'source' }], { name: 'x' });
+    lone.links = [];
+    lone.nodes = lone.nodes.filter((n) => n.type === 'source');
+    const a = new Simulator(lone);
+    a.runToEnd();
+    expect(a.completed).toBe(0);
+
+    const direct = buildLine([{ name: 'Raw Material', type: 'source' }, { name: 'FG', type: 'sink' }], { name: 'y' });
+    direct.settings.duration = 100;
+    direct.settings.transportSpeed = 0;
+    const b = new Simulator(direct);
+    b.runToEnd();
+    expect(b.completed).toBeGreaterThan(90);
+    expect(b.completed).toBeLessThanOrEqual(101);
+  });
+
+  it('ciclo de tempo zero é interrompido com mensagem', () => {
+    const m = buildLine(
+      [
+        { name: 'Raw Material', type: 'source', next: 'A' },
+        { name: 'A', type: 'buffer', cycleTime: 0, next: 'B' },
+        { name: 'B', type: 'buffer', cycleTime: 0, next: 'A' },
+      ],
+      { name: 'z' },
+    );
+    m.settings.transportSpeed = 0;
+    const sim = new Simulator(m);
+    sim.runToEnd();
+    expect(sim.error).toBeTruthy();
+  });
+});

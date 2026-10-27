@@ -41,6 +41,7 @@ export function Toolbar() {
   const runToEnd = () => {
     st().sim.runToEnd();
     st().setRun('done');
+    if (st().sim.error) st().setMessage(st().sim.error!);
     st().refresh(true);
   };
   const replay = () => {
@@ -56,7 +57,7 @@ export function Toolbar() {
       </div>
 
       <div className="group" role="group" aria-label="Arquivo">
-        <button className="btn" onClick={() => st().setModel({ name: 'Novo modelo', nodes: [], links: [], settings: { ...DEFAULT_SETTINGS } }, 'Modelo vazio. Arraste blocos da paleta para o canvas.')}>
+        <button className="btn" onClick={() => st().setModel({ name: 'Novo modelo', nodes: [], links: [], settings: { ...DEFAULT_SETTINGS } }, 'Modelo vazio. Clique em Source na paleta e depois em Machine, Buffer… Cada bloco novo já sai ligado ao anterior.')}>
           Novo
         </button>
         <select

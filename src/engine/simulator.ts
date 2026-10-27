@@ -63,6 +63,7 @@ export interface NodeRt {
   /** Peças que a inspeção mandou para retrabalho. */
   rejected: number;
   released: number;
+  refillPending: boolean;
 }
 
 export interface Transit {
@@ -72,7 +73,7 @@ export interface Transit {
   end: number;
 }
 
-type EvKind = 'create' | 'end' | 'arrive' | 'fail' | 'repair' | 'wake' | 'sample' | 'warmup';
+type EvKind = 'create' | 'refill' | 'end' | 'arrive' | 'fail' | 'repair' | 'wake' | 'sample' | 'warmup';
 interface SimEvent {
   t: number;
   seq: number;
@@ -89,6 +90,11 @@ export interface TimelinePoint {
   wip: number;
   throughputPerHour: number;
 }
+
+/** Intervalo mínimo (s) entre peças de uma fonte ilimitada quando a saída está livre. */
+const SOURCE_MIN_GAP = 1;
+/** Proteção contra loops de tempo zero (modelo com ciclo sem tempo). */
+const MAX_SAME_TIME_EVENTS = 200_000;
 
 const STATES: NodeState[] = ['working', 'starved', 'blocked', 'down', 'setup', 'off'];
 const zeroStates = (): Record<NodeState, number> =>
@@ -125,6 +131,9 @@ export class Simulator {
   private entitySeq = 0;
   private lastSample = { t: 0, completed: 0 };
   readonly sampleEvery: number;
+  /** Preenchido quando a simulação é interrompida por um modelo inválido. */
+  error: string | null = null;
+  private sameTimeEvents = 0;
 
   constructor(model: Model) {
     this.model = model;
@@ -149,6 +158,7 @@ export class Simulator {
         failures: 0,
         rejected: 0,
         released: 0,
+        refillPending: false,
       };
       this.nodes.push(n);
       this.byId.set(def.id, n);
@@ -209,6 +219,15 @@ export class Simulator {
       const ev = this.heap.peek();
       if (!ev || ev.t > target) break;
       this.heap.pop();
+      if (ev.t === this.now) {
+        if (++this.sameTimeEvents > MAX_SAME_TIME_EVENTS) {
+          this.error = 'A simulação entrou em loop sem avançar o tempo. Verifique ciclos de fluxo com tempo de ciclo 0.';
+          this.now = this.duration;
+          return;
+        }
+      } else {
+        this.sameTimeEvents = 0;
+      }
       this.now = ev.t;
       this.handle(ev);
       this.drainRetry();
@@ -224,10 +243,15 @@ export class Simulator {
     const n = ev.node;
     switch (ev.kind) {
       case 'create':
+        if (n!.out.length === 0) break;
         if (n!.def.maxArrivals > 0 && n!.released + n!.done.length >= n!.def.maxArrivals) break;
         n!.done.push(this.newEntity(n!));
         this.tryPush(n!);
         this.schedule(this.now + n!.def.interarrival, 'create', { node: n });
+        break;
+      case 'refill':
+        n!.refillPending = false;
+        this.refillSource(n!);
         break;
       case 'end':
         this.onEnd(n!, ev.job!, ev.token!);
@@ -306,11 +330,20 @@ export class Simulator {
     return occ < Math.max(1, n.def.capacity) + Math.max(0, n.def.queueCap);
   }
 
+  /**
+   * Fonte ilimitada: mantém sempre uma peça pronta na saída. Se a peça sair na hora
+   * (destino com folga, ex.: ligado direto ao produto acabado), a próxima só é criada
+   * 1 s depois, para nunca gerar infinitas peças no mesmo instante.
+   */
   private refillSource(src: NodeRt): void {
     const max = src.def.maxArrivals;
-    while (src.done.length === 0 && (max <= 0 || src.released < max)) {
-      src.done.push(this.newEntity(src));
-      if (!this.tryPush(src, false)) break;
+    if (src.out.length === 0 || src.refillPending || src.done.length > 0) return;
+    if (max > 0 && src.released >= max) return;
+    src.done.push(this.newEntity(src));
+    this.tryPush(src, false);
+    if (src.done.length === 0) {
+      src.refillPending = true;
+      this.schedule(this.now + SOURCE_MIN_GAP, 'refill', { node: src });
     }
   }
 

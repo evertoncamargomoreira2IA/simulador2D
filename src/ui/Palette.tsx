@@ -41,12 +41,20 @@ export function Palette() {
                 e.dataTransfer.effectAllowed = 'copy';
               }}
               onClick={() => {
-                const nodes = useStore.getState().model.nodes;
-                const x = nodes.length ? Math.max(...nodes.map((n) => n.x)) + 120 : 160;
-                const y = nodes.length ? nodes[nodes.length - 1].y : 160;
-                useStore.getState().addNode(b.type, x, y);
+                // Clique: adiciona à direita do bloco selecionado e já liga os dois.
+                const st = useStore.getState();
+                const nodes = st.model.nodes;
+                const prev = st.selected.length === 1 ? nodes.find((n) => n.id === st.selected[0]) : undefined;
+                const x = prev ? prev.x + 120 : nodes.length ? Math.max(...nodes.map((n) => n.x)) + 120 : 160;
+                const y = prev ? prev.y : nodes.length ? nodes[nodes.length - 1].y : 160;
+                st.addNode(b.type, x, y);
+                const added = useStore.getState().selected[0];
+                if (prev && prev.type !== 'sink' && b.type !== 'source' && added) {
+                  useStore.getState().addLink(prev.id, added);
+                  useStore.getState().select([added]);
+                }
               }}
-              title={`${b.desc}. Arraste para o canvas.`}
+              title={`${b.desc}. Arraste para o canvas, ou clique para adicionar ligado ao bloco selecionado.`}
             >
               <Icon type={b.type} />
               <span>
@@ -85,7 +93,7 @@ export function Palette() {
         </div>
       </section>
       <p className="hint">
-        Roda do mouse: zoom. Arrastar o fundo: mover. Shift+arrastar: selecionar área. Delete: apagar seleção.
+        Clique num bloco da paleta para adicioná-lo já ligado ao bloco selecionado. Roda do mouse: zoom. Arrastar o fundo: mover. Shift+arrastar: selecionar área. Delete: apagar seleção.
       </p>
     </aside>
   );

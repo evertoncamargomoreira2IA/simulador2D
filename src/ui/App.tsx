@@ -20,6 +20,7 @@ export function App() {
         st.sim.advanceTo(st.sim.now + dt * st.speed);
         const done = st.sim.finished;
         if (done) st.setRun('done');
+        if (st.sim.error) st.setMessage(st.sim.error);
         const kpiDue = done || t - lastKpi > 300;
         if (kpiDue) lastKpi = t;
         st.refresh(kpiDue);
