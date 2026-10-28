@@ -43,6 +43,16 @@ npm run build:single # gera dist-single/index.html (arquivo único, abre direto 
 - **Painel de pessoas**: ocupação por grupo (ocioso / equilibrado / sobrecarga), distância percorrida e ranking dos 5 gargalos.
 - Modelo de exemplo privado opcional: se existir `private/example.json` (fora do git), ele vira o modelo inicial do build.
 
+## O que tem na Sprint 3
+
+- **Agrupamento** (`batchSize`): o posto junta N peças numa carga (carrinho de 15, pallet de 48) e quebra cargas maiores quando preciso. Tempos e distâncias são somados por unidade.
+- **Ponto de medição** (`outputPoint`): throughput, lead time e takt medidos no fim da linha, mesmo com expedição depois.
+- **Distância real no link** (`length`): trechos fora de escala no desenho (ex.: AGV de 200 m até a expedição).
+- **Áreas** (`zones`): regiões desenhadas no canvas, como a expedição fora do layout.
+- **Bonequinhos** nos postos com operador fixo (animados quando o posto trabalha) e nos grupos de operadores; empilhadeira e AGV mostram a carga.
+- **Total cycle time** (conteúdo de trabalho por unidade, com submontagens) separado do lead time (com esperas). Tile de cargas expedidas.
+- Paleta: Source com um posto selecionado entra à esquerda já alimentando o posto; blocos sem seleção entram no centro da tela; ligações inválidas (entrada em Source, saída de Finished Goods) são recusadas.
+
 ## Formato da tabela de importação
 
 Uma linha por bloco. Só a coluna `nome` é obrigatória; sem `proximo`, os blocos são ligados em

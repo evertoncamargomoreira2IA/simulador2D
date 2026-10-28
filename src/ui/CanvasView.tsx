@@ -50,6 +50,11 @@ export function CanvasView() {
   const fitKey = model.name + model.nodes.length + (model.background ? 'bg' : '');
   useEffect(() => fit(), [fitKey, size.w > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Guarda o centro visível para a paleta colocar blocos novos onde o usuário está olhando.
+  useEffect(() => {
+    useStore.getState().setViewCenter({ x: (size.w / 2 - view.x) / view.scale, y: (size.h / 2 - view.y) / view.scale });
+  }, [view, size]);
+
   function fit() {
     const ns = useStore.getState().model.nodes;
     const el = wrap.current;
@@ -58,6 +63,7 @@ export function CanvasView() {
     const xs = ns.map((n) => n.x);
     const ys = ns.map((n) => n.y);
     if (bg) xs.push(0, bg.width), ys.push(0, bg.height);
+    for (const z of useStore.getState().model.zones ?? []) xs.push(z.x, z.x + z.w), ys.push(z.y, z.y + z.h);
     const minX = Math.min(...xs) - 80;
     const maxX = Math.max(...xs) + 80;
     const minY = Math.min(...ys) - 80;
@@ -184,6 +190,18 @@ export function CanvasView() {
           </Layer>
         )}
 
+        {(model.zones?.length ?? 0) > 0 && (
+          <Layer listening={false}>
+            {model.zones!.map((z) => (
+              <Group key={z.id}>
+                <Rect x={z.x} y={z.y} width={z.w} height={z.h} cornerRadius={10} stroke={colors.accent} strokeWidth={1.5} dash={[8, 6]} fill={colors.accent} opacity={0.06} />
+                <Rect x={z.x} y={z.y} width={z.w} height={z.h} cornerRadius={10} stroke={colors.accent} strokeWidth={1.5} dash={[8, 6]} opacity={0.7} />
+                <Text x={z.x + 12} y={z.y + 10} text={z.name.toUpperCase()} fontSize={14} fontStyle="bold" letterSpacing={1.5} fill={colors.accent} />
+              </Group>
+            ))}
+          </Layer>
+        )}
+
         {layers.links && (
           <Layer>
             {model.links.map((l) => {
@@ -223,6 +241,19 @@ export function CanvasView() {
                       useStore.getState().select([], l.id);
                     }}
                   />
+                  {!!l.length && layers.labels && (
+                    <Text
+                      x={(pts[0] + pts[2]) / 2 - 60}
+                      y={(pts[1] + pts[3]) / 2 + 6}
+                      width={120}
+                      align="center"
+                      text={`${l.length} m`}
+                      fontSize={12}
+                      fontStyle="bold"
+                      fill={byVehicle ? colors.human : colors.muted}
+                      listening={false}
+                    />
+                  )}
                   {multi && layers.labels && (
                     <Text
                       x={(pts[0] + pts[2]) / 2 + 4}
@@ -252,6 +283,8 @@ export function CanvasView() {
                 bottleneck={kpi.bottleneckId === n.id && kpi.completed > 0}
                 draggable={draggable}
                 labels={layers.labels}
+                people={layers.people}
+                now={sim.now}
                 stage={stageRef}
                 onSelect={(add) => {
                   const st = useStore.getState();
@@ -285,11 +318,14 @@ export function CanvasView() {
               const span = t.end - t.start;
               const f = span > 0 ? Math.min(1, Math.max(0, (sim.now - t.start) / span)) : 1;
               const pts = edgePoints(a, b);
+              const x = pts[0] + (pts[2] - pts[0]) * f;
+              const y = pts[1] + (pts[3] - pts[1]) * f;
+              if (t.entity.qty > 1) return <Load key={t.entity.id} x={x} y={y} qty={t.entity.qty} colors={colors} />;
               return (
                 <Circle
                   key={t.entity.id}
-                  x={pts[0] + (pts[2] - pts[0]) * f}
-                  y={pts[1] + (pts[3] - pts[1]) * f}
+                  x={x}
+                  y={y}
                   radius={5}
                   fill={t.entity.reworks > 0 ? colors.state.blocked : colors.transport}
                   stroke={colors.raised}
@@ -371,9 +407,11 @@ interface NodeShapeProps {
   labels: boolean;
   stage: React.RefObject<Konva.Stage | null>;
   onSelect: (add: boolean) => void;
+  people: boolean;
+  now: number;
 }
 
-function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, stage, onSelect }: NodeShapeProps) {
+function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, stage, onSelect, people, now }: NodeShapeProps) {
   const stateColor = colors.state[rt.state];
   const stroke = selected ? colors.accent : stateColor;
   const sw = selected ? 3 : 2;
@@ -383,6 +421,11 @@ function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, s
   const inProc = rt.processing.length + rt.done.length;
   const isBuffer = def.type === 'buffer';
   const cap = Math.max(1, def.capacity);
+  const batch = Math.round(def.batchSize ?? 0);
+  let queuedUnits = 0;
+  for (const e of rt.queue) queuedUnits += e.qty;
+  const crew = Math.min(3, Math.max(0, Math.round(def.operators)));
+  const showCrew = crew > 0 && !def.poolId && !def.area && people && def.type !== 'source' && def.type !== 'sink' && def.type !== 'buffer';
 
   return (
     <Group
@@ -465,6 +508,26 @@ function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, s
       {Array.from({ length: Math.min(q, 6) }).map((_, i) => (
         <Rect key={i} x={-W / 2 - 9} y={H / 2 - 8 - i * 7} width={6} height={5} fill={colors.muted} listening={false} />
       ))}
+      {showCrew && (
+        <Group y={-H / 2 - 13} listening={false}>
+          {Array.from({ length: crew }).map((_, i) => (
+            <Group key={i} x={(i - (crew - 1) / 2) * 15}>
+              <Person
+                color={rt.state === 'working' ? colors.human : mixHex(colors.human, colors.muted, 0.6)}
+                outline={colors.canvas}
+                phase={rt.state === 'working' ? now + i * 1.7 + def.x * 0.01 : 0}
+              />
+            </Group>
+          ))}
+        </Group>
+      )}
+      {batch > 1 && (
+        <Group listening={false}>
+          <Rect x={-W / 2} y={H / 2 - 7} width={W} height={4} fill={colors.line} />
+          <Rect x={-W / 2} y={H / 2 - 7} width={W * Math.min(1, queuedUnits / batch)} height={4} fill={colors.accent} />
+          <Text x={W / 2 + 4} y={-6} text={`${queuedUnits}/${batch}`} fontSize={11} fontStyle="bold" fill={colors.accent} />
+        </Group>
+      )}
       {labels && (
         <>
           <Text x={-50} y={H / 2 + 5} width={100} align="center" text={def.name} fontSize={11} fill={colors.ink} listening={false} wrap="none" ellipsis />
@@ -551,6 +614,8 @@ const Plant = memo(function Plant({ bg, line, text }: { bg: Background; line: st
 
 /** Operadores (círculos) e veículos (retângulos) nas posições atuais. */
 function Units({ sim, colors, labels }: { sim: Simulator; colors: CanvasColors; labels: boolean }) {
+  const carrying = new Map<string, number>();
+  for (const t of sim.transits) if (t.unit) carrying.set(t.unit.id, t.entity.qty);
   return (
     <>
       {sim.pools.flatMap((p) =>
@@ -560,20 +625,48 @@ function Units({ sim, colors, labels }: { sim: Simulator; colors: CanvasColors; 
           if (p.def.kind === 'operator')
             return (
               <Group key={u.id} x={pos.x} y={pos.y}>
-                <Circle radius={7} fill={c} stroke={colors.canvas} strokeWidth={2} />
-                <Circle y={-2} radius={2.5} fill={colors.canvas} />
-                {labels && <Text x={-12} y={9} width={24} align="center" text={`${i + 1}`} fontSize={9} fill={colors.human} />}
+                <Person color={c} outline={colors.canvas} phase={u.busy ? sim.now + i : 0} scale={1.3} />
+                {labels && <Text x={-12} y={12} width={24} align="center" text={`${i + 1}`} fontSize={9} fill={colors.human} />}
               </Group>
             );
+          const qty = carrying.get(u.id) ?? 0;
           return (
             <Group key={u.id} x={pos.x} y={pos.y}>
-              <Rect x={-11} y={-7} width={22} height={14} cornerRadius={3} fill={c} stroke={colors.canvas} strokeWidth={2} />
-              {u.loaded && <Rect x={-5} y={-4} width={10} height={8} fill={colors.transport} />}
+              <Rect x={-13} y={-8} width={26} height={16} cornerRadius={3} fill={c} stroke={colors.canvas} strokeWidth={2} />
+              {p.def.kind === 'forklift' && <Rect x={13} y={-6} width={7} height={2.5} fill={c} />}
+              {p.def.kind === 'forklift' && <Rect x={13} y={3.5} width={7} height={2.5} fill={c} />}
+              {u.loaded && <Rect x={-7} y={-5} width={14} height={10} fill={colors.transport} />}
+              {qty > 1 && <Text x={-20} y={10} width={40} align="center" text={`${qty} pç`} fontSize={10} fontStyle="bold" fill={colors.human} />}
+              {labels && <Text x={-30} y={-21} width={60} align="center" text={p.def.kind === 'agv' ? 'AGV' : 'Empilh.'} fontSize={9} fill={colors.muted} />}
             </Group>
           );
         }),
       )}
     </>
+  );
+}
+
+/** Bonequinho: cabeça e tronco; balança levemente enquanto trabalha. */
+function Person({ color, outline, phase, scale = 1 }: { color: string; outline: string; phase: number; scale?: number }) {
+  const bob = phase ? Math.sin(phase * 2.2) * 1.2 : 0;
+  const arm = phase ? Math.sin(phase * 3.1) * 2.5 : 0;
+  return (
+    <Group scaleX={scale} scaleY={scale} y={bob}>
+      <Rect x={-5} y={-1} width={10} height={9} cornerRadius={[5, 5, 2, 2]} fill={color} stroke={outline} strokeWidth={1} />
+      <Line points={[-5, 1, -8, 6 + arm]} stroke={color} strokeWidth={2} lineCap="round" />
+      <Line points={[5, 1, 8, 6 - arm]} stroke={color} strokeWidth={2} lineCap="round" />
+      <Circle y={-5} radius={3.6} fill={color} stroke={outline} strokeWidth={1} />
+    </Group>
+  );
+}
+
+/** Carga (carrinho ou pallet) em transporte, com a quantidade. */
+function Load({ x, y, qty, colors }: { x: number; y: number; qty: number; colors: CanvasColors }) {
+  return (
+    <Group x={x} y={y}>
+      <Rect x={-11} y={-8} width={22} height={16} cornerRadius={2} fill={colors.transport} stroke={colors.raised} strokeWidth={1.5} />
+      <Text x={-11} y={-5} width={22} align="center" text={String(qty)} fontSize={10} fontStyle="bold" fill={colors.raised} />
+    </Group>
   );
 }
 
@@ -600,7 +693,7 @@ function Body({ type, fill, stroke, sw }: { type: NodeType; fill: string; stroke
 }
 
 function glyph(t: NodeType): string {
-  return { source: 'MP', machine: 'M', buffer: 'BUF', inspection: 'QC', rework: 'RW', sink: 'FG' }[t];
+  return { source: 'ENT', machine: 'M', buffer: 'BUF', inspection: 'QC', rework: 'RW', sink: 'FG' }[t];
 }
 
 /** Pontos de um link, saindo da borda do bloco de origem até a borda do destino. */

@@ -42,6 +42,10 @@ export interface NodeDef {
   partBuffer?: number;
   /** Área ocupada pelas gigas/postos paralelos (px), centrada no bloco. Vazio = tudo no centro. */
   area?: { w: number; h: number };
+  /** Agrupamento: junta N peças numa carga (carrinho, pallet) antes de processar. 0/1 = sem. */
+  batchSize?: number;
+  /** Ponto de medição da produção da linha (throughput, lead time, takt). */
+  outputPoint?: boolean;
 }
 
 /** Posição de cada giga/posto paralelo do nó (1 ou 2 fileiras distribuídas na área). */
@@ -70,6 +74,8 @@ export interface LinkDef {
   role?: 'flow' | 'part';
   /** Pool de transporte (empilhadeira, AGV, AMR) que leva as peças por este link. */
   poolId?: string;
+  /** Distância real (m) quando o trecho não está em escala no desenho. */
+  length?: number;
 }
 
 export type PoolKind = 'operator' | 'forklift' | 'agv';
@@ -114,6 +120,16 @@ export interface SimSettings {
   pxPerMeter: number;
 }
 
+/** Área desenhada no canvas (ex.: expedição fora do layout). */
+export interface ZoneDef {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface Model {
   name: string;
   nodes: NodeDef[];
@@ -121,6 +137,7 @@ export interface Model {
   settings: SimSettings;
   pools?: PoolDef[];
   background?: Background;
+  zones?: ZoneDef[];
 }
 
 export type NodeState = 'working' | 'starved' | 'blocked' | 'resource' | 'down' | 'setup' | 'off';

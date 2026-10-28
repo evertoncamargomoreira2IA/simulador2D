@@ -43,6 +43,11 @@ export interface LineKpi {
   cycleTime: number;
   leadTime: number;
   valueAddedTime: number;
+  /** Total cycle time: conteúdo de trabalho por unidade, somando os componentes consumidos. */
+  totalCycleTime: number;
+  /** Unidades e cargas entregues no destino final. */
+  shipped: number;
+  shippedLoads: number;
   queueTime: number;
   blockedTime: number;
   transportTime: number;
@@ -141,6 +146,9 @@ export function lineKpi(sim: Simulator): LineKpi {
     cycleTime: c > 0 ? elapsed / c : 0,
     leadTime,
     valueAddedTime: valueAdded,
+    totalCycleTime: avg(sim.workSum),
+    shipped: sim.shipped,
+    shippedLoads: sim.shippedLoads,
     queueTime: avg(sim.queueSum),
     blockedTime: avg(sim.blockedSum),
     transportTime: transport,

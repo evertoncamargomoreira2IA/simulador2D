@@ -11,6 +11,9 @@
 //   faz a carga/descarga (handlingTime) e fica livre; com handlingTime 0 fica o ciclo todo.
 // - Links com pool de transporte (empilhadeira/AGV) esperam um veículo, que vai vazio até
 //   a origem, carrega e leva a peça ao destino.
+// - Agrupamento (batchSize N): o nó junta N peças da fila numa carga (carrinho, pallet),
+//   quebrando cargas maiores se preciso, e processa a carga inteira de uma vez.
+// - Tempos e distâncias das peças são somados por unidade (carga de 15 = 15 unidades).
 // - Peças saindo do retrabalho sempre entram no destino (pista de retorno), evitando deadlock.
 // - Falhas: MTBF derivado de disponibilidade e MTTR; processamento é pausado.
 
@@ -34,6 +37,14 @@ export interface Entity {
   awaitingPickup: boolean;
   /** Giga ocupada no nó atual (-1 = nenhuma). */
   slot: number;
+  /** Unidades nesta carga (1 = peça avulsa). */
+  qty: number;
+  /** Instantes de entrada das unidades de uma carga (lead time por unidade). */
+  members?: number[];
+  /** Conteúdo de trabalho acumulado, incluindo os componentes consumidos (s·unidade). */
+  work: number;
+  /** Já contada no ponto de medição da produção. */
+  counted: boolean;
 }
 
 interface Job {
@@ -70,6 +81,8 @@ export interface NodeRt {
   processing: Job[];
   done: Entity[];
   reserved: number;
+  /** Unidades reservadas a caminho (para nós de agrupamento). */
+  reservedUnits: number;
   down: boolean;
   setupUntil: number;
   state: NodeState;
@@ -192,6 +205,10 @@ export class Simulator {
   completed = 0;
   completedGood = 0;
   consumed = 0;
+  /** Unidades e cargas que chegaram ao destino final (sink). */
+  shipped = 0;
+  shippedLoads = 0;
+  workSum = 0;
   leadTimeSum = 0;
   procSum = 0;
   queueSum = 0;
@@ -216,6 +233,10 @@ export class Simulator {
   /** Preenchido quando a simulação é interrompida por um modelo inválido. */
   error: string | null = null;
   private sameTimeEvents = 0;
+  /** Distâncias reais (m) entre pares de posições, vindas de links com comprimento informado. */
+  private lengths = new Map<string, number>();
+  /** Há um nó marcado como ponto de medição da produção. */
+  readonly hasOutputPoint: boolean;
 
   constructor(model: Model) {
     this.model = model;
@@ -254,6 +275,7 @@ export class Simulator {
         processing: [],
         done: [],
         reserved: 0,
+        reservedUnits: 0,
         down: false,
         setupUntil: def.setupTime > 0 ? def.setupTime : 0,
         state: 'off',
@@ -283,7 +305,12 @@ export class Simulator {
       const from = this.byId.get(def.from);
       const to = this.byId.get(def.to);
       if (!from || !to || from === to) continue;
-      const distance = Math.hypot(to.def.x - from.def.x, to.def.y - from.def.y) / ppm;
+      const geo = Math.hypot(to.def.x - from.def.x, to.def.y - from.def.y) / ppm;
+      const distance = def.length && def.length > 0 ? def.length : geo;
+      if (def.length && def.length > 0) {
+        this.lengths.set(`${from.def.x},${from.def.y}|${to.def.x},${to.def.y}`, def.length);
+        this.lengths.set(`${to.def.x},${to.def.y}|${from.def.x},${from.def.y}`, def.length);
+      }
       const pool = def.poolId ? poolById.get(def.poolId) ?? null : null;
       const vehicle = pool && pool.def.kind !== 'operator' ? pool : null;
       const speed = vehicle ? vehicle.def.speed : model.settings.transportSpeed;
@@ -307,6 +334,7 @@ export class Simulator {
       }
       this.links.push(l);
     }
+    this.hasOutputPoint = this.nodes.some((n) => n.def.outputPoint && n.def.type !== 'source');
     this.sampleEvery = Math.max(60, Math.round(model.settings.duration / 240));
     this.init();
   }
@@ -445,6 +473,9 @@ export class Simulator {
       next: null,
       awaitingPickup: false,
       slot: -1,
+      qty: 1,
+      work: 0,
+      counted: false,
     };
     e.next = this.route(src);
     return e;
@@ -463,10 +494,24 @@ export class Simulator {
     return n.out[n.out.length - 1];
   }
 
+  private batchOf(n: NodeRt): number {
+    const b = Math.round(n.def.batchSize ?? 0);
+    return b > 1 && n.def.type !== 'source' && n.def.type !== 'sink' ? b : 0;
+  }
+
+  /** Unidades na fila de entrada do nó (a caminho incluídas). */
+  queuedUnits(n: NodeRt): number {
+    let u = 0;
+    for (const e of n.queue) u += e.qty;
+    return u;
+  }
+
   canAccept(n: NodeRt): boolean {
     const t = n.def.type;
     if (t === 'sink') return true;
     if (t === 'source') return false;
+    const batch = this.batchOf(n);
+    if (batch) return this.queuedUnits(n) + n.reservedUnits < batch + Math.max(0, n.def.queueCap);
     const occ = n.queue.length + n.processing.length + n.done.length + n.reserved;
     return occ < Math.max(1, n.def.capacity) + Math.max(0, n.def.queueCap);
   }
@@ -517,7 +562,10 @@ export class Simulator {
         continue;
       }
       if (link.isPart) link.reserved++;
-      else link.to.reserved++;
+      else {
+        link.to.reserved++;
+        link.to.reservedUnits += e.qty;
+      }
       if (link.pool) {
         // Transporte por veículo: a peça espera no posto até ser buscada.
         e.awaitingPickup = true;
@@ -546,14 +594,14 @@ export class Simulator {
       n.released++;
       this.setWip(this.wip + 1);
     } else {
-      e.blockedTime += this.now - e.blockedSince;
+      e.blockedTime += (this.now - e.blockedSince) * e.qty;
     }
     if (link.to.def.type === 'rework') {
       n.rejected++;
       e.reworks++;
     }
     link.moved++;
-    e.distance += link.distance;
+    e.distance += link.distance * e.qty;
     const tr: Transit = { entity: e, link, start: this.now, end: this.now + travel, unit };
     this.transits.add(tr);
     this.schedule(tr.end, 'arrive', { transit: tr });
@@ -580,7 +628,13 @@ export class Simulator {
     }
     const servers = Math.max(1, n.def.capacity);
     let pulled = false;
-    while (n.queue.length > 0 && n.processing.length + n.done.length < servers && this.partsReady(n)) {
+    const batch = this.batchOf(n);
+    while (
+      n.queue.length > 0 &&
+      n.processing.length + n.done.length < servers &&
+      this.partsReady(n) &&
+      (!batch || this.queuedUnits(n) >= batch)
+    ) {
       let slot = n.slotBusy.indexOf(false);
       if (slot < 0) slot = 0;
       const sp = n.slots[slot] ?? { x: n.def.x, y: n.def.y };
@@ -598,14 +652,17 @@ export class Simulator {
         }
         walk = this.sendUnit(unit, sp.x, sp.y, n.def.name);
       }
-      const e = n.queue.shift()!;
+      const e = batch ? this.formBatch(n, batch) : n.queue.shift()!;
       e.slot = slot;
       if (slot < n.slotBusy.length) n.slotBusy[slot] = true;
-      e.queueTime += this.now - e.enteredQueueAt;
-      n.queueTimeSum += this.now - e.enteredQueueAt;
+      if (!batch) {
+        e.queueTime += (this.now - e.enteredQueueAt) * e.qty;
+        n.queueTimeSum += this.now - e.enteredQueueAt;
+      }
       n.started++;
       for (const l of n.partLinks) {
-        n.parts.get(l)!.shift();
+        const part = n.parts.get(l)!.shift();
+        if (part) e.work += part.work;
         this.consumed++;
         this.setWip(this.wip - 1);
         this.retry.add(l.from);
@@ -623,6 +680,57 @@ export class Simulator {
     }
     this.updateState(n);
     if (pulled) this.notifyUpstream(n);
+  }
+
+  /** Junta `size` unidades da fila numa carga; quebra a última carga se sobrar. */
+  private formBatch(n: NodeRt, size: number): Entity {
+    const members: number[] = [];
+    const carrier: Entity = {
+      id: ++this.entitySeq,
+      releasedAt: Infinity,
+      procTime: 0,
+      queueTime: 0,
+      blockedTime: 0,
+      transTime: 0,
+      distance: 0,
+      reworks: 0,
+      enteredQueueAt: this.now,
+      blockedSince: this.now,
+      next: null,
+      awaitingPickup: false,
+      slot: -1,
+      qty: 0,
+      members,
+      work: 0,
+      counted: true,
+    };
+    let need = size;
+    while (need > 0 && n.queue.length > 0) {
+      const e = n.queue[0];
+      const take = Math.min(need, e.qty);
+      const f = take / e.qty;
+      const times = e.members ?? [e.releasedAt];
+      members.push(...times.slice(0, take));
+      carrier.procTime += e.procTime * f;
+      carrier.queueTime += e.queueTime * f + (this.now - e.enteredQueueAt) * take;
+      carrier.blockedTime += e.blockedTime * f;
+      carrier.transTime += e.transTime * f;
+      carrier.distance += e.distance * f;
+      carrier.work += e.work * f;
+      carrier.reworks += e.qty === 1 ? (e.reworks > 0 ? 1 : 0) : Math.round(e.reworks * f);
+      carrier.counted = carrier.counted && e.counted;
+      carrier.releasedAt = Math.min(carrier.releasedAt, e.releasedAt);
+      carrier.qty += take;
+      need -= take;
+      if (take === e.qty) n.queue.shift();
+      else {
+        // Sobra da carga continua na fila para a próxima.
+        e.qty -= take;
+        e.members = times.slice(take);
+        for (const k of ['procTime', 'queueTime', 'blockedTime', 'transTime', 'distance', 'work'] as const) e[k] *= 1 - f;
+      }
+    }
+    return carrier;
   }
 
   // ---- Recursos (operadores e veículos) ----
@@ -658,7 +766,7 @@ export class Simulator {
   /** Desloca a unidade até (x, y) a partir de agora; retorna o tempo de deslocamento (s). */
   private sendUnit(u: UnitRt, x: number, y: number, where: string, t0 = this.now): number {
     const p = this.positionOf(u, t0);
-    const meters = Math.hypot(x - p.x, y - p.y) / this.ppm;
+    const meters = this.lengths.get(`${p.x},${p.y}|${x},${y}`) ?? Math.hypot(x - p.x, y - p.y) / this.ppm;
     const speed = u.pool.def.speed > 0 ? u.pool.def.speed : Infinity;
     const dt = meters / speed;
     u.distance += meters;
@@ -721,7 +829,8 @@ export class Simulator {
     if (idx < 0) return;
     n.processing.splice(idx, 1);
     const e = job.entity;
-    e.procTime += job.duration;
+    e.procTime += job.duration * e.qty;
+    e.work += n.def.cycleTime;
     n.processed++;
     if (job.unit) this.releaseUnit(job.unit);
     e.next = this.route(n);
@@ -736,7 +845,7 @@ export class Simulator {
     const e = tr.entity;
     const l = tr.link;
     const to = l.to;
-    e.transTime += tr.end - tr.start;
+    e.transTime += (tr.end - tr.start) * e.qty;
     if (tr.unit) {
       const pool = tr.unit.pool;
       // Descarga no destino: o veículo fica livre depois do tempo de descarga.
@@ -750,8 +859,10 @@ export class Simulator {
       return;
     }
     to.reserved--;
+    to.reservedUnits -= e.qty;
+    if (to.def.outputPoint && !e.counted) this.recordOutput(e);
     if (to.def.type === 'sink') {
-      to.processed++;
+      to.processed += e.qty;
       this.exitSystem(e);
       this.updateState(to);
       return;
@@ -762,18 +873,29 @@ export class Simulator {
   }
 
   private exitSystem(e: Entity): void {
-    this.setWip(this.wip - 1);
-    this.completed++;
-    if (e.reworks === 0) this.completedGood++;
-    this.leadTimeSum += this.now - e.releasedAt;
+    this.setWip(this.wip - e.qty);
+    this.shipped += e.qty;
+    this.shippedLoads++;
+    if (!e.counted && !this.hasOutputPoint) this.recordOutput(e);
+  }
+
+  /** Conta a produção da linha (no ponto de medição, ou no destino final se não houver). */
+  private recordOutput(e: Entity): void {
+    e.counted = true;
+    const q = e.qty;
+    this.completed += q;
+    this.completedGood += q === 1 ? (e.reworks === 0 ? 1 : 0) : Math.max(0, q - e.reworks);
+    if (e.members) for (const r of e.members) this.leadTimeSum += this.now - r;
+    else this.leadTimeSum += (this.now - e.releasedAt) * q;
     this.procSum += e.procTime;
     this.queueSum += e.queueTime;
     this.blockedSum += e.blockedTime;
     this.transSum += e.transTime;
     this.distanceSum += e.distance;
+    this.workSum += e.work;
     if (this.lastExit >= 0) {
-      this.intervals++;
-      if (this.now - this.lastExit <= this.model.settings.takt + 1e-9) this.taktOk++;
+      this.intervals += q;
+      if ((this.now - this.lastExit) / q <= this.model.settings.takt + 1e-9) this.taktOk += q;
     }
     this.lastExit = this.now;
   }
@@ -879,7 +1001,7 @@ export class Simulator {
       }
     }
     this.statsStart = this.now;
-    this.completed = this.completedGood = this.consumed = 0;
+    this.completed = this.completedGood = this.consumed = this.shipped = this.shippedLoads = this.workSum = 0;
     this.leadTimeSum = this.procSum = this.queueSum = this.blockedSum = this.transSum = this.distanceSum = 0;
     this.taktOk = this.intervals = 0;
     this.wipIntegral = 0;
@@ -919,6 +1041,10 @@ export class Simulator {
     if (n.def.type === 'source' || n.def.type === 'sink') return 0;
     let parts = 0;
     for (const arr of n.parts.values()) parts += arr.length;
-    return n.queue.length + n.processing.length + n.done.length + parts;
+    let units = parts;
+    for (const e of n.queue) units += e.qty;
+    for (const j of n.processing) units += j.entity.qty;
+    for (const e of n.done) units += e.qty;
+    return units;
   }
 }

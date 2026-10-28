@@ -247,9 +247,9 @@ select.btn { padding: 4px 6px; max-width: 136px; }
 }
 .dash.collapsed { height: auto; grid-template-columns: 1fr; }
 .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; align-content: start; }
-.tile { background: var(--raised); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; min-width: 0; }
+.tile { background: var(--raised); border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; min-width: 0; }
 .tile .k { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tile .v { font: 600 22px/1.1 var(--font-display); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .v { font: 600 19px/1.1 var(--font-display); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .v small { font: 400 11px var(--font-ui); color: var(--muted); margin-left: 3px; }
 .tile.alert { border-color: var(--st-down); }
 .tile.alert .v { color: var(--st-down); }
@@ -313,3 +313,6 @@ select.btn { padding: 4px 6px; max-width: 136px; }
 .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .live.on i { background: var(--st-working); box-shadow: 0 0 0 3px color-mix(in srgb, var(--st-working) 30%, transparent); }
 .warm { color: var(--st-starved); text-transform: none; letter-spacing: 0; }
+.field.check { display: flex; align-items: center; gap: 8px; }
+.field.check input { width: auto; flex: none; }
+.field.check span { font-size: 12px; color: var(--ink); }

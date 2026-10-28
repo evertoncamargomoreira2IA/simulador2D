@@ -35,11 +35,14 @@ export function Dashboard() {
             <Tile k="Produção" v={String(kpi.completed)} u="peças" />
             <Tile k="Throughput" v={fmt(kpi.throughputPerHour, 0)} u="pç/h" />
             <Tile k="Cycle time real" v={fmt(kpi.cycleTime, 1)} u={`s · takt ${fmt(takt, 1)}`} alert={kpi.completed > 5 && kpi.cycleTime > takt * 1.05} />
-            <Tile k="Lead time" v={kpi.leadTime ? fmtTime(kpi.leadTime) : '–'} />
+            <Tile k="Lead time" v={kpi.leadTime ? fmtTime(kpi.leadTime) : '–'} hint="Tempo de uma máquina desde a entrada até o fim da linha, com filas, esperas e transporte." />
+            <Tile k="Total cycle time" v={kpi.totalCycleTime ? fmtTime(kpi.totalCycleTime) : '–'} hint="Soma dos tempos de ciclo para montar uma máquina, incluindo as submontagens." />
             <Tile k="WIP" v={String(kpi.wip)} u={`méd ${fmt(kpi.avgWip, 0)}`} />
             <Tile k="OEE linha" v={pct(kpi.oee)} />
             <Tile k="Aderência takt" v={pct(kpi.taktCompliance)} />
             <Tile k="Utilização média" v={pct(kpi.capacityUtilization)} />
+            <Tile k="Expedido" v={String(kpi.shippedLoads)} u={kpi.shipped > kpi.shippedLoads ? `cargas · ${kpi.shipped} pç` : 'pç'} hint="Cargas (pallets) que chegaram ao destino final." />
+            <Tile k="FPY" v={pct(kpi.firstPassYield)} hint="Primeira passada: peças sem retrabalho." />
             <Tile k="Gargalo" v={bottleneck && kpi.completed > 0 ? bottleneck.name : '–'} alert={!!bottleneck && kpi.completed > 0} />
           </div>
         )}
@@ -51,9 +54,9 @@ export function Dashboard() {
   );
 }
 
-function Tile({ k, v, u, alert }: { k: string; v: string; u?: string; alert?: boolean }) {
+function Tile({ k, v, u, alert, hint }: { k: string; v: string; u?: string; alert?: boolean; hint?: string }) {
   return (
-    <div className={`tile${alert ? ' alert' : ''}`} title={`${k}: ${v} ${u ?? ''}`}>
+    <div className={`tile${alert ? ' alert' : ''}`} title={hint ?? `${k}: ${v} ${u ?? ''}`}>
       <div className="k">{k}</div>
       <div className="v">
         {v}

@@ -22,6 +22,7 @@ const FIELDS: FieldDef[] = [
   { k: 'operators', label: 'Operadores', step: 1 },
   { k: 'handlingTime', label: 'Carga+descarga operador (s)', step: 5, types: PROCESS },
   { k: 'partBuffer', label: 'Estoque de componentes', step: 1, types: PROCESS },
+  { k: 'batchSize', label: 'Agrupar N peças (carrinho/pallet)', step: 1, types: ['machine', 'inspection', 'buffer'] },
   { k: 'shifts', label: 'Turnos', step: 1 },
   { k: 'oeeTarget', label: 'OEE meta (%)', scale: 100 },
   { k: 'powerKw', label: 'Potência (kW)', step: 0.1 },
@@ -55,6 +56,13 @@ export function PropertiesPanel() {
             <label className="field full">
               <span>Peso de roteamento (proporção entre saídas)</span>
               <input id="link-weight" type="number" min={0} step={1} value={l.weight} onChange={(e) => useStore.getState().updateLink(l.id, { weight: Number(e.target.value) })} />
+            </label>
+            <label className="field full">
+              <span>Distância real (m, vazio = medida no desenho)</span>
+              <input id="link-length" type="number" min={0} step={10} value={l.length ?? ''} placeholder={fmt(rt?.distance ?? 0, 1)} onChange={(e) => {
+                const v = Number(e.target.value);
+                useStore.getState().updateLink(l.id, { length: e.target.value === '' || !(v > 0) ? undefined : v });
+              }} />
             </label>
             <label className="field full">
               <span>Papel do fluxo</span>
@@ -133,6 +141,12 @@ export function PropertiesPanel() {
                   <input id="node-area-h" type="number" min={0} step={10} value={n.area?.h ?? 0} disabled={!n.area} onChange={(e) => n.area && upd({ area: { ...n.area, h: Math.max(0, Number(e.target.value)) } })} />
                 </label>
               </>
+            )}
+            {n.type !== 'source' && (
+              <label className="field full check">
+                <input id="node-output" type="checkbox" checked={!!n.outputPoint} onChange={(e) => upd({ outputPoint: e.target.checked || undefined })} />
+                <span>Medir a produção da linha aqui (throughput, lead time e takt)</span>
+              </label>
             )}
             {FIELDS.filter((f) => !f.types || f.types.includes(n.type)).map((f) => {
               const raw = (n[f.k] as number | undefined) ?? 0;

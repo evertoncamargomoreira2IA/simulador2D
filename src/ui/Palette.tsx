@@ -6,13 +6,48 @@ import { DRAG_MIME } from './CanvasView';
 import { STATE_LABEL } from './theme';
 
 const BLOCKS: { type: NodeType; label: string; desc: string }[] = [
-  { type: 'source', label: 'Source', desc: 'Matéria-prima' },
+  { type: 'source', label: 'Source', desc: 'Entrada de material' },
   { type: 'machine', label: 'Machine', desc: 'Posto / máquina' },
   { type: 'buffer', label: 'Buffer', desc: 'Estoque / WIP' },
   { type: 'inspection', label: 'Inspection', desc: 'QC / teste' },
   { type: 'rework', label: 'Rework', desc: 'Retrabalho' },
   { type: 'sink', label: 'Finished Goods', desc: 'Produto acabado' },
 ];
+
+/** Posição livre perto de (x, y): desce 100 px até não encostar em outro bloco. */
+function freeSpot(x: number, y: number): { x: number; y: number } {
+  const nodes = useStore.getState().model.nodes;
+  let yy = y;
+  for (let i = 0; i < 30 && nodes.some((n) => Math.abs(n.x - x) < 90 && Math.abs(n.y - yy) < 80); i++) yy += 100;
+  return { x, y: yy };
+}
+
+/**
+ * Clique na paleta. Com um bloco selecionado: Source entra à esquerda e alimenta o bloco;
+ * os demais entram à direita, ligados a partir dele. Sem seleção: no centro da tela.
+ */
+function addFromPalette(type: NodeType) {
+  const st = useStore.getState();
+  const prev = st.selected.length === 1 ? st.model.nodes.find((n) => n.id === st.selected[0]) : undefined;
+  const c = st.viewCenter;
+  let pos: { x: number; y: number };
+  if (prev && type === 'source' && prev.type !== 'source') pos = freeSpot(prev.x - 120, prev.y);
+  else if (prev) pos = freeSpot(prev.x + 120, prev.y);
+  else pos = freeSpot(Math.round(c.x), Math.round(c.y));
+  st.addNode(type, pos.x, pos.y);
+  const added = useStore.getState().selected[0];
+  if (!prev || !added) return;
+  if (type === 'source') {
+    if (prev.type !== 'source') {
+      useStore.getState().addLink(added, prev.id);
+      useStore.getState().select([added]);
+      useStore.getState().setMessage(`Source ligado a "${prev.name}". Ajuste o intervalo de chegadas no painel (0 = sempre abastecido).`);
+    }
+  } else if (prev.type !== 'sink') {
+    useStore.getState().addLink(prev.id, added);
+    useStore.getState().select([added]);
+  }
+}
 
 const LAYERS: { k: keyof Layers; label: string }[] = [
   { k: 'plant', label: 'Planta (DXF)' },
@@ -42,21 +77,8 @@ export function Palette() {
                 e.dataTransfer.setData(DRAG_MIME, b.type);
                 e.dataTransfer.effectAllowed = 'copy';
               }}
-              onClick={() => {
-                // Clique: adiciona à direita do bloco selecionado e já liga os dois.
-                const st = useStore.getState();
-                const nodes = st.model.nodes;
-                const prev = st.selected.length === 1 ? nodes.find((n) => n.id === st.selected[0]) : undefined;
-                const x = prev ? prev.x + 120 : nodes.length ? Math.max(...nodes.map((n) => n.x)) + 120 : 160;
-                const y = prev ? prev.y : nodes.length ? nodes[nodes.length - 1].y : 160;
-                st.addNode(b.type, x, y);
-                const added = useStore.getState().selected[0];
-                if (prev && prev.type !== 'sink' && b.type !== 'source' && added) {
-                  useStore.getState().addLink(prev.id, added);
-                  useStore.getState().select([added]);
-                }
-              }}
-              title={`${b.desc}. Arraste para o canvas, ou clique para adicionar ligado ao bloco selecionado.`}
+              onClick={() => addFromPalette(b.type)}
+              title={b.type === 'source' ? 'Entrada de material. Com um posto selecionado, o clique cria o Source à esquerda já alimentando o posto.' : `${b.desc}. Arraste para o canvas, ou clique para adicionar ligado ao bloco selecionado.`}
             >
               <Icon type={b.type} />
               <span>

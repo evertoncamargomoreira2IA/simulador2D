@@ -35,6 +35,9 @@ interface State {
   tick: number;
   kpi: LineKpi;
   message: string;
+  /** Centro da área visível do canvas (coordenadas do modelo). */
+  viewCenter: { x: number; y: number };
+  setViewCenter: (p: { x: number; y: number }) => void;
 
   setModel: (m: Model, message?: string) => void;
   updateNode: (id: string, patch: Partial<NodeDef>) => void;
@@ -89,6 +92,7 @@ export const useStore = create<State>((set, get) => {
     speed: 10,
     ...fresh(initial),
     tick: 0,
+    viewCenter: { x: 200, y: 200 },
     message: privateExample()
       ? 'Linha real carregada sobre o layout DXF (PST 6 gigas/2 operadores, Final Test 28 gigas/6 operadores). Clique em ▶ Start.'
       : 'Modelo exemplo LP2 carregado (70 postos, 12 s por posto). Clique em ▶ Start.',
@@ -124,6 +128,16 @@ export const useStore = create<State>((set, get) => {
     addLink: (from, to) => {
       const m = get().model;
       if (from === to || m.links.some((l) => l.from === from && l.to === to)) return;
+      const a = m.nodes.find((n) => n.id === from);
+      const b = m.nodes.find((n) => n.id === to);
+      if (b?.type === 'source') {
+        set({ message: 'Um Source só tem saída: ligue o Source ao posto, e não o posto ao Source.' });
+        return;
+      }
+      if (a?.type === 'sink') {
+        set({ message: 'Finished Goods é o fim do fluxo e não tem saída.' });
+        return;
+      }
       const link: LinkDef = { id: newId('L'), from, to, weight: 1 };
       edit({ ...m, links: [...m.links, link] }, { selectedLink: link.id, selected: [] });
     },
@@ -161,6 +175,7 @@ export const useStore = create<State>((set, get) => {
     resetSim: () => set({ ...fresh(get().model), run: 'idle', tick: get().tick + 1 }),
     refresh: (withKpi = false) =>
       set(withKpi ? { tick: get().tick + 1, kpi: lineKpi(get().sim) } : { tick: get().tick + 1 }),
+    setViewCenter: (viewCenter) => set({ viewCenter }),
     setMessage: (message) => set({ message }),
   };
 });
