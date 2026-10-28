@@ -54,7 +54,7 @@ export function Toolbar() {
   return (
     <header className="topbar">
       <div className="brand">
-        <b>Simulador 2D</b>
+        <b>{__APP_NAME__}</b>
         <span className="tag" title="Gêmeo digital centrado nas pessoas">Indústria 5.0</span>
         <span title={model.name}>{model.name}</span>
       </div>
