@@ -82,6 +82,11 @@ interface State {
   resetSim: () => void;
   refresh: (withKpi?: boolean) => void;
   setMessage: (m: string) => void;
+  /** Modelo salvo que está aberto (para Salvar sobrescrever) e a versão gravada (para saber se mudou). */
+  saved: { id: string; model: Model } | null;
+  setSaved: (s: { id: string; model: Model } | null) => void;
+  showSaved: boolean;
+  setShowSaved: (v: boolean) => void;
 }
 
 /** Exemplo da linha real, embutido só no build privado. */
@@ -120,7 +125,7 @@ export const useStore = create<State>((set, get) => {
       : 'Modelo exemplo LP2 carregado (70 postos, 12 s por posto). Clique em ▶ Start.',
 
     setModel: (m, message) =>
-      edit(m, { selected: [], selectedLink: null, connectFrom: null, message: message ?? `Modelo "${m.name}" carregado.` }),
+      edit(m, { selected: [], selectedLink: null, connectFrom: null, saved: null, message: message ?? `Modelo "${m.name}" carregado.` }),
 
     updateNode: (id, patch) => {
       const m = get().model;
@@ -206,5 +211,9 @@ export const useStore = create<State>((set, get) => {
     realSource: '',
     setReal: (real, realSource) => set({ real, realSource }),
     setMessage: (message) => set({ message }),
+    saved: null,
+    setSaved: (saved) => set({ saved }),
+    showSaved: false,
+    setShowSaved: (showSaved) => set({ showSaved }),
   };
 });

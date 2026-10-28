@@ -7,6 +7,7 @@ import { Dashboard } from './Dashboard';
 import { Palette } from './Palette';
 import { PropertiesPanel } from './PropertiesPanel';
 import { Toolbar } from './Toolbar';
+import { saveCurrent } from './SaveDialog';
 import { Analysis } from './Analysis';
 import { StationDetail } from './StationDetail';
 
@@ -36,6 +37,13 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        const st = useStore.getState();
+        if (st.saved) saveCurrent();
+        else st.setShowSaved(true);
+        return;
+      }
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
       const st = useStore.getState();

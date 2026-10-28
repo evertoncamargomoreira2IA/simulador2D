@@ -10,13 +10,17 @@ import { DEFAULT_SETTINGS } from '../engine/types';
 import { privateExample, useStore } from '../store';
 import { fmtTime } from './theme';
 import { Tutorial, downloadTemplate } from './Tutorial';
+import { SavedModels, saveCurrent } from './SaveDialog';
 
 const SPEEDS = [1, 2, 5, 10, 30, 60, 120, 300, 600];
 
 export function Toolbar() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [help, setHelp] = useState(false);
+  const showSaved = useStore((s) => s.showSaved);
+  const saved = useStore((s) => s.saved);
   const model = useStore((s) => s.model);
+  const dirty = !saved || saved.model !== model;
   const run = useStore((s) => s.run);
   const speed = useStore((s) => s.speed);
   const sim = useStore((s) => s.sim);
@@ -96,6 +100,16 @@ export function Toolbar() {
           <option value="lp2">Linha LP2 (70 postos)</option>
           <option value="simple">Linha simples</option>
         </select>
+        <button
+          className={`btn${dirty ? ' dirty' : ''}`}
+          onClick={() => (saved ? saveCurrent() : st().setShowSaved(true))}
+          title={saved ? 'Grava por cima do modelo salvo (Ctrl+S)' : 'Dar um nome e salvar (Ctrl+S)'}
+        >
+          {dirty ? 'Salvar •' : 'Salvo ✓'}
+        </button>
+        <button className="btn" onClick={() => st().setShowSaved(true)} title="Abrir, salvar como novo ou apagar modelos salvos">
+          Salvos
+        </button>
         <button className="btn" onClick={() => fileRef.current?.click()} title="Planilha padrão preenchida, Excel (.xlsx), CSV, JSON do simulador ou planta DXF (AutoCAD)">
           Importar
         </button>
@@ -164,6 +178,7 @@ export function Toolbar() {
         <button className="btn" onClick={() => setHelp(true)} title="Procedimento de uso e planilha padrão">? Como usar</button>
       </div>
       {help && <Tutorial onClose={() => setHelp(false)} />}
+      {showSaved && <SavedModels onClose={() => st().setShowSaved(false)} />}
       <span className={`live${run === 'running' ? ' on' : ''}`}><i />{run === 'running' ? 'Ao vivo' : run === 'done' ? 'Concluído' : run === 'paused' ? 'Pausado' : 'Pronto'}</span>
       <div className="clock" aria-live="off">
         {fmtTime(sim.clock)} <small>/ {fmtTime(sim.duration - sim.t0)}</small>

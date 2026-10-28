@@ -390,3 +390,14 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .faq { display: grid; gap: 8px; margin: 0; }
 .faq dt { font-weight: 600; }
 .faq dd { margin: 2px 0 0; color: var(--muted); line-height: 1.45; }
+
+/* Salvar */
+.save-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.save-row .input { flex: 1; min-width: 180px; background: var(--raised); border: 1px solid var(--line); color: var(--ink); border-radius: 6px; padding: 6px 8px; font: inherit; }
+.saved { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.saved li { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.saved li > div { flex: 1; min-width: 0; }
+.saved li b { overflow-wrap: anywhere; }
+.saved li.on { border-color: var(--accent); }
+.btn.dirty { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.btn.danger { color: var(--st-down); border-color: var(--st-down); }

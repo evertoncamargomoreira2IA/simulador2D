@@ -114,3 +114,9 @@ tests        testes (vitest)
 - **Exportar → Planilha padrão** baixa um Excel com as abas Leia-me, Postos, Ligações, Pessoas e veículos e Parâmetros. Preencha e suba em **Importar** para montar a linha inteira. **Exportar → Planilha do modelo atual** sai preenchida com a linha aberta, para editar no Excel e importar de volta (com `x_m`/`y_m` em todos os postos, a planta DXF é mantida).
 - **? Como usar** abre o procedimento de uso passo a passo, com os botões para baixar a planilha.
 - **Análises → Cycle × Takt** mostra o cycle time de cada posto (tempo da giga ÷ gigas, ajustado por amostra, reparo e lote) contra o takt e 90% do takt, com o tempo medido na simulação ao lado.
+
+## Salvar modelos
+
+- **Salvar** (ou Ctrl+S) grava o modelo aberto; o botão mostra **Salvar •** quando há mudança não salva e **Salvo ✓** quando está tudo gravado.
+- **Salvos** lista os modelos para abrir, salvar como novo ou apagar.
+- Dentro do artefato do claude.ai os modelos ficam na conta de cada pessoa (banco do artefato, área privada), divididos em partes quando a planta DXF é grande. Fora dele, ou sem permissão de escrita, ficam no navegador.
