@@ -1,6 +1,6 @@
 // Monta modelos a partir de listas de postos e faz o layout automático em serpentina.
 
-import { DEFAULT_SETTINGS, makeNode, newId, type LinkDef, type Model, type NodeDef, type NodeType } from '../engine/types';
+import { DEFAULT_SETTINGS, makeNode, MANUAL_PATCH, newId, operationsTime, type ActivityKind, type LinkDef, type Model, type NodeDef, type NodeType, type Operation } from '../engine/types';
 import { LP2_STATIONS } from './lp2';
 
 export interface StationRow {
@@ -167,4 +167,57 @@ export function simpleModel(): Model {
   rw.y = 330;
   m.settings.takt = 15;
   return m;
+}
+
+type Act = [string, number, ActivityKind];
+const ELEMENT_LINE: { name: string; type?: NodeType; capacity?: number; efficiency?: number; ops: [string, Act[]][] }[] = [
+  { name: 'Posto 1 – Base', ops: [['Preparar base', [['Pegar base do carrinho', 4, 'nva'], ['Inspecionar base', 3, 'nva'], ['Posicionar no pallet', 3, 'va']]], ['Etiquetas', [['Colar etiqueta de série', 6, 'va'], ['Escanear série', 3, 'nva'], ['Colar etiqueta de lote', 5, 'va']]], ['Fixação inicial', [['Fixar 4 parafusos', 12, 'va'], ['Andar até o kanban', 4, 'walk']]]] },
+  { name: 'Posto 2 – Placa', ops: [['Placa eletrônica', [['Pegar e desembalar placa', 6, 'nva'], ['Encaixar placa', 8, 'va'], ['Fixar 3 parafusos', 9, 'va']]], ['Cabos', [['Conectar cabo de força', 5, 'va'], ['Conectar cabo flat', 6, 'va'], ['Rotear cabos', 8, 'va']]]] },
+  { name: 'Posto 3 – Mecanismo', efficiency: 0.9, ops: [['Mecanismo', [['Pegar mecanismo', 4, 'nva'], ['Lubrificar 4 pontos', 8, 'va'], ['Encaixar mecanismo', 10, 'va'], ['Fixar 2 parafusos', 7, 'va']]], ['Ajuste', [['Girar produto 180°', 3, 'nva'], ['Ajustar folga', 9, 'va'], ['Aguardar parafusadeira', 4, 'wait']]]] },
+  { name: 'Posto 4 – Tampa', ops: [['Tampa traseira', [['Pegar tampa', 3, 'nva'], ['Encaixar tampa', 7, 'va'], ['Fixar 6 parafusos', 16, 'va']]], ['Acabamento', [['Colar 2 pés de borracha', 6, 'va'], ['Limpar superfície', 5, 'nva']]]] },
+  { name: 'Posto 5 – Inspeção visual', type: 'inspection', ops: [['Inspeção', [['Inspeção cosmética', 15, 'nva'], ['Conferir etiquetas', 6, 'nva'], ['Registrar no sistema', 5, 'nva']]]] },
+  { name: 'Teste funcional', type: 'inspection', capacity: 3, ops: [['Teste', [['Conectar no testador', 10, 'nva'], ['Teste automático', 120, 'machine'], ['Desconectar e liberar', 8, 'nva']]]] },
+  { name: 'Posto 6 – Embalagem', ops: [['Embalagem', [['Montar caixa', 10, 'nva'], ['Colocar produto e calços', 14, 'va'], ['Colocar manual e acessórios', 8, 'va'], ['Fechar e etiquetar caixa', 12, 'va']]]] },
+];
+
+/** Linha genérica com operações e atividades por posto (estudo por elemento e Yamazumi). */
+export function elementsModel(): Model {
+  const nodes: NodeDef[] = [];
+  const links: LinkDef[] = [];
+  const add = (n: NodeDef) => {
+    const prev = nodes[nodes.length - 1];
+    nodes.push(n);
+    if (prev) links.push({ id: newId('L'), from: prev.id, to: n.id, weight: 1 });
+  };
+  add(makeNode('source', { name: 'Kit de peças', x: 120, y: 220 }));
+  ELEMENT_LINE.forEach((s, i) => {
+    const operations: Operation[] = s.ops.map(([name, acts]) => ({ name, activities: acts.map(([n, time, kind]) => ({ name: n, time, kind })) }));
+    const type = s.type ?? 'machine';
+    add(
+      makeNode(type, {
+        ...(type === 'machine' ? MANUAL_PATCH : {}),
+        name: s.name,
+        x: 260 + i * 130,
+        y: 220,
+        operators: 1,
+        capacity: s.capacity ?? 1,
+        queueCap: 2,
+        cv: 0.08,
+        availability: 1,
+        cycleTime: operationsTime(operations),
+        operations,
+        cycleFromOps: true,
+        efficiency: s.efficiency,
+        area: s.capacity && s.capacity > 1 ? { w: 100, h: 50 } : undefined,
+      }),
+    );
+  });
+  add(makeNode('sink', { name: 'Produto acabado', x: 260 + ELEMENT_LINE.length * 130, y: 220 }));
+  return {
+    name: 'Linha exemplo – estudo por elemento (Yamazumi)',
+    nodes,
+    links,
+    pools: [],
+    settings: { ...DEFAULT_SETTINGS, takt: 50, studyMode: 'elements', startFull: true, warmup: 0 },
+  };
 }

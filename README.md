@@ -151,3 +151,4 @@ tests        testes (vitest)
 - **Tarefas de transporte** (painel Modelo): operador, AGV, AMR ou empilhadeira busca num ponto e entrega em outro (kanban, buffer, FGI, posto).
 - **Operações e atividades** por posto (agrega valor, não agrega, deslocamento, espera, máquina); a soma pode virar o tempo de ciclo.
 - **Yamazumi** em Análises: atividades empilhadas por posto contra o takt, com escolha dos postos e a ineficiência no topo.
+- **Estudo por cycle time ou por elemento** (painel Modelo ou Yamazumi): por elemento, a simulação usa a soma das atividades de cada posto; por cycle time, usa o tempo do posto e o Yamazumi reparte as atividades na proporção. Exemplo pronto: Exemplos → Linha com atividades (Yamazumi).

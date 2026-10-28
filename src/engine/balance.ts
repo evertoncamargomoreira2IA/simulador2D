@@ -1,7 +1,7 @@
 // Carga por posto (cycle time × takt): ordem do fluxo, fração de peças e lote por posto.
 
 import type { LineKpi } from './metrics';
-import type { Model, NodeDef } from './types';
+import { baseCycle, type Model, type NodeDef } from './types';
 
 export interface CtRow {
   id: string;
@@ -67,10 +67,10 @@ export function cycleRows(model: Model, kpi?: LineKpi): CtRow[] {
   for (const l of model.links) if (l.role === 'part') mark(l.from);
   const elapsed = Math.max(1, kpi?.elapsed ?? 0);
   return order
-    .filter((n) => (n.type === 'machine' || n.type === 'inspection' || n.type === 'rework') && n.cycleTime > 0)
+    .filter((n) => (n.type === 'machine' || n.type === 'inspection' || n.type === 'rework') && baseCycle(n, model.settings) > 0)
     .map((n) => {
       const k = kpi?.nodes.find((x) => x.id === n.id);
-      const raw = n.cycleTime / (n.efficiency || 1) / Math.max(1, n.capacity);
+      const raw = baseCycle(n, model.settings) / (n.efficiency || 1) / Math.max(1, n.capacity);
       const sh = share.get(n.id) ?? 1;
       const ld = load.get(n.id) ?? 1;
       // ao vivo: tempo ocupado por carga processada, convertido para "por peça da linha"

@@ -8,6 +8,7 @@ const KINDS = Object.keys(ACTIVITY_LABEL) as ActivityKind[];
 
 export function Operations({ n }: { n: NodeDef }) {
   const ops = n.operations ?? [];
+  const elements = useStore((s) => s.model.settings.studyMode === 'elements');
   const total = operationsTime(ops);
   const save = (next: Operation[], fromOps = n.cycleFromOps ?? true) => {
     const t = operationsTime(next);
@@ -57,7 +58,8 @@ export function Operations({ n }: { n: NodeDef }) {
           + operação
         </button>
       </div>
-      {ops.length > 0 && (
+      {ops.length > 0 && elements && <p className="hint">Estudo por elemento: a simulação usa a soma das atividades ({fmt(total, 1)} s).</p>}
+      {ops.length > 0 && !elements && (
         <label className="check">
           <input type="checkbox" checked={n.cycleFromOps ?? true} onChange={(e) => save(ops, e.target.checked)} />
           <span>Tempo de ciclo = soma das atividades ({fmt(total, 1)} s)</span>

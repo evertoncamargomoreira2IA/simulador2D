@@ -3,7 +3,7 @@
 import Chart from 'chart.js/auto';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cycleRows, effectiveTakt } from '../engine/balance';
-import { ACTIVITY_LABEL, type ActivityKind } from '../engine/types';
+import { ACTIVITY_LABEL, baseCycle, operationsTime, type ActivityKind } from '../engine/types';
 import { useStore } from '../store';
 import { lineSequence } from './CycleTakt';
 import { Kpi } from './Modal';
@@ -31,6 +31,22 @@ interface Col {
   total: number;
 }
 
+/** Chave do estudo: por cycle time do posto ou por elementos (soma das atividades). */
+export function StudyMode() {
+  const mode = useStore((s) => s.model.settings.studyMode ?? 'cycle');
+  const set = (studyMode: 'cycle' | 'elements') => useStore.getState().updateSettings({ studyMode });
+  return (
+    <div className="seg" role="group" aria-label="Estudo por">
+      <button className={`btn${mode === 'cycle' ? ' on' : ''}`} onClick={() => set('cycle')} title="A simulação usa o tempo de ciclo de cada posto; no Yamazumi as atividades são repartidas na proporção desse ciclo.">
+        Por cycle time
+      </button>
+      <button className={`btn${mode === 'elements' ? ' on' : ''}`} onClick={() => set('elements')} title="A simulação usa a soma das atividades de cada posto (postos sem atividades seguem com o tempo de ciclo).">
+        Por elemento
+      </button>
+    </div>
+  );
+}
+
 export function Yamazumi() {
   const model = useStore((s) => s.model);
   const colors = useCanvasColors();
@@ -49,17 +65,19 @@ export function Yamazumi() {
         .map((r) => {
           const n = byId.get(r.id)!;
           const eff = n.efficiency && n.efficiency < 1 ? n.efficiency : 1;
-          // por peça da linha: mesma escala do Cycle × Takt (÷ gigas, fração e lote), sem a ineficiência
-          const k = perPiece && n.cycleTime > 0 ? (r.plan * eff) / n.cycleTime : 1;
-          const base = n.operations?.length ? n.operations.reduce((s, o) => s + o.activities.reduce((a, x) => a + x.time, 0), 0) : n.cycleTime;
-          const segs: Seg[] = n.operations?.length
-            ? n.operations.flatMap((o) => o.activities.map((a) => ({ label: `${o.name} · ${a.name}`, time: a.time * k, kind: a.kind })))
-            : [{ label: 'Ciclo (sem atividades)', time: base * k, kind: 'none' as const }];
+          // altura da barra sem a ineficiência: por peça da linha (escala do Cycle × Takt) ou o ciclo base do posto
+          const target = perPiece ? r.plan * eff : baseCycle(n, model.settings);
+          const ops = operationsTime(n.operations);
+          // por cycle time, as atividades são repartidas na proporção do ciclo do posto
+          const k = ops > 0 ? target / ops : 0;
+          const segs: Seg[] = ops > 0
+            ? n.operations!.flatMap((o) => o.activities.map((a) => ({ label: `${o.name} · ${a.name}`, time: a.time * k, kind: a.kind })))
+            : [{ label: 'Ciclo (sem atividades)', time: target, kind: 'none' as const }];
           // ineficiência no topo da pilha: ciclo real = tempo ÷ eficiência
-          if (eff < 1) segs.push({ label: `Ineficiência (eficiência ${pct(eff)})`, time: base * k * (1 / eff - 1), kind: 'loss' });
+          if (eff < 1) segs.push({ label: `Ineficiência (eficiência ${pct(eff)})`, time: target * (1 / eff - 1), kind: 'loss' });
           return { id: r.id, name: r.name, segs, total: segs.reduce((s, x) => s + x.time, 0) };
         }),
-    [all, pick, onlyOps, perPiece, byId],
+    [all, pick, onlyOps, perPiece, byId, model.settings],
   );
 
   const ref = useRef<HTMLCanvasElement>(null);
@@ -150,6 +168,9 @@ export function Yamazumi() {
         <Kpi k="Agrega valor" v={pct(tot ? va / tot : 0)} u="do tempo mostrado" />
       </div>
       <div className="row-btns section">
+        <span className="muted">Estudo</span>
+        <StudyMode />
+        <span className="muted">Escala</span>
         <div className="seg" role="group" aria-label="Escala">
           <button className={`btn${perPiece ? ' on' : ''}`} onClick={() => setPerPiece(true)} title="÷ postos paralelos, fração de peças e lote: a mesma escala do Cycle × Takt">Por peça da linha</button>
           <button className={`btn${!perPiece ? ' on' : ''}`} onClick={() => setPerPiece(false)} title="Tempo de cada atividade como cadastrado">Conteúdo de trabalho</button>

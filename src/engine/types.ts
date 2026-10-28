@@ -30,6 +30,11 @@ export function operationsTime(ops: Operation[] | undefined): number {
   return (ops ?? []).reduce((s, o) => s + o.activities.reduce((a, x) => a + (x.time || 0), 0), 0);
 }
 
+/** Tempo de ciclo base do posto no estudo: soma das atividades no modo elementos, senão o tempo do posto. */
+export function baseCycle(n: Pick<NodeDef, 'cycleTime' | 'operations'>, settings?: Pick<SimSettings, 'studyMode'>): number {
+  return settings?.studyMode === 'elements' && n.operations?.length ? operationsTime(n.operations) : n.cycleTime;
+}
+
 export interface NodeDef {
   id: string;
   name: string;
@@ -177,6 +182,8 @@ export interface SimSettings {
   pxPerMeter: number;
   /** Começar com a linha cheia (regime): ignora a rampa de enchimento e mostra o UPH real. */
   startFull?: boolean;
+  /** Estudo por tempo de ciclo do posto (padrão) ou por elementos: o ciclo vira a soma das atividades. */
+  studyMode?: 'cycle' | 'elements';
   /** Custos (R$): mão de obra por operador-hora, energia por kWh, matéria-prima por peça,
    *  manutenção por hora de parada, estoque em processo por peça-hora. */
   laborRate?: number;

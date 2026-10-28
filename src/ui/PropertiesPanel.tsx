@@ -297,6 +297,13 @@ export function PropertiesPanel() {
           <span>Transporte (m/s)</span>
           <input id="set-speed" type="number" min={0} step={0.1} value={s.transportSpeed} onChange={(e) => updS({ transportSpeed: Number(e.target.value) })} />
         </label>
+        <label className="field full">
+          <span>Estudo por</span>
+          <select id="set-study" value={s.studyMode ?? 'cycle'} onChange={(e) => updS({ studyMode: e.target.value as 'cycle' | 'elements' })}>
+            <option value="cycle">Cycle time do posto</option>
+            <option value="elements">Elemento (soma das atividades)</option>
+          </select>
+        </label>
         <label className="field full check">
           <input id="set-full" type="checkbox" checked={!!s.startFull} onChange={(e) => updS({ startFull: e.target.checked })} />
           <span>Linha cheia desde o início (ignora a rampa e mostra o UPH real)</span>

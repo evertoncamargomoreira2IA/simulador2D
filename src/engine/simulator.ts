@@ -20,7 +20,7 @@
 import { effectiveTakt } from './balance';
 import { MinHeap } from './heap';
 import { Rng } from './rng';
-import { slotPositions, type LinkDef, type Model, type NodeDef, type NodeState, type PoolDef } from './types';
+import { baseCycle, slotPositions, type LinkDef, type Model, type NodeDef, type NodeState, type PoolDef } from './types';
 
 export interface Entity {
   id: number;
@@ -703,7 +703,7 @@ export class Simulator {
         this.retry.add(l.from);
       }
       const handling = n.def.handlingTime ?? 0;
-      const duration = walk + (unit ? handling : 0) + this.rng.lognormal(n.def.cycleTime / (n.def.efficiency || 1), n.def.cv);
+      const duration = walk + (unit ? handling : 0) + this.rng.lognormal(baseCycle(n.def, this.model.settings) / (n.def.efficiency || 1), n.def.cv);
       const job: Job = { entity: e, start: this.now, end: this.now + duration, duration, remaining: duration, token: 0 };
       if (unit) {
         if (handling > 0) this.schedule(this.now + walk + handling, 'unitFree', { unit });

@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { lineKpi } from '../engine/metrics';
 import { exportModelCsv, exportModelJson, exportResultsXlsx } from '../io/exporter';
 import { ACCEPT, importAnyFile } from './fileImport';
-import { lp2Model, simpleModel } from '../model/builder';
+import { elementsModel, lp2Model, simpleModel } from '../model/builder';
 import { privateExample, useStore } from '../store';
 import { fmtTime } from './theme';
 import { effectiveTakt } from '../engine/balance';
@@ -73,6 +73,7 @@ export function Toolbar() {
             const main = e.target.value === 'main' ? privateExample('main') : null;
             if (main) st().setModel(main, 'Main line com operações e atividades de cada posto. Veja Análises → Yamazumi.');
             if (e.target.value === 'lp2') st().setModel(lp2Model(), 'Exemplo LP2 carregado (70 postos, 12 s por posto).');
+            if (e.target.value === 'elements') st().setModel(elementsModel(), 'Linha exemplo com operações e atividades: estudo por elemento. Veja Análises → Yamazumi.');
             if (e.target.value === 'simple') st().setModel(simpleModel(), 'Linha exemplo simples carregada.');
           }}
         >
@@ -81,6 +82,7 @@ export function Toolbar() {
           {__EXAMPLE_MAIN__ && <option value="main">Linha real: main line com atividades</option>}
           <option value="lp2">Linha LP2 (70 postos)</option>
           <option value="simple">Linha simples</option>
+          <option value="elements">Linha com atividades (Yamazumi)</option>
         </select>
         <button className="btn icon" disabled={!undoLabel} onClick={() => st().undo()} title={undoLabel ? `Desfazer ${undoLabel} (Ctrl+Z)` : 'Nada para desfazer'} aria-label="Desfazer">↶</button>
         <button className="btn icon" disabled={!redoLabel} onClick={() => st().redo()} title={redoLabel ? `Refazer ${redoLabel} (Ctrl+Y)` : 'Nada para refazer'} aria-label="Refazer">↷</button>

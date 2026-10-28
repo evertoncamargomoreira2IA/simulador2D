@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_SETTINGS } from '../engine/types';
 import { modelStore, type SavedMeta } from '../io/storage';
-import { lp2Model, simpleModel } from '../model/builder';
+import { elementsModel, lp2Model, simpleModel } from '../model/builder';
 import { privateExample, useStore } from '../store';
 import { ACCEPT, importAnyFile } from './fileImport';
 import { Modal } from './Modal';
@@ -32,12 +32,13 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
     st().setModel(blankModel(name.trim() || 'Novo trabalho'), 'Trabalho novo. Arraste a planta (DXF ou imagem) para a tela e monte a linha pela paleta: cada bloco novo já sai ligado ao anterior.');
     onClose();
   };
-  const example = (k: 'real' | 'main' | 'lp2' | 'simple') => {
+  const example = (k: 'real' | 'main' | 'lp2' | 'simple' | 'elements') => {
     const ex = privateExample();
     const main = k === 'main' ? privateExample('main') : null;
     if (main) st().setModel(main, 'Main line com operações e atividades de cada posto. Veja Análises → Yamazumi.');
     if (k === 'real' && ex) st().setModel(ex, 'Linha real carregada sobre o layout DXF. Clique em ▶ Start.');
     if (k === 'lp2') st().setModel(lp2Model(), 'Exemplo LP2 carregado (70 postos, 12 s por posto).');
+    if (k === 'elements') st().setModel(elementsModel(), 'Linha exemplo com operações e atividades: estudo por elemento. Veja Análises → Yamazumi.');
     if (k === 'simple') st().setModel(simpleModel(), 'Linha exemplo simples carregada.');
     onClose();
   };
@@ -73,6 +74,7 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
             {__EXAMPLE_MAIN__ && <button className="btn" onClick={() => example('main')}>Exemplo: main line com atividades</button>}
             <button className="btn" onClick={() => example('lp2')}>Exemplo: LP2</button>
             <button className="btn" onClick={() => example('simple')}>Exemplo: linha simples</button>
+            <button className="btn" onClick={() => example('elements')}>Exemplo: linha com atividades (Yamazumi)</button>
           </div>
         </section>
         <section className="section">
