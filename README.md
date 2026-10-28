@@ -141,3 +141,4 @@ tests        testes (vitest)
 - **Selecionar vários**: arraste com o botão esquerdo no fundo (Shift soma à seleção) e arraste um dos blocos para mover todos. Botão direito/meio (ou Alt + esquerdo) move a tela.
 - **Busca de peça / transporte** no painel do posto: escolha AGV, empilhadeira, operador ou esteira para cada entrada, ou crie um novo ali mesmo.
 - **Ajustar planta** (botão na tela): puxe os cantos para mudar o tamanho e arraste para posicionar.
+- **Copiar e colar**: Ctrl+C / Ctrl+V (leva as ligações entre os blocos copiados), Ctrl+X recorta, Ctrl+D duplica, Ctrl+A seleciona tudo.

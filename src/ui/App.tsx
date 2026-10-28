@@ -63,6 +63,16 @@ export function App() {
         return;
       }
       const st = useStore.getState();
+      const k = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && (k === 'c' || k === 'x' || k === 'v' || k === 'd' || k === 'a')) {
+        e.preventDefault();
+        if (k === 'c') st.copySelection();
+        if (k === 'x' && st.copySelection()) st.deleteSelection();
+        if (k === 'v') st.paste();
+        if (k === 'd' && st.copySelection()) st.paste();
+        if (k === 'a') st.select(st.model.nodes.map((n) => n.id));
+        return;
+      }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (st.selected.length || st.selectedLink) st.deleteSelection();
       } else if (e.key === 'Escape') {

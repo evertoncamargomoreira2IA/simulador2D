@@ -68,6 +68,9 @@ interface State {
   addLink: (from: string, to: string) => void;
   updateLink: (id: string, patch: Partial<LinkDef>) => void;
   deleteSelection: () => void;
+  /** Copiar/colar blocos selecionados (com as ligações entre eles). */
+  copySelection: () => number;
+  paste: () => void;
   select: (ids: string[], link?: string | null) => void;
   setTool: (t: Tool) => void;
   setConnectFrom: (id: string | null) => void;
@@ -112,6 +115,9 @@ const fresh = (m: Model) => {
 
 // Abre em branco; a tela de início oferece trabalhos salvos, novo ou exemplos.
 const initial: Model = { name: 'Novo trabalho', nodes: [], links: [], settings: { ...DEFAULT_SETTINGS } };
+
+/** Área de transferência interna (blocos copiados). */
+let clip: { nodes: NodeDef[]; links: LinkDef[]; times: number } | null = null;
 
 export const useStore = create<State>((set, get) => {
   const history = new History<Model>();
@@ -209,6 +215,36 @@ export const useStore = create<State>((set, get) => {
       edit({ ...m, links: m.links.map((l) => (l.id === id ? { ...l, ...patch } : l)) }, {}, 'alterar ligação', `link:${id}:${Object.keys(patch).sort().join(',')}`);
     },
 
+    copySelection: () => {
+      const { model: m, selected } = get();
+      const ids = new Set(selected);
+      if (!ids.size) return 0;
+      clip = { nodes: m.nodes.filter((n) => ids.has(n.id)), links: m.links.filter((l) => ids.has(l.from) && ids.has(l.to)), times: 0 };
+      set({ message: `${clip.nodes.length} bloco(s) copiado(s). Ctrl+V cola.` });
+      return clip.nodes.length;
+    },
+    paste: () => {
+      if (!clip?.nodes.length) return;
+      clip.times++;
+      const m = get().model;
+      const off = 40 * clip.times;
+      const map = new Map<string, string>();
+      const names = new Set(m.nodes.map((n) => n.name));
+      const nodes = clip.nodes.map((n) => {
+        const id = newId('N');
+        map.set(n.id, id);
+        let name = `${n.name} (cópia)`;
+        for (let i = 2; names.has(name); i++) name = `${n.name} (cópia ${i})`;
+        names.add(name);
+        return { ...structuredClone(n), id, name, x: n.x + off, y: n.y + off, outputPoint: undefined };
+      });
+      const links = clip.links.map((l) => ({ ...l, id: newId('L'), from: map.get(l.from)!, to: map.get(l.to)! }));
+      edit(
+        { ...m, nodes: [...m.nodes, ...nodes], links: [...m.links, ...links] },
+        { selected: nodes.map((n) => n.id), selectedLink: null, message: `${nodes.length} bloco(s) colado(s). Arraste para posicionar.` },
+        `colar ${nodes.length} bloco(s)`,
+      );
+    },
     deleteSelection: () => {
       const { model: m, selected, selectedLink } = get();
       const del = new Set(selected);
