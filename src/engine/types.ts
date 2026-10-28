@@ -50,6 +50,8 @@ export interface NodeDef {
   fixedTime?: boolean;
   /** Posto de montagem: junta o produto com um kit de cada componente (ligações do tipo peça). */
   assembly?: boolean;
+  /** Eficiência do posto (0-1, padrão 1): ineficiência alonga o ciclo (ciclo real = tempo / eficiência). */
+  efficiency?: number;
   /** Posto manual: só pessoa, sem máquina (sem quebra, setup, potência nem carga/descarga). */
   manual?: boolean;
   /** Onde o operador fixo aparece em relação ao bloco (padrão: em cima). */

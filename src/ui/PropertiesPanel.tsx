@@ -13,6 +13,7 @@ const PROCESS: NodeType[] = ['machine', 'inspection', 'rework', 'buffer'];
 const FIELDS: FieldDef[] = [
   { k: 'cycleTime', label: 'Tempo de ciclo (s)', step: 0.5, types: PROCESS },
   { k: 'cv', label: 'Variação CV (%)', scale: 100, types: PROCESS },
+  { k: 'efficiency', label: 'Eficiência (%)', scale: 100, types: ['machine', 'inspection', 'rework'] },
   { k: 'capacity', label: 'Capacidade', step: 1, types: PROCESS },
   { k: 'queueCap', label: 'Fila de entrada', step: 1, types: ['machine', 'inspection', 'rework'] },
   { k: 'setupTime', label: 'Setup (s)', step: 10, types: PROCESS, machine: true },
@@ -200,7 +201,7 @@ export function PropertiesPanel() {
                 !(f.machine && n.manual) &&
                 !(f.assembly && !isAssembly(n, model.links)),
             ).map((f) => {
-              const raw = (n[f.k] as number | undefined) ?? 0;
+              const raw = (n[f.k] as number | undefined) ?? (f.k === 'efficiency' ? 1 : 0);
               const scale = f.scale ?? 1;
               return (
                 <label key={f.k} className="field">
@@ -212,7 +213,7 @@ export function PropertiesPanel() {
                     value={Math.round(raw * scale * 1000) / 1000}
                     onChange={(e) => {
                       const v = Number(e.target.value);
-                      if (Number.isFinite(v)) upd({ [f.k]: v / scale } as Partial<NodeDef>);
+                      if (Number.isFinite(v)) upd({ [f.k]: f.k === 'efficiency' ? (v > 0 && v < 100 ? v / scale : undefined) : v / scale } as Partial<NodeDef>);
                     }}
                   />
                 </label>

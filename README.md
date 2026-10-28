@@ -133,3 +133,4 @@ tests        testes (vitest)
 - **Recentes**: campo na barra com os 10 últimos trabalhos salvos; Salvos → Baixar arquivo guarda uma cópia `.sim2d.json` (abre em Importar).
 - **Meta UPH** ao lado do takt na configuração do modelo.
 - **Gráfico da frente**: ordem da linha principal por padrão (off-lines depois) e chave Estados / vs Takt (carga de cada posto em % do takt, passa de 100% quando estoura).
+- **Eficiência (%)** por posto (padrão 100%): o ciclo real fica tempo ÷ eficiência; coluna `eficiencia` na planilha padrão.

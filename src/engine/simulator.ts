@@ -701,7 +701,7 @@ export class Simulator {
         this.retry.add(l.from);
       }
       const handling = n.def.handlingTime ?? 0;
-      const duration = walk + (unit ? handling : 0) + this.rng.lognormal(n.def.cycleTime, n.def.cv);
+      const duration = walk + (unit ? handling : 0) + this.rng.lognormal(n.def.cycleTime / (n.def.efficiency || 1), n.def.cv);
       const job: Job = { entity: e, start: this.now, end: this.now + duration, duration, remaining: duration, token: 0 };
       if (unit) {
         if (handling > 0) this.schedule(this.now + walk + handling, 'unitFree', { unit });

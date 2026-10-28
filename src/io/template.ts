@@ -13,7 +13,7 @@ export const SHEETS = { readme: 'Leia-me', nodes: 'Postos', links: 'Ligações',
 const NODE_COLS = [
   'id', 'nome', 'tipo', 'tempo_ciclo_s', 'cv', 'capacidade', 'fila', 'operadores', 'disponibilidade', 'mttr_s', 'setup_s',
   'intervalo_chegada_s', 'lote', 'ponto_saida', 'tempo_fixo', 'pool_operadores', 'manuseio_s', 'potencia_kw', 'potencia_espera_kw',
-  'custo_hora', 'kit_ao_lado', 'x_m', 'y_m', 'area_largura_m', 'area_altura_m',
+  'custo_hora', 'kit_ao_lado', 'x_m', 'y_m', 'area_largura_m', 'area_altura_m', 'eficiencia',
 ] as const;
 const LINK_COLS = ['de', 'para', 'peso', 'papel', 'transporte', 'distancia_m', 'uma_vez'] as const;
 const POOL_COLS = ['id', 'nome', 'tipo', 'quantidade', 'velocidade_m_s', 'tempo_carga_s', 'custo_hora', 'potencia_kw', 'x_m', 'y_m'] as const;
@@ -68,6 +68,7 @@ export const README: [string, string][] = [
   ['tempo_fixo', 'S para o posto não ser alterado pela calibração ao takt.'],
   ['kit_ao_lado', 'Montagem: quantos kits de cada componente ficam ao lado do posto.'],
   ['area_largura_m, area_altura_m', 'Área ocupada pelas gigas, para o operador andar entre elas.'],
+  ['eficiencia', 'Eficiência do posto (0,9 ou 90%). Vazio = 100%. O ciclo real fica tempo_ciclo / eficiência.'],
   ['x_m, y_m', 'Posição em metros. Vazio = o simulador desenha em U. Se preencher todos, a planta DXF aberta é mantida.'],
   ['', ''],
   ['Colunas da aba Ligações', ''],
@@ -143,7 +144,7 @@ export function templateWorkbook(model?: Model): XLSX.WorkBook {
           n.id, n.name, isAssembly(n, m.links) ? 'montagem' : n.manual ? 'manual' : TIPO_PT[n.type], r3(n.cycleTime), r3(n.cv), n.capacity, n.queueCap, n.operators, r3(n.availability), n.mttr,
           n.setupTime, n.interarrival, n.batchSize || '', sn(n.outputPoint), sn(n.fixedTime), n.poolId ?? '', n.handlingTime ?? '',
           n.powerKw || '', n.idlePowerKw || '', n.costPerHour || '', n.partBuffer ?? '', pos ? r3(n.x / ppm) : '', pos ? r3(n.y / ppm) : '',
-          n.area ? r3(n.area.w / ppm) : '', n.area ? r3(n.area.h / ppm) : '',
+          n.area ? r3(n.area.w / ppm) : '', n.area ? r3(n.area.h / ppm) : '', n.efficiency && n.efficiency < 1 ? r3(n.efficiency) : '',
         ]),
       ],
       [12, 24, 9, ...NODE_COLS.slice(3).map(() => 12)],
@@ -273,6 +274,7 @@ export function parseTemplate(wb: XLSX.WorkBook, name: string): TemplateResult {
     set('idlePowerKw', num(r.potencia_espera_kw));
     set('costPerHour', num(r.custo_hora));
     set('partBuffer', num(r.kit_ao_lado));
+    set('efficiency', frac(r.eficiencia));
     const aw = num(r.area_largura_m);
     const ah = num(r.area_altura_m);
     if (aw !== undefined && ah !== undefined) p.area = { w: aw * ppm, h: ah * ppm };

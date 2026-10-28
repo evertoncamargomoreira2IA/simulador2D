@@ -75,7 +75,7 @@ export function cycleRows(model: Model, kpi?: LineKpi): CtRow[] {
     .filter((n) => (n.type === 'machine' || n.type === 'inspection' || n.type === 'rework') && n.cycleTime > 0)
     .map((n) => {
       const k = kpi?.nodes.find((x) => x.id === n.id);
-      const raw = n.cycleTime / Math.max(1, n.capacity);
+      const raw = n.cycleTime / (n.efficiency || 1) / Math.max(1, n.capacity);
       const sh = share.get(n.id) ?? 1;
       const ld = load.get(n.id) ?? 1;
       const real = k && kpi && kpi.completed > 0 ? (k.utilization * elapsed) / kpi.completed : undefined;
