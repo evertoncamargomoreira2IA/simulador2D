@@ -25,7 +25,7 @@ export function CanvasView() {
   const stageRef = useRef<Konva.Stage>(null);
   const [size, setSize] = useState({ w: 800, h: 500 });
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 0.75 });
-  const [band, setBand] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const [band, setBand] = useState<{ x0: number; y0: number; x1: number; y1: number; add?: boolean } | null>(null);
   const colors = useCanvasColors();
 
   const model = useStore((s) => s.model);
@@ -123,16 +123,32 @@ export function CanvasView() {
     setView({ scale, x: cx - wx * scale, y: cy - wy * scale });
   }
 
-  // Seleção por retângulo com Shift + arrastar no fundo; arrastar sem Shift faz pan.
+  // Botão esquerdo no fundo: caixa de seleção (Shift soma à seleção).
+  // Botão direito ou do meio (ou Alt + esquerdo): move a tela.
+  const pan = useRef<{ sx: number; sy: number; vx: number; vy: number } | null>(null);
+  const banded = useRef(false);
+  useEffect(() => {
+    const stop = () => (pan.current = null);
+    window.addEventListener('mouseup', stop);
+    return () => window.removeEventListener('mouseup', stop);
+  }, []);
   function onStageDown(e: Konva.KonvaEventObject<MouseEvent>) {
-    if (e.target !== e.target.getStage()) return;
-    if (e.evt.shiftKey) {
-      const p = stageRef.current!.getPointerPosition()!;
-      const w = toWorld(p.x, p.y);
-      setBand({ x0: w.x, y0: w.y, x1: w.x, y1: w.y });
+    if (e.evt.button === 1 || e.evt.button === 2 || (e.evt.button === 0 && e.evt.altKey)) {
+      e.evt.preventDefault();
+      pan.current = { sx: e.evt.clientX, sy: e.evt.clientY, vx: view.x, vy: view.y };
+      return;
     }
+    if (e.target !== e.target.getStage() || e.evt.button !== 0) return;
+    const p = stageRef.current!.getPointerPosition()!;
+    const w = toWorld(p.x, p.y);
+    setBand({ x0: w.x, y0: w.y, x1: w.x, y1: w.y, add: e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey });
   }
-  function onStageMove() {
+  function onStageMove(e: Konva.KonvaEventObject<MouseEvent>) {
+    if (pan.current) {
+      const p = pan.current;
+      setView({ ...view, x: p.vx + e.evt.clientX - p.sx, y: p.vy + e.evt.clientY - p.sy });
+      return;
+    }
     if (wire) {
       const p = stageRef.current!.getPointerPosition()!;
       const w = toWorld(p.x, p.y);
@@ -149,11 +165,19 @@ export function CanvasView() {
     if (!band) return;
     const [x0, x1] = [Math.min(band.x0, band.x1), Math.max(band.x0, band.x1)];
     const [y0, y1] = [Math.min(band.y0, band.y1), Math.max(band.y0, band.y1)];
-    const ids = model.nodes.filter((n) => n.x >= x0 && n.x <= x1 && n.y >= y0 && n.y <= y1).map((n) => n.id);
-    useStore.getState().select(ids);
     setBand(null);
+    if (x1 - x0 < 3 / view.scale && y1 - y0 < 3 / view.scale) return; // foi um clique: onStageClick limpa a seleção
+    const ids = model.nodes.filter((n) => n.x >= x0 && n.x <= x1 && n.y >= y0 && n.y <= y1).map((n) => n.id);
+    banded.current = true; // o click que vem logo depois não deve limpar a seleção
+    const st = useStore.getState();
+    st.select(band.add ? [...new Set([...st.selected, ...ids])] : ids);
+    if (ids.length > 1) st.setMessage(`${ids.length} blocos selecionados: arraste um deles para mover todos juntos (Delete apaga).`);
   }
   function onStageClick(e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) {
+    if (banded.current) {
+      banded.current = false;
+      return;
+    }
     if (e.target === e.target.getStage() && !e.evt.shiftKey) {
       useStore.getState().select([]);
       useStore.getState().setConnectFrom(null);
@@ -199,6 +223,7 @@ export function CanvasView() {
   return (
     <div
       ref={wrap}
+      onContextMenu={(e) => e.preventDefault()}
       className={`canvas-wrap${tool === 'connect' ? ' connect' : ''}`}
       onDragOver={(e) => {
         if (e.dataTransfer.types.includes(DRAG_MIME)) e.preventDefault();
@@ -213,7 +238,7 @@ export function CanvasView() {
         y={view.y}
         scaleX={view.scale}
         scaleY={view.scale}
-        draggable={!band && !wire}
+        draggable={false}
         onDragEnd={(e) => {
           if (e.target === stageRef.current) setView({ ...view, x: e.target.x(), y: e.target.y() });
         }}

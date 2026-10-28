@@ -138,3 +138,4 @@ tests        testes (vitest)
 - **Planta de fundo**: no painel Modelo, tamanho (−/+), mover X/Y, opacidade, voltar ao original ou remover, sem mexer nos blocos.
 - **Ligar arrastando**: passe o mouse no bloco, puxe a bolinha ➜ da lateral até o destino e solte. No modo Conectar, arrastar do próprio bloco também liga.
 - **Tela de início**: o simulador abre em branco e pergunta: trabalho novo (com nome), um dos 10 salvos, abrir arquivo ou exemplo. O botão Início reabre essa tela.
+- **Selecionar vários**: arraste com o botão esquerdo no fundo (Shift soma à seleção) e arraste um dos blocos para mover todos. Botão direito/meio (ou Alt + esquerdo) move a tela.

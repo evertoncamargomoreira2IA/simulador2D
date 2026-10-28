@@ -120,7 +120,7 @@ export function Toolbar() {
       <span className="sep" />
 
       <div className="group" role="group" aria-label="Edição">
-        <button className={`btn${tool === 'select' ? ' on' : ''}`} onClick={() => st().setTool('select')} title="Selecionar e mover (Shift+arrastar = seleção por área)">
+        <button className={`btn${tool === 'select' ? ' on' : ''}`} onClick={() => st().setTool('select')} title="Arraste no fundo para selecionar vários e mova todos juntos. Botão direito/meio arrasta a tela; roda do mouse dá zoom.">
           Selecionar
         </button>
         <button className={`btn${tool === 'connect' ? ' on' : ''}`} onClick={() => st().setTool(tool === 'connect' ? 'select' : 'connect')} title="Clique na origem e depois no destino">
