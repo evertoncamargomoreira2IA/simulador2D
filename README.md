@@ -144,3 +144,10 @@ tests        testes (vitest)
 - **Copiar e colar**: Ctrl+C / Ctrl+V (leva as ligações entre os blocos copiados), Ctrl+X recorta, Ctrl+D duplica, Ctrl+A seleciona tudo.
 - **Meta UPH na barra**: digite o UPH esperado e o takt é calculado (3600 / UPH).
 - **Gráfico inicial**: abre em Performance por posto × takt, ao vivo (barra clara = ainda planejado, cheia = medido), com a linha do takt; ⇅ Sequência dos postos ao lado.
+- **Takt zero**: sem meta UPH, o takt usa a carga do posto gargalo da linha principal.
+- **Indicadores**: OEE do posto gargalo; UPH real × meta (sem teto) e utilização na meta (carga média em % do takt, já com a ineficiência).
+- **Top 5 gargalos** com o UPH de cada posto; clique no Throughput para escolher um posto de referência (fica roxo com "REF" no layout).
+- **Adição rápida**: puxe a seta de um bloco e solte no vazio para criar Posto manual, Machine, Montagem, Buffer, Inspection, Rework ou Finished Goods já ligado.
+- **Tarefas de transporte** (painel Modelo): operador, AGV, AMR ou empilhadeira busca num ponto e entrega em outro (kanban, buffer, FGI, posto).
+- **Operações e atividades** por posto (agrega valor, não agrega, deslocamento, espera, máquina); a soma pode virar o tempo de ciclo.
+- **Yamazumi** em Análises: atividades empilhadas por posto contra o takt, com escolha dos postos e a ineficiência no topo.

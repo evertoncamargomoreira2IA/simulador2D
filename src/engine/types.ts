@@ -2,6 +2,34 @@
 
 export type NodeType = 'source' | 'machine' | 'buffer' | 'inspection' | 'rework' | 'sink';
 
+/** Tipo de atividade no Yamazumi. */
+export type ActivityKind = 'va' | 'nva' | 'walk' | 'wait' | 'machine';
+
+export const ACTIVITY_LABEL: Record<ActivityKind, string> = {
+  va: 'Agrega valor',
+  nva: 'Não agrega (necessária)',
+  walk: 'Deslocamento',
+  wait: 'Espera',
+  machine: 'Máquina (automático)',
+};
+
+export interface Activity {
+  name: string;
+  /** Segundos por peça. */
+  time: number;
+  kind: ActivityKind;
+}
+
+export interface Operation {
+  name: string;
+  activities: Activity[];
+}
+
+/** Soma das atividades de todas as operações do posto (s por peça). */
+export function operationsTime(ops: Operation[] | undefined): number {
+  return (ops ?? []).reduce((s, o) => s + o.activities.reduce((a, x) => a + (x.time || 0), 0), 0);
+}
+
 export interface NodeDef {
   id: string;
   name: string;
@@ -50,6 +78,10 @@ export interface NodeDef {
   fixedTime?: boolean;
   /** Posto de montagem: junta o produto com um kit de cada componente (ligações do tipo peça). */
   assembly?: boolean;
+  /** Operações do posto, cada uma com suas atividades (base do Yamazumi). */
+  operations?: Operation[];
+  /** Tempo de ciclo = soma das atividades (atualizado ao editar as operações). */
+  cycleFromOps?: boolean;
   /** Eficiência do posto (0-1, padrão 1): ineficiência alonga o ciclo (ciclo real = tempo / eficiência). */
   efficiency?: number;
   /** Posto manual: só pessoa, sem máquina (sem quebra, setup, potência nem carga/descarga). */
@@ -92,7 +124,7 @@ export interface LinkDef {
   once?: boolean;
 }
 
-export type PoolKind = 'operator' | 'forklift' | 'agv';
+export type PoolKind = 'operator' | 'forklift' | 'agv' | 'amr';
 
 /** Recurso compartilhado: grupo de operadores ou frota de veículos. */
 export interface PoolDef {
@@ -176,6 +208,8 @@ export interface Model {
   background?: Background;
   zones?: ZoneDef[];
   /** Ordem dos postos nos gráficos (ids). Vazio = ordem do fluxo. */
+  /** Posto de referência do UPH (destacado no layout e no indicador Throughput). */
+  refStation?: string;
   chartOrder?: string[];
   /** Postos escondidos nos gráficos (ids). */
   chartHidden?: string[];
@@ -244,7 +278,8 @@ export function makeNode(type: NodeType, partial: Partial<NodeDef> = {}): NodeDe
 export const POOL_LABEL: Record<PoolKind, string> = {
   operator: 'Operadores',
   forklift: 'Empilhadeira',
-  agv: 'AGV / AMR',
+  agv: 'AGV',
+  amr: 'AMR',
 };
 
 export function makePool(kind: PoolKind, partial: Partial<PoolDef> = {}): PoolDef {
@@ -253,12 +288,12 @@ export function makePool(kind: PoolKind, partial: Partial<PoolDef> = {}): PoolDe
     name: POOL_LABEL[kind],
     kind,
     count: kind === 'operator' ? 2 : 1,
-    speed: kind === 'operator' ? 1 : kind === 'forklift' ? 1.5 : 1,
+    speed: kind === 'operator' ? 1 : kind === 'forklift' ? 1.5 : kind === 'amr' ? 1.2 : 1,
     loadTime: kind === 'operator' ? 0 : 15,
     x: 0,
     y: 0,
-    costPerHour: kind === 'forklift' ? 45 : kind === 'agv' ? 25 : 0,
-    powerKw: kind === 'forklift' ? 5 : kind === 'agv' ? 0.6 : 0,
+    costPerHour: kind === 'forklift' ? 45 : kind === 'agv' || kind === 'amr' ? 25 : 0,
+    powerKw: kind === 'forklift' ? 5 : kind === 'agv' || kind === 'amr' ? 0.6 : 0,
     fuelCo2: 0,
     ...partial,
   };

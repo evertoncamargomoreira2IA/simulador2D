@@ -8,11 +8,25 @@ import type { NodeRt, Simulator } from '../engine/simulator';
 import type { Background, NodeDef, NodeType } from '../engine/types';
 import { footprint } from '../engine/analytics';
 import { useStore } from '../store';
+import { createOperator } from './operators';
 import { mixHex, useCanvasColors, type CanvasColors } from './theme';
 
+/** Cor do posto de referência do UPH (diferente dos estados). */
+const REF_COLOR = '#8b5cf6';
 const W = 64;
 const H = 40;
 export const DRAG_MIME = 'application/x-sim-node';
+
+/** Blocos do menu de adição rápida (soltar a seta no vazio). */
+const QUICK: { type: NodeType | BlockVariant; label: string }[] = [
+  { type: 'manual', label: 'Posto manual' },
+  { type: 'machine', label: 'Machine' },
+  { type: 'assembly', label: 'Montagem' },
+  { type: 'buffer', label: 'Buffer' },
+  { type: 'inspection', label: 'Inspection' },
+  { type: 'rework', label: 'Rework' },
+  { type: 'sink', label: 'Finished Goods' },
+];
 
 interface View {
   x: number;
@@ -100,7 +114,19 @@ export function CanvasView() {
     if (target && target.id !== wire.from) {
       st.addLink(wire.from, target.id);
       st.setConnectFrom(null);
+    } else if (wire.moved && p) {
+      // soltou a seta no vazio: menu de adição rápida já ligado
+      setQuick({ from: wire.from, sx: p.x, sy: p.y, ...toWorld(p.x, p.y) });
     } else if (!wire.moved && st.tool === 'connect') st.setConnectFrom(wire.from);
+  }
+  // Adição rápida ao soltar a seta fora de um bloco.
+  const [quick, setQuick] = useState<{ from: string; sx: number; sy: number; x: number; y: number } | null>(null);
+  function quickAdd(b: (typeof QUICK)[number]['type']) {
+    if (!quick) return;
+    const variant = b === 'manual' || b === 'assembly' ? b : null;
+    const type: NodeType = variant ? 'machine' : (b as NodeType);
+    useStore.getState().addAfter(quick.from, type, quick.x + W / 2, quick.y, variant ? variantPatch(variant, 1) : {});
+    setQuick(null);
   }
 
   const toWorld = (px: number, py: number) => ({ x: (px - view.x) / view.scale, y: (py - view.y) / view.scale });
@@ -134,6 +160,7 @@ export function CanvasView() {
     return () => window.removeEventListener('mouseup', stop);
   }, []);
   function onStageDown(e: Konva.KonvaEventObject<MouseEvent>) {
+    if (quick) setQuick(null);
     if (e.evt.button === 1 || e.evt.button === 2 || (e.evt.button === 0 && e.evt.altKey)) {
       e.evt.preventDefault();
       pan.current = { sx: e.evt.clientX, sy: e.evt.clientY, vx: view.x, vy: view.y };
@@ -186,11 +213,16 @@ export function CanvasView() {
   }
 
   function onDrop(e: React.DragEvent) {
-    const type = e.dataTransfer.getData(DRAG_MIME) as NodeType | BlockVariant;
+    const type = e.dataTransfer.getData(DRAG_MIME) as NodeType | BlockVariant | 'operator';
     if (!type) return;
     e.preventDefault();
     const r = wrap.current!.getBoundingClientRect();
     const w = toWorld(e.clientX - r.left, e.clientY - r.top);
+    if (type === 'operator') {
+      // solto em cima de um posto: a equipe já atende esse posto
+      createOperator(nodeAt(w.x, w.y), w);
+      return;
+    }
     const variant = type === 'assembly' || type === 'manual' ? type : null;
     useStore.getState().addNode(variant ? 'machine' : (type as NodeType), w.x, w.y, variant ? variantPatch(variant, 1) : {});
   }
@@ -357,6 +389,7 @@ export function CanvasView() {
                 colors={colors}
                 selected={selected.includes(n.id) || connectFrom === n.id}
                 bottleneck={kpi.bottleneckId === n.id && kpi.completed > 0}
+                reference={model.refStation === n.id}
                 draggable={draggable}
                 labels={layers.labels}
                 people={layers.people}
@@ -370,6 +403,10 @@ export function CanvasView() {
                 wireTarget={!!wire && wire.moved && wire.from !== n.id}
                 onSelect={(add) => {
                   const st = useStore.getState();
+                  if (st.pendingPool && n.type !== 'source' && n.type !== 'sink') {
+                    st.assignPool(n.id, st.pendingPool);
+                    return;
+                  }
                   if (st.tool === 'connect') {
                     if (st.connectFrom && st.connectFrom !== n.id) {
                       st.addLink(st.connectFrom, n.id);
@@ -454,6 +491,17 @@ export function CanvasView() {
           </Layer>
         )}
       </Stage>
+      {quick && (
+        <div className="quick-add" style={{ left: quick.sx, top: quick.sy }} role="menu" aria-label="Adicionar bloco ligado">
+          <p className="label">Adicionar ligado</p>
+          {QUICK.map((q) => (
+            <button key={q.type} role="menuitem" className="btn" onClick={() => quickAdd(q.type)}>
+              {q.label}
+            </button>
+          ))}
+          <button className="btn ghost" onClick={() => setQuick(null)}>Cancelar</button>
+        </div>
+      )}
       <div className="zoom">
         <button className="btn" onClick={() => zoomBy(1.2)} aria-label="Aproximar">+</button>
         <button className="btn" onClick={() => zoomBy(1 / 1.2)} aria-label="Afastar">−</button>
@@ -518,6 +566,8 @@ interface NodeShapeProps {
   colors: CanvasColors;
   selected: boolean;
   bottleneck: boolean;
+  /** Posto de referência do UPH. */
+  reference?: boolean;
   draggable: boolean;
   labels: boolean;
   stage: React.RefObject<Konva.Stage | null>;
@@ -551,7 +601,7 @@ function crewPlace(def: NodeDef, labels: boolean): { x: number; y: number; row: 
   }
 }
 
-function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, stage, onSelect, people, now, topRank, co2Heat, dim, assembly, onWire, wireTarget }: NodeShapeProps) {
+function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable, labels, stage, onSelect, people, now, topRank, co2Heat, dim, assembly, onWire, wireTarget }: NodeShapeProps) {
   const [hover, setHover] = useState(false);
   const stateColor = colors.state[rt.state];
   const stroke = selected ? colors.accent : stateColor;
@@ -630,6 +680,13 @@ function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, s
           <Rect x={-W / 2 - 9} y={-H / 2 - 9} width={W + 18} height={H + 18} cornerRadius={9} stroke={topRank === 1 ? colors.state.down : colors.state.blocked} strokeWidth={3} />
           <Circle x={-W / 2 - 4} y={-H / 2 - 4} radius={11} fill={topRank === 1 ? colors.state.down : colors.state.blocked} />
           <Text x={-W / 2 - 15} y={-H / 2 - 10} width={22} align="center" text={String(topRank)} fontSize={13} fontStyle="bold" fill={colors.canvas} />
+        </Group>
+      )}
+      {reference && (
+        <Group listening={false}>
+          <Rect x={-W / 2 - 11} y={-H / 2 - 11} width={W + 22} height={H + 22} cornerRadius={10} stroke={REF_COLOR} strokeWidth={3} />
+          <Rect x={W / 2 - 18} y={-H / 2 - 20} width={30} height={14} cornerRadius={4} fill={REF_COLOR} />
+          <Text x={W / 2 - 18} y={-H / 2 - 18} width={30} align="center" text="REF" fontSize={10} fontStyle="bold" fill="#fff" />
         </Group>
       )}
       {bottleneck && (
@@ -866,7 +923,7 @@ function Units({ sim, colors, labels }: { sim: Simulator; colors: CanvasColors; 
               {p.def.kind === 'forklift' && <Rect x={13} y={3.5} width={7} height={2.5} fill={c} />}
               {u.loaded && <Rect x={-7} y={-5} width={14} height={10} fill={colors.transport} />}
               {qty > 1 && <Text x={-20} y={10} width={40} align="center" text={`${qty} pç`} fontSize={10} fontStyle="bold" fill={colors.human} />}
-              {labels && <Text x={-30} y={-21} width={60} align="center" text={p.def.kind === 'agv' ? 'AGV' : 'Empilh.'} fontSize={9} fill={colors.muted} />}
+              {labels && <Text x={-30} y={-21} width={60} align="center" text={p.def.kind === 'agv' ? 'AGV' : p.def.kind === 'amr' ? 'AMR' : 'Empilh.'} fontSize={9} fill={colors.muted} />}
             </Group>
           );
         }),

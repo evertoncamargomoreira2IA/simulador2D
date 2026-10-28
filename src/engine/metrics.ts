@@ -56,7 +56,10 @@ export interface LineKpi {
   avgWip: number;
   firstPassYield: number;
   taktCompliance: number;
+  /** OEE do posto gargalo (disponibilidade × performance × qualidade). */
   oee: number;
+  /** Produção boa ÷ meta do takt (sem teto: 3,6 = 360% da meta). */
+  targetAttainment: number;
   capacityUtilization: number;
   bottleneckId: string | null;
   distancePerUnit: number;
@@ -157,7 +160,8 @@ export function lineKpi(sim: Simulator): LineKpi {
     avgWip: sim.avgWip(),
     firstPassYield: c > 0 ? sim.completedGood / c : 1,
     taktCompliance: sim.intervals > 0 ? sim.taktOk / sim.intervals : 0,
-    oee: takt > 0 ? Math.min(1, (sim.completedGood * takt) / elapsed) : 0,
+    oee: (nodes.find((k) => k.id === bottleneckId) ?? { oee: 0 }).oee,
+    targetAttainment: takt > 0 ? (sim.completedGood * takt) / elapsed : 0,
     capacityUtilization: capUtil,
     bottleneckId,
     distancePerUnit: avg(sim.distanceSum),

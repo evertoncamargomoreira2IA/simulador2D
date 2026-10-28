@@ -8,16 +8,19 @@ import { calibrateToTakt } from '../engine/calibrate';
 import { lineKpi } from '../engine/metrics';
 import { Simulator } from '../engine/simulator';
 import type { Model } from '../engine/types';
+import { effectiveTakt } from '../engine/balance';
 import { useStore, type AnalysisTab, type RealRow } from '../store';
 import { Advisor } from './Advisor';
 import { CycleTakt } from './CycleTakt';
 import { ThroughputTab } from './Throughput';
+import { Yamazumi } from './Yamazumi';
 import { Bars, Kpi, Modal } from './Modal';
 import { norm } from './StationDetail';
 import { fmt, fmtTime, pct } from './theme';
 
 const TABS: { k: AnalysisTab; label: string }[] = [
   { k: 'ciclo', label: 'Cycle × Takt' },
+  { k: 'yamazumi', label: 'Yamazumi' },
   { k: 'throughput', label: 'Throughput por intervalo' },
   { k: 'gargalos', label: 'Gargalos' },
   { k: 'spaghetti', label: 'Spaghetti' },
@@ -44,6 +47,7 @@ export function Analysis() {
       </nav>
       <div className="tab-body">
         {tab === 'ciclo' && <CycleTakt />}
+        {tab === 'yamazumi' && <Yamazumi />}
         {tab === 'throughput' && <ThroughputTab />}
         {tab === 'gargalos' && <Bottlenecks />}
         {tab === 'spaghetti' && <SpaghettiTab />}
@@ -70,7 +74,7 @@ function Bottlenecks() {
   const model = useStore((s) => s.model);
   const top5 = useStore((s) => s.layers.top5);
   const [busy, setBusy] = useState(false);
-  const takt = model.settings.takt;
+  const takt = effectiveTakt(model);
   const top = kpi.ranking.slice(0, 5);
   const calibrate = () => {
     setBusy(true);

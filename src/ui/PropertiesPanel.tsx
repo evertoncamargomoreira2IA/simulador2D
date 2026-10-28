@@ -1,9 +1,11 @@
 // Painel de propriedades: bloco selecionado, link selecionado ou configuração do modelo.
 
+import { useState } from 'react';
 import { nodeKpi } from '../engine/metrics';
 import type { LinkDef, NodeDef, NodeState, NodeType, PoolDef, PoolKind } from '../engine/types';
-import { isAssembly, makePool, MANUAL_PATCH, POOL_LABEL, TYPE_LABEL } from '../engine/types';
+import { isAssembly, makePool, MANUAL_PATCH, newId, POOL_LABEL, TYPE_LABEL } from '../engine/types';
 import { useStore } from '../store';
+import { Operations } from './Operations';
 import { fmt, pct, STATE_LABEL } from './theme';
 
 /** `machine`: só faz sentido com máquina (some no posto manual). `assembly`: só na montagem. */
@@ -216,6 +218,7 @@ export function PropertiesPanel() {
             })}
           </div>
 
+          {PROCESS.includes(n.type) && n.type !== 'buffer' && <Operations n={n} />}
           <Supply nodeId={n.id} />
 
           <div className="section">
@@ -305,6 +308,7 @@ export function PropertiesPanel() {
       </div>
       {model.background && <PlantControls />}
       <Resources pools={model.pools ?? []} />
+      <TransportTasks />
       <p className="hint section">
         Selecione um bloco para editar tempo de ciclo, capacidade, disponibilidade e os dados de custo, energia e CO2e
         (usados nas próximas sprints). Qualquer edição reinicia a simulação.
@@ -313,7 +317,7 @@ export function PropertiesPanel() {
   );
 }
 
-const KINDS: PoolKind[] = ['operator', 'forklift', 'agv'];
+const KINDS: PoolKind[] = ['operator', 'forklift', 'agv', 'amr'];
 
 function Resources({ pools }: { pools: PoolDef[] }) {
   const st = useStore.getState;
@@ -441,8 +445,92 @@ function PlantControls() {
   );
 }
 
-const QUICK: PoolKind[] = ['agv', 'forklift', 'operator'];
-const NEW_LABEL: Record<PoolKind, string> = { agv: '+ Novo AGV', forklift: '+ Nova empilhadeira', operator: '+ Novo operador (busca a pé)' };
+const QUICK: PoolKind[] = ['agv', 'amr', 'forklift', 'operator'];
+const NEW_LABEL: Record<PoolKind, string> = { agv: '+ Novo AGV', amr: '+ Novo AMR', forklift: '+ Nova empilhadeira', operator: '+ Novo operador (busca a pé)' };
+
+/**
+ * Tarefas de transporte: um recurso busca a peça num ponto (source, posto, máquina)
+ * e leva até outro (kanban, buffer, FGI, posto). Cada tarefa é uma ligação com transporte.
+ */
+function TransportTasks() {
+  const model = useStore((s) => s.model);
+  const pools = model.pools ?? [];
+  const [pool, setPool] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const name = (id: string) => model.nodes.find((n) => n.id === id)?.name ?? id;
+  const tasks = model.links.filter((l) => l.poolId);
+  const froms = model.nodes.filter((n) => n.type !== 'sink');
+  const tos = model.nodes.filter((n) => n.type !== 'source' && n.id !== from);
+  const add = () => {
+    const st = useStore.getState();
+    let pid = pool;
+    const a = model.nodes.find((n) => n.id === from);
+    if (!a || !to) return;
+    if (pid.startsWith('+')) pid = newPoolNear(pid.slice(1) as PoolKind, a.x, a.y);
+    if (!pid) return;
+    const m = useStore.getState().model;
+    const l = m.links.find((x) => x.from === from && x.to === to);
+    if (l) st.updateLink(l.id, { poolId: pid });
+    else {
+      st.patchModel({ links: [...m.links, { id: newId('L'), from, to, weight: 1, poolId: pid }] });
+      st.setMessage(`Tarefa criada: ${name(from)} → ${name(to)}. Como é um fluxo novo, "${name(from)}" divide as peças entre as saídas pelo peso (ajuste clicando na ligação).`);
+    }
+    setFrom('');
+    setTo('');
+  };
+  return (
+    <div className="section tasks">
+      <p className="label">Tarefas de transporte (pick-up e entrega)</p>
+      {tasks.length === 0 && <p className="hint">Nenhuma. Escolha quem leva, onde busca e onde entrega (kanban, buffer, FGI, outro posto).</p>}
+      {tasks.map((l) => {
+        const p = pools.find((x) => x.id === l.poolId);
+        return (
+          <div key={l.id} className="task">
+            <i className={`kind ${p?.kind ?? ''}`} />
+            <button className="link" onClick={() => useStore.getState().select([], l.id)} title="Abrir a ligação">
+              <b>{p?.name ?? '?'}</b> · {name(l.from)} → {name(l.to)}
+            </button>
+            <button className="btn icon" aria-label="Tirar o transporte desta ligação" title="Volta a ser esteira/automático" onClick={() => useStore.getState().updateLink(l.id, { poolId: undefined })}>×</button>
+          </div>
+        );
+      })}
+      <div className="fields">
+        <label className="field full">
+          <span>Quem leva</span>
+          <select id="task-pool" value={pool} onChange={(e) => setPool(e.target.value)}>
+            <option value="">Escolha…</option>
+            {pools.map((p) => (
+              <option key={p.id} value={p.id}>{p.name} ({POOL_LABEL[p.kind].toLowerCase()}, {p.count})</option>
+            ))}
+            {QUICK.map((k) => (
+              <option key={k} value={`+${k}`}>{NEW_LABEL[k]}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Busca em</span>
+          <select id="task-from" value={from} onChange={(e) => setFrom(e.target.value)}>
+            <option value="">Origem…</option>
+            {froms.map((n) => (
+              <option key={n.id} value={n.id}>{n.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Entrega em</span>
+          <select id="task-to" value={to} onChange={(e) => setTo(e.target.value)}>
+            <option value="">Destino…</option>
+            {tos.map((n) => (
+              <option key={n.id} value={n.id}>{n.name}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <button className="btn primary" disabled={!pool || !from || !to} onClick={add}>Criar tarefa</button>
+    </div>
+  );
+}
 
 /** Cria um recurso perto do posto e devolve o id. */
 function newPoolNear(kind: PoolKind, x: number, y: number): string {

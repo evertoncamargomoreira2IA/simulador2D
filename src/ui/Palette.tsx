@@ -1,8 +1,9 @@
 // Paleta de blocos (arrastar para o canvas ou clicar para adicionar), legenda e camadas.
 
-import { makePool, variantPatch, type BlockVariant, type NodeType, type NodeState } from '../engine/types';
+import { variantPatch, type BlockVariant, type NodeType, type NodeState } from '../engine/types';
 import { useStore, type Layers } from '../store';
 import { DRAG_MIME } from './CanvasView';
+import { createOperator } from './operators';
 import { STATE_LABEL } from './theme';
 
 type Block = NodeType | BlockVariant | 'operator';
@@ -67,23 +68,8 @@ function addFromPalette(block: Block) {
 /** Cria um grupo de operadores. Com um posto selecionado, o grupo já passa a atender esse posto. */
 function addOperator() {
   const st = useStore.getState();
-  const m = st.model;
-  const pools = m.pools ?? [];
-  const sel = st.selected.length === 1 ? m.nodes.find((n) => n.id === st.selected[0]) : undefined;
-  const c = st.viewCenter;
-  const pool = makePool('operator', {
-    name: `Operadores ${pools.filter((p) => p.kind === 'operator').length + 1}`,
-    count: 1,
-    x: Math.round(sel ? sel.x : c.x),
-    y: Math.round(sel ? sel.y + 60 : c.y),
-  });
-  const station = sel && sel.type !== 'source' && sel.type !== 'sink' ? sel : undefined;
-  st.patchModel({ pools: [...pools, pool], ...(station ? { nodes: m.nodes.map((n) => (n.id === station.id ? { ...n, poolId: pool.id } : n)) } : {}) });
-  st.setMessage(
-    station
-      ? `"${pool.name}" criado e ligado a "${station.name}". Para a mesma equipe atender outros postos, selecione o posto e escolha o grupo em "Operadores compartilhados".`
-      : `"${pool.name}" criado em Recursos (painel da direita). Selecione um posto e escolha o grupo em "Operadores compartilhados".`,
-  );
+  const sel = st.selected.length === 1 ? st.model.nodes.find((n) => n.id === st.selected[0]) : undefined;
+  createOperator(sel);
 }
 
 const LAYERS: { k: keyof Layers; label: string }[] = [
@@ -111,7 +97,7 @@ export function Palette() {
             <button
               key={b.type}
               className="block"
-              draggable={b.type !== 'operator'}
+              draggable
               onDragStart={(e) => {
                 e.dataTransfer.setData(DRAG_MIME, b.type);
                 e.dataTransfer.effectAllowed = 'copy';

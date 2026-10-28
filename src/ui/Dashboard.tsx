@@ -7,14 +7,18 @@ import type { NodeState } from '../engine/types';
 import { useStore } from '../store';
 import { fmt, fmtTime, pct, STATE_LABEL, useCanvasColors } from './theme';
 import { POOL_LABEL } from '../engine/types';
-import { cycleRows, lineSequence } from './CycleTakt';
+import { cycleRows, effectiveTakt, lineSequence } from './CycleTakt';
 
 const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup'];
 
 export function Dashboard() {
   const kpi = useStore((s) => s.kpi);
   const sim = useStore((s) => s.sim);
-  const takt = useStore((s) => s.model.settings.takt);
+  const model = useStore((s) => s.model);
+  const takt = effectiveTakt(model);
+  // carga planejada (com ineficiência) de cada posto da linha principal em % do takt da meta
+  const mainRows = cycleRows(model).filter((r) => !r.offline);
+  const loadAtTarget = takt > 0 && mainRows.length ? mainRows.reduce((s, r) => s + r.plan / takt, 0) / mainRows.length : 0;
   const warmup = useStore((s) => s.model.settings.warmup);
   const startFull = useStore((s) => s.model.settings.startFull);
   const [open, setOpen] = useState(true);
@@ -35,14 +39,25 @@ export function Dashboard() {
         {open && (
           <div className="tiles">
             <Tile k="Produção" v={String(kpi.completed)} u="peças" />
-            <Tile k="Throughput" v={fmt(kpi.throughputPerHour, 0)} u="pç/h" />
+            <ThroughputTile kpi={kpi} />
             <Tile k="Cycle time real" v={fmt(kpi.cycleTime, 1)} u={`s · takt ${fmt(takt, 1)}`} alert={kpi.completed > 5 && kpi.cycleTime > takt * 1.05} />
             <Tile k="Lead time" v={kpi.leadTime ? fmtTime(kpi.leadTime) : '–'} hint="Tempo de uma máquina desde a entrada até o fim da linha, com filas, esperas e transporte." />
             <Tile k="Total cycle time" v={kpi.totalCycleTime ? fmtTime(kpi.totalCycleTime) : '–'} hint="Soma dos tempos de ciclo para montar uma máquina, incluindo as submontagens." />
             <Tile k="WIP" v={String(kpi.wip)} u={`méd ${fmt(kpi.avgWip, 0)}`} />
-            <Tile k="OEE linha" v={pct(kpi.oee)} />
-            <Tile k="Aderência takt" v={pct(kpi.taktCompliance)} />
-            <Tile k="Utilização média" v={pct(kpi.capacityUtilization)} />
+            <Tile k="OEE (gargalo)" v={pct(kpi.oee)} hint="OEE do posto gargalo: disponibilidade × performance × qualidade." />
+            <Tile
+              k="UPH real × meta"
+              v={`${fmt(kpi.throughputPerHour, 0)} / ${fmt(takt ? 3600 / takt : 0, 0)}`}
+              u={`${pct(kpi.targetAttainment)} da meta`}
+              alert={kpi.completed > 5 && kpi.targetAttainment < 0.95}
+              hint={`UPH real da linha ÷ UPH meta (takt ${fmt(takt, 1)} s), sem teto: acima de 100% a linha está mais rápida que a meta. Aderência ao takt (parte do tempo em que a saída acompanhou o takt): ${pct(kpi.taktCompliance)}.`}
+            />
+            <Tile
+              k="Utilização na meta"
+              v={pct(loadAtTarget)}
+              u={`real ${pct(kpi.capacityUtilization)}`}
+              hint="Média da carga dos postos da linha principal em % do takt da meta UPH, já com a ineficiência de cada posto (ciclo ÷ eficiência). 'Real' = tempo ocupado medido na simulação."
+            />
             <Tile k="Expedido" v={String(kpi.shippedLoads)} u={kpi.shipped > kpi.shippedLoads ? `cargas · ${kpi.shipped} pç` : 'pç'} hint="Cargas (pallets) que chegaram ao destino final." />
             <Tile k="FPY" v={pct(kpi.firstPassYield)} hint="Primeira passada: peças sem retrabalho." />
             <Tile k="Gargalo" v={bottleneck && kpi.completed > 0 ? bottleneck.name : '–'} alert={!!bottleneck && kpi.completed > 0} />
@@ -53,6 +68,34 @@ export function Dashboard() {
       {open && <TimeChart tick={sim.timeline.length} sim={sim} takt={takt} />}
       {open && <People kpi={kpi} />}
     </section>
+  );
+}
+
+/** UPH de um posto: cargas processadas × peças por carga, por hora. */
+export function stationUph(k: { processed: number }, def: { batchSize?: number } | undefined, elapsed: number): number {
+  return (k.processed * Math.max(1, Math.round(def?.batchSize ?? 1)) * 3600) / Math.max(1, elapsed);
+}
+
+/** Throughput da linha ou de um posto escolhido como referência (destacado no layout). */
+function ThroughputTile({ kpi }: { kpi: LineKpi }) {
+  const model = useStore((s) => s.model);
+  const ref = model.refStation ? model.nodes.find((n) => n.id === model.refStation) : undefined;
+  const k = ref ? kpi.nodes.find((n) => n.id === ref.id) : undefined;
+  const procs = lineSequence(model, model.nodes.filter((n) => n.type !== 'source' && n.type !== 'sink'));
+  return (
+    <label className={`tile ref-tile${ref ? ' ref' : ''}`} title="Escolha um posto como referência do UPH: ele fica destacado no layout.">
+      <div className="k">{ref ? `UPH ${ref.name}` : 'Throughput'}</div>
+      <div className="v">
+        {fmt(k ? stationUph(k, ref, kpi.elapsed) : kpi.throughputPerHour, 0)}
+        <small>{ref ? `pç/h · linha ${fmt(kpi.throughputPerHour, 0)}` : 'pç/h ▾'}</small>
+      </div>
+      <select aria-label="Posto de referência do UPH" value={ref?.id ?? ''} onChange={(e) => useStore.getState().setRefStation(e.target.value || undefined)}>
+        <option value="">Saída da linha</option>
+        {procs.map((n) => (
+          <option key={n.id} value={n.id}>{n.name}</option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -74,11 +117,12 @@ function StateChart({ kpi }: { kpi: LineKpi }) {
   const colors = useCanvasColors();
   const model = useStore((s) => s.model);
   const [mode, setMode] = useState<'estados' | 'takt'>('takt');
-  const takt = model.settings.takt || 0;
+  const takt = effectiveTakt(model);
   const procs = lineSequence(model, kpi.nodes.filter((n) => n.type !== 'source' && n.type !== 'sink'));
   // vs Takt: carga por peça (medida na simulação; antes de rodar, a planejada) em % do takt
   const ct = new Map(cycleRows(model, kpi).map((r) => [r.id, r.real ?? r.plan]));
   const loads = lineSequence(model, cycleRows(model, kpi));
+  const eff = new Map(model.nodes.filter((n) => n.efficiency && n.efficiency < 1).map((n) => [n.id, n.efficiency!]));
   const pctTakt = (id: string) => (takt > 0 ? ((ct.get(id) ?? 0) / takt) * 100 : 0);
 
   useEffect(() => {
@@ -148,7 +192,7 @@ function StateChart({ kpi }: { kpi: LineKpi }) {
             const r = loads[t.dataIndex];
             return t.dataset.label === 'Takt'
               ? `Takt ${fmt(takt, 1)} s`
-              : `${fmt(Number(t.raw), 0)}% do takt · ${fmt(ct.get(r.id) ?? 0, 1)} s por peça ${r.real !== undefined ? '(medido agora)' : '(planejado)'}`;
+              : `${fmt(Number(t.raw), 0)}% do takt · ${fmt(ct.get(r.id) ?? 0, 1)} s por peça ${r.real !== undefined ? '(medido agora)' : '(planejado)'}${eff.get(r.id) ? ` · eficiência ${pct(eff.get(r.id)!)}` : ''}`;
           },
         },
       };
@@ -165,7 +209,7 @@ function StateChart({ kpi }: { kpi: LineKpi }) {
   return (
     <div className="chart">
       <p className="label">
-        {mode === 'estados' ? 'Estados por posto (% do tempo)' : `Performance por posto × takt ${fmt(takt, 1)} s (ao vivo)`}
+        {mode === 'estados' ? 'Estados por posto (% do tempo)' : `Utilização por posto × meta ${fmt(takt ? 3600 / takt : 0, 0)} UPH (takt ${fmt(takt, 1)} s, com ineficiência, ao vivo)`}
         <span className="seg mini" role="group" aria-label="Visão do gráfico">
           <button className={`btn link${mode === 'estados' ? ' on' : ''}`} onClick={() => setMode('estados')}>Estados</button>
           <button className={`btn link${mode === 'takt' ? ' on' : ''}`} onClick={() => setMode('takt')} disabled={!takt} title={takt ? '' : 'Defina o takt ou a meta UPH na configuração do modelo'}>vs Takt</button>
@@ -247,6 +291,7 @@ function band(u: number): { label: string; color: string } {
 
 function People({ kpi }: { kpi: LineKpi }) {
   const top5 = useStore((s) => s.layers.top5);
+  const model = useStore((s) => s.model);
   const top = kpi.ranking.slice(0, 5);
   const max = top[0]?.active || 1;
   return (
@@ -283,6 +328,7 @@ function People({ kpi }: { kpi: LineKpi }) {
               <button className="name link" onClick={() => useStore.getState().setDetail(r.id)}>{i + 1}. {r.name}</button>
               <span className="bar"><span style={{ width: `${(r.active / max) * 100}%`, background: i === 0 ? 'var(--st-down)' : 'var(--accent)' }} /></span>
               <b>{pct(r.active)}</b>
+              <span className="muted uph-col" title="UPH do posto">{fmt(stationUph(kpi.nodes.find((n) => n.id === r.id) ?? { processed: 0 }, model.nodes.find((n) => n.id === r.id), kpi.elapsed), 0)} UPH</span>
             </li>
           ))}
         {kpi.completed === 0 && <li className="hint">Rode a simulação para ver o ranking.</li>}

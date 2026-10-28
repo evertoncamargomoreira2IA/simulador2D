@@ -17,6 +17,7 @@
 // - Peças saindo do retrabalho sempre entram no destino (pista de retorno), evitando deadlock.
 // - Falhas: MTBF derivado de disponibilidade e MTTR; processamento é pausado.
 
+import { effectiveTakt } from './balance';
 import { MinHeap } from './heap';
 import { Rng } from './rng';
 import { slotPositions, type LinkDef, type Model, type NodeDef, type NodeState, type PoolDef } from './types';
@@ -247,7 +248,8 @@ export class Simulator {
   readonly hasOutputPoint: boolean;
 
   constructor(model: Model) {
-    this.model = model;
+    // Takt zerado: usa o tempo do gargalo planejado como referência.
+    this.model = model.settings.takt > 0 ? model : { ...model, settings: { ...model.settings, takt: effectiveTakt(model) } };
     this.rng = new Rng(model.settings.seed);
     const ppm = (this.ppm = model.settings.pxPerMeter || 40);
     const poolById = new Map<string, PoolRt>();

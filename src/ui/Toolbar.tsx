@@ -7,6 +7,7 @@ import { ACCEPT, importAnyFile } from './fileImport';
 import { lp2Model, simpleModel } from '../model/builder';
 import { privateExample, useStore } from '../store';
 import { fmtTime } from './theme';
+import { effectiveTakt } from '../engine/balance';
 import { Tutorial, downloadTemplate } from './Tutorial';
 import { RecentSelect, SavedModels, saveCurrent } from './SaveDialog';
 
@@ -69,12 +70,15 @@ export function Toolbar() {
           onChange={(e) => {
             const ex = privateExample();
             if (e.target.value === 'real' && ex) st().setModel(ex, 'Linha real carregada sobre o layout DXF.');
+            const main = e.target.value === 'main' ? privateExample('main') : null;
+            if (main) st().setModel(main, 'Main line com operações e atividades de cada posto. Veja Análises → Yamazumi.');
             if (e.target.value === 'lp2') st().setModel(lp2Model(), 'Exemplo LP2 carregado (70 postos, 12 s por posto).');
             if (e.target.value === 'simple') st().setModel(simpleModel(), 'Linha exemplo simples carregada.');
           }}
         >
           <option value="" disabled>Exemplos…</option>
           {__EXAMPLE__ && <option value="real">Linha real (layout DXF)</option>}
+          {__EXAMPLE_MAIN__ && <option value="main">Linha real: main line com atividades</option>}
           <option value="lp2">Linha LP2 (70 postos)</option>
           <option value="simple">Linha simples</option>
         </select>
@@ -171,7 +175,9 @@ export function Toolbar() {
 
 /** Meta UPH na barra: o takt sai daqui (takt = 3600 / UPH). */
 function UphField() {
-  const takt = useStore((s) => s.model.settings.takt);
+  const model = useStore((s) => s.model);
+  const takt = model.settings.takt;
+  const eff = effectiveTakt(model);
   const uph = takt > 0 ? Math.round((3600 / takt) * 10) / 10 : 0;
   return (
     <label className="uph" title="Peças por hora esperadas. O takt é calculado sozinho (3600 / UPH) e aparece como linha nos gráficos.">
@@ -187,7 +193,9 @@ function UphField() {
           useStore.getState().updateSettings({ takt: u > 0 ? Math.round((3600 / u) * 1000) / 1000 : 0 });
         }}
       />
-      <small>takt {takt > 0 ? `${takt.toFixed(1)} s` : '–'}</small>
+      <small title={takt > 0 ? '' : 'Sem meta: o takt de referência é o tempo do posto gargalo (planejado).'}>
+        {takt > 0 ? `takt ${takt.toFixed(1)} s` : eff > 0 ? `takt do gargalo ${eff.toFixed(1)} s` : 'takt –'}
+      </small>
     </label>
   );
 }

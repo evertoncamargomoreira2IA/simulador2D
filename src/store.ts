@@ -24,7 +24,7 @@ export interface Layers {
   co2: boolean;
 }
 
-export type AnalysisTab = 'ciclo' | 'throughput' | 'gargalos' | 'spaghetti' | 'custos' | 'energia' | 'carbono' | 'cenarios' | 'real' | 'ia';
+export type AnalysisTab = 'ciclo' | 'yamazumi' | 'throughput' | 'gargalos' | 'spaghetti' | 'custos' | 'energia' | 'carbono' | 'cenarios' | 'real' | 'ia';
 
 export interface RealRow {
   name: string;
@@ -66,6 +66,8 @@ interface State {
   moveNodes: (ids: string[], dx: number, dy: number) => void;
   addNode: (type: NodeType, x: number, y: number, patch?: Partial<NodeDef>) => void;
   addLink: (from: string, to: string) => void;
+  /** Bloco novo já ligado a partir de outro, num passo só de desfazer. */
+  addAfter: (from: string, type: NodeType, x: number, y: number, patch?: Partial<NodeDef>) => void;
   updateLink: (id: string, patch: Partial<LinkDef>) => void;
   deleteSelection: () => void;
   /** Copiar/colar blocos selecionados (com as ligações entre eles). */
@@ -79,15 +81,22 @@ interface State {
   updateSettings: (patch: Partial<Model['settings']>) => void;
   /** Troca partes do modelo (recursos, planta) sem mexer na seleção. */
   patchModel: (patch: Partial<Model>) => void;
-  /** Ordem e visibilidade dos postos nos gráficos: muda o modelo sem reiniciar a simulação. */
+  /** Posto de referência do UPH (só visual: não zera a simulação). */
+  setRefStation: (id: string | undefined) => void;
   undo: () => void;
   redo: () => void;
   /** Rótulos da próxima ação de desfazer/refazer ('' = nada a fazer). */
   undoLabel: string;
   redoLabel: string;
+  /** Ordem e visibilidade dos postos nos gráficos: muda o modelo sem reiniciar a simulação. */
   setChartView: (order: string[] | undefined, hidden: string[] | undefined) => void;
   showOrder: boolean;
   showStart: boolean;
+  /** Equipe criada esperando o clique no posto que vai atender. */
+  pendingPool: string | null;
+  setPendingPool: (id: string | null) => void;
+  /** Liga uma equipe a um posto e deixa a casa dela ao lado do posto. */
+  assignPool: (nodeId: string, poolId: string) => void;
   setShowStart: (v: boolean) => void;
   setShowOrder: (v: boolean) => void;
   setRun: (r: RunState) => void;
@@ -104,8 +113,14 @@ interface State {
 }
 
 /** Exemplo da linha real, embutido só no build privado. */
-export function privateExample(): Model | null {
-  return typeof __EXAMPLE__ !== 'undefined' && __EXAMPLE__ ? structuredClone(__EXAMPLE__) : null;
+export function privateExample(kind: 'real' | 'main' = 'real'): Model | null {
+  const real = typeof __EXAMPLE__ !== 'undefined' ? __EXAMPLE__ : null;
+  if (kind === 'real') return real ? structuredClone(real) : null;
+  const main = typeof __EXAMPLE_MAIN__ !== 'undefined' ? __EXAMPLE_MAIN__ : null;
+  if (!main) return null;
+  const m = structuredClone(main);
+  if (!m.background && real?.background) m.background = structuredClone(real.background);
+  return m;
 }
 
 const fresh = (m: Model) => {
@@ -159,6 +174,23 @@ export const useStore = create<State>((set, get) => {
     viewCenter: { x: 200, y: 200 },
     message: 'Escolha um trabalho salvo, comece um novo ou abra um exemplo.',
     showStart: true,
+    pendingPool: null,
+    setPendingPool: (pendingPool) => set({ pendingPool }),
+    assignPool: (nodeId, poolId) => {
+      const m = get().model;
+      const n = m.nodes.find((x) => x.id === nodeId);
+      if (!n) return;
+      const alone = !m.nodes.some((x) => x.poolId === poolId && x.id !== nodeId);
+      edit(
+        {
+          ...m,
+          nodes: m.nodes.map((x) => (x.id === nodeId ? { ...x, poolId } : x)),
+          pools: (m.pools ?? []).map((p) => (p.id === poolId && alone ? { ...p, x: n.x, y: n.y - 34 } : p)),
+        },
+        { pendingPool: null, message: `Equipe ligada a "${n.name}".` },
+        'ligar equipe',
+      );
+    },
     setShowStart: (showStart) => set({ showStart }),
 
     setModel: (m, message) =>
@@ -191,6 +223,18 @@ export const useStore = create<State>((set, get) => {
       if (patch.name) patch = { ...patch, name: `${patch.name} ${count}` };
       Object.assign(node, patch);
       edit({ ...m, nodes: [...m.nodes, node] }, { selected: [node.id], selectedLink: null }, `adicionar ${node.name}`);
+    },
+
+    addAfter: (from, type, x, y, patch = {}) => {
+      const m = get().model;
+      const g = get().gridSize;
+      const count = m.nodes.filter((n) => n.type === type).length + 1;
+      const node = makeNode(type, { x: get().snap ? Math.round(x / g) * g : x, y: get().snap ? Math.round(y / g) * g : y });
+      node.name = `${node.name} ${count}`;
+      if (patch.name) patch = { ...patch, name: `${patch.name} ${count}` };
+      Object.assign(node, patch);
+      const link: LinkDef = { id: newId('L'), from, to: node.id, weight: 1 };
+      edit({ ...m, nodes: [...m.nodes, node], links: [...m.links, link] }, { selected: [node.id], selectedLink: null }, `adicionar ${node.name}`);
     },
 
     addLink: (from, to) => {
@@ -273,6 +317,10 @@ export const useStore = create<State>((set, get) => {
     setChartView: (chartOrder, chartHidden) => {
       history.push(get().model, undefined, Date.now(), 'sequência dos postos');
       set({ model: { ...get().model, chartOrder, chartHidden }, ...labels() });
+    },
+    setRefStation: (refStation) => {
+      history.push(get().model, undefined, Date.now(), 'posto de referência');
+      set({ model: { ...get().model, refStation }, ...labels() });
     },
     undoLabel: '',
     redoLabel: '',

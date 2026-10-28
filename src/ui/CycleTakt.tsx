@@ -2,87 +2,13 @@
 
 import Chart from 'chart.js/auto';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { LineKpi } from '../engine/metrics';
-import { chartSequence, type Model, type NodeDef } from '../engine/types';
+import { cycleRows, effectiveTakt, type CtRow } from '../engine/balance';
+import { chartSequence, type Model } from '../engine/types';
 import { useStore } from '../store';
 import { Kpi } from './Modal';
 import { fmt, pct, useCanvasColors } from './theme';
 
-export interface CtRow {
-  id: string;
-  name: string;
-  /** Carga planejada por peça da linha: (tempo da giga ÷ gigas) × fração das peças que passam ÷ peças por carga. */
-  plan: number;
-  /** Tempo da giga ÷ gigas, sem descontar amostra, yield ou lote. */
-  raw: number;
-  /** Fração das peças da linha que passa pelo posto (1 = todas; 0,1 = amostra de 10%). */
-  share: number;
-  /** Peças por carga que chegam ao posto (carrinho, pallet). */
-  load: number;
-  /** Medido na simulação: tempo ocupado (por giga) ÷ peças produzidas na linha. */
-  real?: number;
-  offline: boolean;
-}
-
-/** Postos na ordem do fluxo (busca em largura a partir das entradas). Off-lines = alimentam montagem. */
-export function cycleRows(model: Model, kpi?: LineKpi): CtRow[] {
-  const byId = new Map(model.nodes.map((n) => [n.id, n]));
-  const order: NodeDef[] = [];
-  const rank = new Map<string, number>();
-  const queue = model.nodes.filter((n) => n.type === 'source').map((n) => n.id);
-  while (queue.length) {
-    const id = queue.shift()!;
-    if (rank.has(id)) continue;
-    rank.set(id, order.length);
-    const n = byId.get(id);
-    if (n) order.push(n);
-    for (const l of model.links) if (l.from === id && !rank.has(l.to)) queue.push(l.to);
-  }
-  for (const n of model.nodes) if (!rank.has(n.id)) (rank.set(n.id, order.length), order.push(n));
-
-  const detour = (l: Model['links'][number]) =>
-    !!l.once || byId.get(l.to)?.type === 'rework' || model.links.some((o) => o.from === l.to && rank.get(o.to)! <= rank.get(l.from)!);
-  // Fração das peças e tamanho da carga, propagados na ordem do fluxo (ligações de volta não contam).
-  const share = new Map<string, number>();
-  const load = new Map<string, number>();
-  for (const n of order) {
-    const ins = model.links.filter((l) => l.to === n.id && rank.get(l.from)! < rank.get(n.id)!);
-    let f = n.type === 'source' ? 1 : 0;
-    let ld = 1;
-    for (const l of ins) {
-      // Desvio (amostra "uma vez", reparo, laço que volta): leva só a sua fração e não tira peças do caminho principal.
-      const outs = model.links.filter((o) => o.from === l.from && (o.role ?? 'flow') === (l.role ?? 'flow') && rank.get(o.to)! > rank.get(l.from)!);
-      const main = outs.filter((o) => !detour(o));
-      const pool = detour(l) ? outs : main;
-      const tot = pool.reduce((s, o) => s + o.weight, 0) || 1;
-      f += (share.get(l.from) ?? 0) * (l.role === 'part' ? 1 : l.weight / tot);
-      const up = byId.get(l.from)!;
-      ld = Math.max(ld, up.batchSize && up.batchSize > 1 ? up.batchSize : load.get(l.from) ?? 1);
-    }
-    share.set(n.id, Math.min(1, f));
-    load.set(n.id, n.batchSize && n.batchSize > 1 ? n.batchSize : ld);
-  }
-
-  const feeders = new Set<string>();
-  const mark = (id: string) => {
-    if (feeders.has(id)) return;
-    feeders.add(id);
-    for (const l of model.links) if (l.to === id) mark(l.from);
-  };
-  for (const l of model.links) if (l.role === 'part') mark(l.from);
-  const elapsed = Math.max(1, kpi?.elapsed ?? 0);
-  return order
-    .filter((n) => (n.type === 'machine' || n.type === 'inspection' || n.type === 'rework') && n.cycleTime > 0)
-    .map((n) => {
-      const k = kpi?.nodes.find((x) => x.id === n.id);
-      const raw = n.cycleTime / (n.efficiency || 1) / Math.max(1, n.capacity);
-      const sh = share.get(n.id) ?? 1;
-      const ld = load.get(n.id) ?? 1;
-      // ao vivo: tempo ocupado por carga processada, convertido para "por peça da linha"
-      const real = k && k.processed > 0 ? ((k.utilization * elapsed) / k.processed) * (sh / ld) : undefined;
-      return { id: n.id, name: n.name, raw, share: sh, load: ld, plan: (raw * sh) / ld, real, offline: feeders.has(n.id) };
-    });
-}
+export { cycleRows, effectiveTakt, type CtRow } from '../engine/balance';
 
 const flowCache = new WeakMap<Model['nodes'], Map<string, number>>();
 
@@ -115,7 +41,7 @@ export function CycleTakt() {
   const colors = useCanvasColors();
   const [sorted, setSorted] = useState(false);
   const [scope, setScope] = useState<'all' | 'main' | 'off'>('all');
-  const takt = model.settings.takt || 0;
+  const takt = effectiveTakt(model);
   const all = useMemo(() => cycleRows(model, kpi), [model, kpi]);
   const rows = useMemo(() => {
     const r = lineSequence(model, all).filter((x) => (scope === 'all' ? true : scope === 'off' ? x.offline : !x.offline));

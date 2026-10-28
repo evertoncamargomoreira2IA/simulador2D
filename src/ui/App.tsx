@@ -76,6 +76,7 @@ export function App() {
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (st.selected.length || st.selectedLink) st.deleteSelection();
       } else if (e.key === 'Escape') {
+        st.setPendingPool(null);
         st.setTool('select');
         st.select([]);
       } else if (e.key === ' ') {

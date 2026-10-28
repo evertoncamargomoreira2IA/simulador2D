@@ -27,8 +27,8 @@ const TIPOS: Record<string, NodeType> = {
   sink: 'sink', saida: 'sink', saída: 'sink', expedicao: 'sink', expedição: 'sink',
 };
 const TIPO_PT: Record<NodeType, string> = { source: 'entrada', machine: 'posto', buffer: 'buffer', inspection: 'teste', rework: 'reparo', sink: 'saida' };
-const POOL_TIPOS: Record<string, PoolKind> = { operador: 'operator', operadores: 'operator', operator: 'operator', empilhadeira: 'forklift', forklift: 'forklift', agv: 'agv', amr: 'agv' };
-const POOL_PT: Record<PoolKind, string> = { operator: 'operador', forklift: 'empilhadeira', agv: 'agv' };
+const POOL_TIPOS: Record<string, PoolKind> = { operador: 'operator', operadores: 'operator', operator: 'operator', empilhadeira: 'forklift', forklift: 'forklift', agv: 'agv', amr: 'amr' };
+const POOL_PT: Record<PoolKind, string> = { operator: 'operador', forklift: 'empilhadeira', agv: 'agv', amr: 'amr' };
 
 type Param = { k: keyof SimSettings; nome: string; unidade: string; desc: string; toSheet?: (v: number) => number; fromSheet?: (v: number) => number };
 const PARAMS: Param[] = [
