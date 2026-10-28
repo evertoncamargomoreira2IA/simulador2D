@@ -1,15 +1,16 @@
 // Paleta de blocos (arrastar para o canvas ou clicar para adicionar), legenda e camadas.
 
-import { makePool, type NodeType, type NodeState } from '../engine/types';
+import { makePool, variantPatch, type BlockVariant, type NodeType, type NodeState } from '../engine/types';
 import { useStore, type Layers } from '../store';
 import { DRAG_MIME } from './CanvasView';
 import { STATE_LABEL } from './theme';
 
-type Block = NodeType | 'assembly' | 'operator';
+type Block = NodeType | BlockVariant | 'operator';
 
 const BLOCKS: { type: Block; label: string; desc: string }[] = [
   { type: 'source', label: 'Source', desc: 'Entrada de material' },
   { type: 'machine', label: 'Machine', desc: 'Posto / máquina' },
+  { type: 'manual', label: 'Posto manual', desc: 'Só operador, sem máquina' },
   { type: 'assembly', label: 'Montagem', desc: 'Junta produto + kits' },
   { type: 'operator', label: 'Operador', desc: 'Equipe compartilhada' },
   { type: 'buffer', label: 'Buffer', desc: 'Estoque / WIP' },
@@ -32,7 +33,7 @@ function freeSpot(x: number, y: number): { x: number; y: number } {
  */
 function addFromPalette(block: Block) {
   if (block === 'operator') return addOperator();
-  const type: NodeType = block === 'assembly' ? 'machine' : block;
+  const type: NodeType = block === 'assembly' || block === 'manual' ? 'machine' : block;
   const st = useStore.getState();
   const prev = st.selected.length === 1 ? st.model.nodes.find((n) => n.id === st.selected[0]) : undefined;
   const c = st.viewCenter;
@@ -40,11 +41,15 @@ function addFromPalette(block: Block) {
   if (prev && type === 'source' && prev.type !== 'source') pos = freeSpot(prev.x - 120, prev.y);
   else if (prev) pos = freeSpot(prev.x + 120, prev.y);
   else pos = freeSpot(Math.round(c.x), Math.round(c.y));
-  st.addNode(type, pos.x, pos.y);
+  const variant = block === 'assembly' || block === 'manual' ? block : null;
+  st.addNode(type, pos.x, pos.y, variant ? variantPatch(variant, 1) : {});
   const added = useStore.getState().selected[0];
-  if (block === 'assembly' && added) {
-    useStore.getState().updateNode(added, { name: 'Montagem', assembly: true, partBuffer: 2 });
-    useStore.getState().setMessage('Montagem criada. Ligue os off-lines a ela e, em cada ligação, escolha "Componente (consumido na montagem)".');
+  if (variant && added) {
+    useStore.getState().setMessage(
+      variant === 'assembly'
+        ? 'Montagem criada. Ligue os off-lines a ela e, em cada ligação, escolha "Componente (consumido na montagem)".'
+        : 'Posto manual criado: só tempo de ciclo, operadores e custo, sem quebra nem energia de máquina.',
+    );
   }
   if (!prev || !added) return;
   if (type === 'source') {
@@ -167,6 +172,13 @@ function Icon({ type }: { type: Block }) {
         <>
           <rect x="8" y="3" width="15" height="14" rx="2" {...s} />
           <polyline points="1,6 8,10 1,14" {...s} />
+        </>
+      )}
+      {type === 'manual' && (
+        <>
+          <rect x="3" y="3" width="20" height="14" rx="2" {...s} strokeDasharray="3 2" />
+          <circle cx="13" cy="8" r="2.4" {...s} />
+          <path d="M8.5 15 C8.5 11.5, 17.5 11.5, 17.5 15" {...s} />
         </>
       )}
       {type === 'operator' && (

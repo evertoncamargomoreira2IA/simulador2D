@@ -3,7 +3,7 @@
 import Chart from 'chart.js/auto';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Simulator } from '../engine/simulator';
-import { chartSequence } from '../engine/types';
+import { lineSequence } from './CycleTakt';
 import { useStore } from '../store';
 import { Kpi } from './Modal';
 import { fmt, fmtTime, useCanvasColors } from './theme';
@@ -60,7 +60,7 @@ export function ThroughputTab() {
   const series = useMemo(() => intervals(sim, step), [sim, step, tick]);
   const elapsed = Math.max(1, kpi.elapsed);
   const stations = useMemo(() => {
-    const r = chartSequence(
+    const r = lineSequence(
       model,
       sim.model.nodes
         .map((n) => ({ n, k: kpi.nodes.find((x) => x.id === n.id) }))

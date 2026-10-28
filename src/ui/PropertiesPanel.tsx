@@ -2,11 +2,12 @@
 
 import { nodeKpi } from '../engine/metrics';
 import type { LinkDef, NodeDef, NodeState, NodeType, PoolDef, PoolKind } from '../engine/types';
-import { isAssembly, makePool, POOL_LABEL, TYPE_LABEL } from '../engine/types';
+import { isAssembly, makePool, MANUAL_PATCH, POOL_LABEL, TYPE_LABEL } from '../engine/types';
 import { useStore } from '../store';
 import { fmt, pct, STATE_LABEL } from './theme';
 
-type FieldDef = { k: keyof NodeDef; label: string; step?: number; scale?: number; types?: NodeType[] };
+/** `machine`: só faz sentido com máquina (some no posto manual). `assembly`: só na montagem. */
+type FieldDef = { k: keyof NodeDef; label: string; step?: number; scale?: number; types?: NodeType[]; machine?: boolean; assembly?: boolean };
 
 const PROCESS: NodeType[] = ['machine', 'inspection', 'rework', 'buffer'];
 const FIELDS: FieldDef[] = [
@@ -14,21 +15,21 @@ const FIELDS: FieldDef[] = [
   { k: 'cv', label: 'Variação CV (%)', scale: 100, types: PROCESS },
   { k: 'capacity', label: 'Capacidade', step: 1, types: PROCESS },
   { k: 'queueCap', label: 'Fila de entrada', step: 1, types: ['machine', 'inspection', 'rework'] },
-  { k: 'setupTime', label: 'Setup (s)', step: 10, types: PROCESS },
-  { k: 'availability', label: 'Disponibilidade (%)', scale: 100, types: ['machine', 'inspection', 'rework'] },
-  { k: 'mttr', label: 'MTTR (s)', step: 10, types: ['machine', 'inspection', 'rework'] },
+  { k: 'setupTime', label: 'Setup (s)', step: 10, types: PROCESS, machine: true },
+  { k: 'availability', label: 'Disponibilidade (%)', scale: 100, types: ['machine', 'inspection', 'rework'], machine: true },
+  { k: 'mttr', label: 'MTTR (s)', step: 10, types: ['machine', 'inspection', 'rework'], machine: true },
   { k: 'interarrival', label: 'Intervalo chegadas (s, 0 = ilimitado)', step: 1, types: ['source'] },
   { k: 'maxArrivals', label: 'Limite de peças (0 = sem)', step: 1, types: ['source'] },
   { k: 'operators', label: 'Operadores', step: 1 },
-  { k: 'handlingTime', label: 'Carga+descarga operador (s)', step: 5, types: PROCESS },
-  { k: 'partBuffer', label: 'Estoque de componentes', step: 1, types: PROCESS },
+  { k: 'handlingTime', label: 'Carga+descarga operador (s)', step: 5, types: PROCESS, machine: true },
+  { k: 'partBuffer', label: 'Estoque de componentes', step: 1, types: PROCESS, assembly: true },
   { k: 'batchSize', label: 'Agrupar N peças (carrinho/pallet)', step: 1, types: ['machine', 'inspection', 'buffer'] },
   { k: 'shifts', label: 'Turnos', step: 1 },
-  { k: 'oeeTarget', label: 'OEE meta (%)', scale: 100 },
-  { k: 'powerKw', label: 'Potência (kW)', step: 0.1 },
-  { k: 'idlePowerKw', label: 'Potência espera (kW)', step: 0.1 },
-  { k: 'costPerHour', label: 'Custo/hora (R$)', step: 1 },
-  { k: 'co2Factor', label: 'Fator CO2e (kg/kWh)', step: 0.01 },
+  { k: 'oeeTarget', label: 'OEE meta (%)', scale: 100, types: PROCESS },
+  { k: 'powerKw', label: 'Potência (kW)', step: 0.1, types: ['machine', 'inspection', 'rework'], machine: true },
+  { k: 'idlePowerKw', label: 'Potência espera (kW)', step: 0.1, types: ['machine', 'inspection', 'rework'], machine: true },
+  { k: 'costPerHour', label: 'Custo máquina/hora (R$)', step: 1, types: PROCESS, machine: true },
+  { k: 'co2Factor', label: 'Fator CO2e (kg/kWh)', step: 0.01, types: ['machine', 'inspection', 'rework'], machine: true },
   { k: 'x', label: 'X', step: 20 },
   { k: 'y', label: 'Y', step: 20 },
 ];
@@ -108,7 +109,7 @@ export function PropertiesPanel() {
       return (
         <aside className="props">
           <h2>{n.name}</h2>
-          <p className="sub">{isAssembly(n, model.links) ? 'Montagem' : TYPE_LABEL[n.type]} · ID {n.id}</p>
+          <p className="sub">{isAssembly(n, model.links) ? 'Montagem' : n.manual ? 'Posto manual' : TYPE_LABEL[n.type]} · ID {n.id}</p>
           <div className="fields">
             <label className="field full">
               <span>Nome</span>
@@ -118,16 +119,20 @@ export function PropertiesPanel() {
               <span>Tipo</span>
               <select
                 id="node-type"
-                value={isAssembly(n, model.links) ? 'assembly' : n.type}
+                value={isAssembly(n, model.links) ? 'assembly' : n.manual ? 'manual' : n.type}
                 onChange={(e) =>
                   e.target.value === 'assembly'
-                    ? upd({ type: 'machine', assembly: true, partBuffer: n.partBuffer ?? 2 })
-                    : upd({ type: e.target.value as NodeType, assembly: false })
+                    ? upd({ type: 'machine', assembly: true, manual: false, partBuffer: n.partBuffer ?? 2 })
+                    : e.target.value === 'manual'
+                      ? upd({ ...MANUAL_PATCH, type: 'machine', operators: Math.max(1, n.operators) })
+                      : upd({ type: e.target.value as NodeType, assembly: false, manual: false })
                 }
               >
                 {(Object.keys(TYPE_LABEL) as NodeType[]).flatMap((t) => [
                   <option key={t} value={t}>{TYPE_LABEL[t]}</option>,
-                  ...(t === 'machine' ? [<option key="assembly" value="assembly">Montagem (junta kits)</option>] : []),
+                  ...(t === 'machine'
+                    ? [<option key="manual" value="manual">Posto manual (só operador)</option>, <option key="assembly" value="assembly">Montagem (junta kits)</option>]
+                    : []),
                 ])}
               </select>
             </label>
@@ -189,7 +194,12 @@ export function PropertiesPanel() {
                 <span>Medir a produção da linha aqui (throughput, lead time e takt)</span>
               </label>
             )}
-            {FIELDS.filter((f) => !f.types || f.types.includes(n.type)).map((f) => {
+            {FIELDS.filter(
+              (f) =>
+                (!f.types || f.types.includes(n.type)) &&
+                !(f.machine && n.manual) &&
+                !(f.assembly && !isAssembly(n, model.links)),
+            ).map((f) => {
               const raw = (n[f.k] as number | undefined) ?? 0;
               const scale = f.scale ?? 1;
               return (
@@ -259,6 +269,20 @@ export function PropertiesPanel() {
         <label className="field">
           <span>Aquecimento (min)</span>
           <input id="set-warmup" type="number" min={0} step={5} value={s.warmup / 60} onChange={(e) => updS({ warmup: Math.max(0, Number(e.target.value) * 60) })} />
+        </label>
+        <label className="field">
+          <span>Meta UPH (peças/h)</span>
+          <input
+            id="set-uph"
+            type="number"
+            min={0}
+            step={1}
+            value={s.takt > 0 ? Math.round((3600 / s.takt) * 10) / 10 : 0}
+            onChange={(e) => {
+              const u = Number(e.target.value);
+              updS({ takt: u > 0 ? Math.round((3600 / u) * 1000) / 1000 : 0 });
+            }}
+          />
         </label>
         <label className="field">
           <span>Takt (s)</span>

@@ -1,9 +1,9 @@
 // Sequência dos postos nos gráficos: arrastar para ordenar e marcar o que aparece.
 
 import { useMemo, useState } from 'react';
-import { chartSequence, isAssembly, TYPE_LABEL } from '../engine/types';
+import { isAssembly, TYPE_LABEL } from '../engine/types';
 import { useStore } from '../store';
-import { cycleRows } from './CycleTakt';
+import { cycleRows, lineSequence } from './CycleTakt';
 import { Modal } from './Modal';
 
 export function StationOrder({ onClose }: { onClose: () => void }) {
@@ -17,7 +17,7 @@ export function StationOrder({ onClose }: { onClose: () => void }) {
     return [...ids, ...extra].map((id) => model.nodes.find((n) => n.id === id)!);
   }, [model]);
   const offline = useMemo(() => new Set(cycleRows(model).filter((r) => r.offline).map((r) => r.id)), [model]);
-  const [order, setOrder] = useState(() => chartSequence(model, flow, true).map((n) => n.id));
+  const [order, setOrder] = useState(() => lineSequence(model, flow, true).map((n) => n.id));
   const [hidden, setHidden] = useState(() => new Set(model.chartHidden ?? []));
   const [drag, setDrag] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);

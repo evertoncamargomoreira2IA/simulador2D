@@ -50,6 +50,8 @@ export interface NodeDef {
   fixedTime?: boolean;
   /** Posto de montagem: junta o produto com um kit de cada componente (ligações do tipo peça). */
   assembly?: boolean;
+  /** Posto manual: só pessoa, sem máquina (sem quebra, setup, potência nem carga/descarga). */
+  manual?: boolean;
   /** Onde o operador fixo aparece em relação ao bloco (padrão: em cima). */
   crewSide?: 'top' | 'bottom' | 'left' | 'right';
   /** Posição livre do operador (px, relativa ao centro do bloco), definida arrastando o boneco. */
@@ -278,4 +280,15 @@ export function chartSequence<T extends { id: string }>(model: Pick<Model, 'char
     .sort((a, b) => a.k - b.k)
     .map((x) => x.it)
     .filter((it) => keepHidden || !hidden.has(it.id));
+}
+
+/** Campos zerados num posto manual: quem trabalha é o operador, não há máquina para quebrar ou consumir energia. */
+export const MANUAL_PATCH: Partial<NodeDef> = { manual: true, assembly: false, availability: 1, mttr: 0, setupTime: 0, powerKw: 0, idlePowerKw: 0, handlingTime: 0, poolId: undefined };
+
+/** Blocos da paleta que são variações de Machine. */
+export type BlockVariant = 'assembly' | 'manual';
+export function variantPatch(v: BlockVariant, operators: number): Partial<NodeDef> {
+  return v === 'assembly'
+    ? { name: 'Montagem', assembly: true, manual: false, partBuffer: 2 }
+    : { ...MANUAL_PATCH, name: 'Posto manual', operators: Math.max(1, operators) };
 }

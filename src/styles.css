@@ -416,3 +416,6 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .seq label b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seq label small { color: var(--muted); white-space: nowrap; }
 .btn.icon { padding: 2px 8px; }
+.seg.mini { display: inline-flex; gap: 0; margin-left: 8px; }
+.seg.mini .btn.link { padding: 0 6px; color: var(--muted); }
+.seg.mini .btn.link.on { color: var(--accent); font-weight: 700; }

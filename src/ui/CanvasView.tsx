@@ -1,7 +1,7 @@
 // Canvas 2D (Konva): grid, blocos arrastáveis, links, peças animadas, zoom/pan e seleção.
 
 import type Konva from 'konva';
-import { isAssembly } from '../engine/types';
+import { isAssembly, variantPatch, type BlockVariant } from '../engine/types';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Arrow, Circle, Group, Layer, Line, Rect, RegularPolygon, Shape, Stage, Text } from 'react-konva';
 import type { NodeRt, Simulator } from '../engine/simulator';
@@ -130,14 +130,13 @@ export function CanvasView() {
   }
 
   function onDrop(e: React.DragEvent) {
-    const type = e.dataTransfer.getData(DRAG_MIME) as NodeType | 'assembly';
+    const type = e.dataTransfer.getData(DRAG_MIME) as NodeType | BlockVariant;
     if (!type) return;
     e.preventDefault();
     const r = wrap.current!.getBoundingClientRect();
     const w = toWorld(e.clientX - r.left, e.clientY - r.top);
-    useStore.getState().addNode(type === 'assembly' ? 'machine' : type, w.x, w.y);
-    const added = useStore.getState().selected[0];
-    if (type === 'assembly' && added) useStore.getState().updateNode(added, { name: 'Montagem', assembly: true, partBuffer: 2 });
+    const variant = type === 'assembly' || type === 'manual' ? type : null;
+    useStore.getState().addNode(variant ? 'machine' : (type as NodeType), w.x, w.y, variant ? variantPatch(variant, 1) : {});
   }
 
   const byId = useMemo(() => new Map(model.nodes.map((n) => [n.id, n])), [model.nodes]);
@@ -546,7 +545,7 @@ function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, s
         y={-7}
         width={W}
         align="center"
-        text={assembly ? 'MT' : glyph(def.type)}
+        text={assembly ? 'MT' : def.manual ? 'MN' : glyph(def.type)}
         fontSize={13}
         fontStyle="bold"
         fill={colors.ink}

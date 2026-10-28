@@ -8,14 +8,39 @@ interface ClaudeHost {
   use?: (name: string) => Promise<{ save: (r: { filename: string; data: BlobPart }) => Promise<unknown> } | null>;
 }
 
-/** Salva um arquivo. Dentro do artefato do claude.ai usa a capacidade `downloads`; fora dele, um link. */
-export async function download(name: string, content: BlobPart, mime: string): Promise<void> {
+/** Avisos do download (a barra de status do app assina isto). */
+export let onDownloadNotice: (msg: string) => void = () => undefined;
+export function setDownloadNotice(f: (msg: string) => void) {
+  onDownloadNotice = f;
+}
+
+/**
+ * Salva um arquivo. Dentro do artefato do claude.ai usa a capacidade `downloads`
+ * (o navegador bloqueia link direto lá dentro); fora dele, um link.
+ */
+export async function download(name: string, content: BlobPart, mime: string): Promise<boolean> {
   const host = (window as unknown as { claude?: ClaudeHost }).claude;
   if (host?.use) {
     const dl = await host.use('downloads').catch(() => null);
-    if (dl) {
-      await dl.save({ filename: name, data: content }).catch(() => undefined);
-      return;
+    if (!dl) {
+      onDownloadNotice(
+        'Esta visualização do artefato não libera downloads. Abra o link do artefato no navegador (claude.ai) e, se aparecer o pedido de permissão para baixar arquivos, aceite. O Salvar (na conta) funciona mesmo assim.',
+      );
+      return false;
+    }
+    try {
+      await dl.save({ filename: name, data: content instanceof Blob ? content : new Blob([content], { type: mime }) });
+      return true;
+    } catch (e) {
+      const code = (e as { code?: string }).code;
+      onDownloadNotice(
+        code === 'declined'
+          ? `Download de "${name}" cancelado.`
+          : code === 'rate_limited'
+            ? 'Já tem um pedido de download aberto: confirme ou feche ele e tente de novo.'
+            : `O download de "${name}" não foi liberado (${code ?? 'indisponível'}). Abra o artefato no navegador e permita downloads.`,
+      );
+      return false;
     }
   }
   const blob = new Blob([content], { type: mime });
@@ -26,6 +51,7 @@ export async function download(name: string, content: BlobPart, mime: string): P
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  return true;
 }
 
 function csvCell(v: unknown): string {
@@ -101,15 +127,15 @@ export function lineRows(k: LineKpi): Record<string, unknown>[] {
   ];
 }
 
-export function exportModelJson(m: Model): Promise<void> {
+export function exportModelJson(m: Model): Promise<boolean> {
   return download(`${slug(m.name)}.json`, JSON.stringify(m, null, 2), 'application/json');
 }
 
-export function exportModelCsv(m: Model): Promise<void> {
+export function exportModelCsv(m: Model): Promise<boolean> {
   return download(`${slug(m.name)}_modelo.csv`, toCsv(modelRows(m)), 'text/csv;charset=utf-8');
 }
 
-export function exportResultsXlsx(m: Model, k: LineKpi): Promise<void> {
+export function exportResultsXlsx(m: Model, k: LineKpi): Promise<boolean> {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lineRows(k)), 'Linha');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resultRows(k)), 'Postos');
@@ -118,7 +144,7 @@ export function exportResultsXlsx(m: Model, k: LineKpi): Promise<void> {
   return download(`${slug(m.name)}_resultados.xlsx`, out, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 }
 
-export function exportResultsCsv(m: Model, k: LineKpi): Promise<void> {
+export function exportResultsCsv(m: Model, k: LineKpi): Promise<boolean> {
   return download(`${slug(m.name)}_resultados.csv`, toCsv(resultRows(k)), 'text/csv;charset=utf-8');
 }
 

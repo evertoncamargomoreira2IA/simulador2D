@@ -2,6 +2,7 @@
 // e a tela é redesenhada por `tick` durante a animação.
 
 import { create } from 'zustand';
+import { History } from './engine/history';
 import { lineKpi, type LineKpi } from './engine/metrics';
 import { Simulator } from './engine/simulator';
 import { makeNode, newId, type LinkDef, type Model, type NodeDef, type NodeType } from './engine/types';
@@ -64,7 +65,7 @@ interface State {
   setModel: (m: Model, message?: string) => void;
   updateNode: (id: string, patch: Partial<NodeDef>) => void;
   moveNodes: (ids: string[], dx: number, dy: number) => void;
-  addNode: (type: NodeType, x: number, y: number) => void;
+  addNode: (type: NodeType, x: number, y: number, patch?: Partial<NodeDef>) => void;
   addLink: (from: string, to: string) => void;
   updateLink: (id: string, patch: Partial<LinkDef>) => void;
   deleteSelection: () => void;
@@ -77,6 +78,11 @@ interface State {
   /** Troca partes do modelo (recursos, planta) sem mexer na seleção. */
   patchModel: (patch: Partial<Model>) => void;
   /** Ordem e visibilidade dos postos nos gráficos: muda o modelo sem reiniciar a simulação. */
+  undo: () => void;
+  redo: () => void;
+  /** Rótulos da próxima ação de desfazer/refazer ('' = nada a fazer). */
+  undoLabel: string;
+  redoLabel: string;
   setChartView: (order: string[] | undefined, hidden: string[] | undefined) => void;
   showOrder: boolean;
   setShowOrder: (v: boolean) => void;
@@ -106,9 +112,28 @@ const fresh = (m: Model) => {
 const initial = privateExample() ?? lp2Model();
 
 export const useStore = create<State>((set, get) => {
-  /** Toda edição do modelo invalida a simulação em andamento. */
-  const edit = (model: Model, extra: Partial<State> = {}) =>
-    set({ model, ...fresh(model), run: 'idle', ...extra });
+  const history = new History<Model>();
+  const labels = () => ({ undoLabel: history.canUndo ? history.undoLabel ?? 'edição' : '', redoLabel: history.canRedo ? history.redoLabel ?? 'edição' : '' });
+  /** Toda edição do modelo invalida a simulação em andamento e entra no desfazer. `key` junta edições seguidas (arrastar, digitar). */
+  const edit = (model: Model, extra: Partial<State> = {}, label = 'edição', key?: string) => {
+    history.push(get().model, key, Date.now(), label);
+    set({ model, ...fresh(model), run: 'idle', ...extra, ...labels() });
+  };
+  const restore = (model: Model | undefined, verb: string, label: string) => {
+    if (!model) return;
+    const ids = new Set(model.nodes.map((n) => n.id));
+    const { selected, selectedLink } = get();
+    set({
+      model,
+      ...fresh(model),
+      run: 'idle',
+      selected: selected.filter((id) => ids.has(id)),
+      selectedLink: model.links.some((l) => l.id === selectedLink) ? selectedLink : null,
+      connectFrom: null,
+      message: `${verb}: ${label}.`,
+      ...labels(),
+    });
+  };
 
   return {
     model: initial,
@@ -129,11 +154,13 @@ export const useStore = create<State>((set, get) => {
       : 'Modelo exemplo LP2 carregado (70 postos, 12 s por posto). Clique em ▶ Start.',
 
     setModel: (m, message) =>
-      edit(m, { selected: [], selectedLink: null, connectFrom: null, saved: null, message: message ?? `Modelo "${m.name}" carregado.` }),
+      edit(m, { selected: [], selectedLink: null, connectFrom: null, saved: null, message: message ?? `Modelo "${m.name}" carregado.` }, `abrir "${m.name}"`),
 
     updateNode: (id, patch) => {
       const m = get().model;
-      edit({ ...m, nodes: m.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) });
+      const name = m.nodes.find((n) => n.id === id)?.name ?? id;
+      const keys = Object.keys(patch).sort().join(',');
+      edit({ ...m, nodes: m.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) }, {}, `alterar ${name}`, `node:${id}:${keys}`);
     },
 
     moveNodes: (ids, dx, dy) => {
@@ -141,10 +168,10 @@ export const useStore = create<State>((set, get) => {
       const set_ = new Set(ids);
       const g = get().gridSize;
       const snap = (v: number) => (get().snap ? Math.round(v / g) * g : v);
-      edit({ ...m, nodes: m.nodes.map((n) => (set_.has(n.id) ? { ...n, x: snap(n.x + dx), y: snap(n.y + dy) } : n)) });
+      edit({ ...m, nodes: m.nodes.map((n) => (set_.has(n.id) ? { ...n, x: snap(n.x + dx), y: snap(n.y + dy) } : n)) }, {}, ids.length > 1 ? `mover ${ids.length} blocos` : 'mover bloco');
     },
 
-    addNode: (type, x, y) => {
+    addNode: (type, x, y, patch = {}) => {
       const m = get().model;
       const g = get().gridSize;
       const count = m.nodes.filter((n) => n.type === type).length + 1;
@@ -153,7 +180,9 @@ export const useStore = create<State>((set, get) => {
         y: get().snap ? Math.round(y / g) * g : y,
       });
       node.name = `${node.name} ${count}`;
-      edit({ ...m, nodes: [...m.nodes, node] }, { selected: [node.id], selectedLink: null });
+      if (patch.name) patch = { ...patch, name: `${patch.name} ${count}` };
+      Object.assign(node, patch);
+      edit({ ...m, nodes: [...m.nodes, node] }, { selected: [node.id], selectedLink: null }, `adicionar ${node.name}`);
     },
 
     addLink: (from, to) => {
@@ -170,12 +199,12 @@ export const useStore = create<State>((set, get) => {
         return;
       }
       const link: LinkDef = { id: newId('L'), from, to, weight: 1 };
-      edit({ ...m, links: [...m.links, link] }, { selectedLink: link.id, selected: [] });
+      edit({ ...m, links: [...m.links, link] }, { selectedLink: link.id, selected: [] }, 'ligar postos');
     },
 
     updateLink: (id, patch) => {
       const m = get().model;
-      edit({ ...m, links: m.links.map((l) => (l.id === id ? { ...l, ...patch } : l)) });
+      edit({ ...m, links: m.links.map((l) => (l.id === id ? { ...l, ...patch } : l)) }, {}, 'alterar ligação', `link:${id}:${Object.keys(patch).sort().join(',')}`);
     },
 
     deleteSelection: () => {
@@ -188,6 +217,7 @@ export const useStore = create<State>((set, get) => {
           links: m.links.filter((l) => l.id !== selectedLink && !del.has(l.from) && !del.has(l.to)),
         },
         { selected: [], selectedLink: null },
+        selected.length ? `apagar ${selected.length} bloco(s)` : 'apagar ligação',
       );
     },
 
@@ -198,10 +228,24 @@ export const useStore = create<State>((set, get) => {
     toggleLayer: (k) => set({ layers: { ...get().layers, [k]: !get().layers[k] } }),
     updateSettings: (patch) => {
       const m = get().model;
-      edit({ ...m, settings: { ...m.settings, ...patch } });
+      edit({ ...m, settings: { ...m.settings, ...patch } }, {}, 'alterar configuração', `settings:${Object.keys(patch).sort().join(',')}`);
     },
-    patchModel: (patch) => edit({ ...get().model, ...patch }),
-    setChartView: (chartOrder, chartHidden) => set({ model: { ...get().model, chartOrder, chartHidden } }),
+    patchModel: (patch) => edit({ ...get().model, ...patch }, {}, 'alterar modelo', `model:${Object.keys(patch).sort().join(',')}`),
+    // Só muda a vista dos gráficos: não zera a simulação.
+    setChartView: (chartOrder, chartHidden) => {
+      history.push(get().model, undefined, Date.now(), 'sequência dos postos');
+      set({ model: { ...get().model, chartOrder, chartHidden }, ...labels() });
+    },
+    undoLabel: '',
+    redoLabel: '',
+    undo: () => {
+      const label = history.undoLabel ?? 'edição';
+      restore(history.undo(get().model), 'Desfeito', label);
+    },
+    redo: () => {
+      const label = history.redoLabel ?? 'edição';
+      restore(history.redo(get().model), 'Refeito', label);
+    },
     showOrder: false,
     setShowOrder: (showOrder) => set({ showOrder }),
     setRun: (run) => set({ run }),

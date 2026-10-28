@@ -10,7 +10,7 @@ import { DEFAULT_SETTINGS } from '../engine/types';
 import { privateExample, useStore } from '../store';
 import { fmtTime } from './theme';
 import { Tutorial, downloadTemplate } from './Tutorial';
-import { SavedModels, saveCurrent } from './SaveDialog';
+import { RecentSelect, SavedModels, saveCurrent } from './SaveDialog';
 
 const SPEEDS = [1, 2, 5, 10, 30, 60, 120, 300, 600];
 
@@ -19,6 +19,8 @@ export function Toolbar() {
   const [help, setHelp] = useState(false);
   const showSaved = useStore((s) => s.showSaved);
   const saved = useStore((s) => s.saved);
+  const undoLabel = useStore((s) => s.undoLabel);
+  const redoLabel = useStore((s) => s.redoLabel);
   const model = useStore((s) => s.model);
   const dirty = !saved || saved.model !== model;
   const run = useStore((s) => s.run);
@@ -100,6 +102,8 @@ export function Toolbar() {
           <option value="lp2">Linha LP2 (70 postos)</option>
           <option value="simple">Linha simples</option>
         </select>
+        <button className="btn icon" disabled={!undoLabel} onClick={() => st().undo()} title={undoLabel ? `Desfazer ${undoLabel} (Ctrl+Z)` : 'Nada para desfazer'} aria-label="Desfazer">↶</button>
+        <button className="btn icon" disabled={!redoLabel} onClick={() => st().redo()} title={redoLabel ? `Refazer ${redoLabel} (Ctrl+Y)` : 'Nada para refazer'} aria-label="Refazer">↷</button>
         <button
           className={`btn${dirty ? ' dirty' : ''}`}
           onClick={() => (saved ? saveCurrent() : st().setShowSaved(true))}
@@ -110,6 +114,7 @@ export function Toolbar() {
         <button className="btn" onClick={() => st().setShowSaved(true)} title="Abrir, salvar como novo ou apagar modelos salvos">
           Salvos
         </button>
+        <RecentSelect />
         <button className="btn" onClick={() => fileRef.current?.click()} title="Planilha padrão preenchida, Excel (.xlsx), CSV, JSON do simulador ou planta DXF (AutoCAD)">
           Importar
         </button>

@@ -128,3 +128,8 @@ tests        testes (vitest)
 - **Colaborador do posto**: escolha em cima, embaixo (na frente), à esquerda ou à direita no painel, ou arraste o boneco no layout.
 - **Throughput por intervalo**: aba de Análises com 15 min, 30 min ou 1 h, total da linha contra a meta do takt e média por posto.
 - **Sequência dos postos**: pop-up para arrastar a ordem e marcar quais postos aparecem nos gráficos (Cycle × Takt, Throughput, Estados por posto). Fica salvo no modelo.
+- **Posto manual**: variação de Machine só com operador; esconde disponibilidade, MTTR, setup, potência, CO2 e custo de máquina.
+- **Desfazer/refazer**: Ctrl+Z / Ctrl+Y ou ↶ ↷ na barra (60 passos; arrastar e digitar no mesmo campo contam como um passo). Módulo `src/engine/history.ts` escrito pelo Codex.
+- **Recentes**: campo na barra com os 10 últimos trabalhos salvos; Salvos → Baixar arquivo guarda uma cópia `.sim2d.json` (abre em Importar).
+- **Meta UPH** ao lado do takt na configuração do modelo.
+- **Gráfico da frente**: ordem da linha principal por padrão (off-lines depois) e chave Estados / vs Takt (carga de cada posto em % do takt, passa de 100% quando estoura).

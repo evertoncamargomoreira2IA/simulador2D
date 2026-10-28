@@ -83,6 +83,30 @@ export function cycleRows(model: Model, kpi?: LineKpi): CtRow[] {
     });
 }
 
+const flowCache = new WeakMap<Model['nodes'], Map<string, number>>();
+
+/** Posição de cada posto na linha: principal na ordem do fluxo, depois os off-lines, depois o resto. */
+export function flowRank(model: Model): Map<string, number> {
+  let r = flowCache.get(model.nodes);
+  if (!r) {
+    const rows = cycleRows(model);
+    const ids = [...rows.filter((x) => !x.offline), ...rows.filter((x) => x.offline)].map((x) => x.id);
+    r = new Map(ids.map((id, i) => [id, i]));
+    flowCache.set(model.nodes, r);
+  }
+  return r;
+}
+
+/** Ordem dos gráficos: a sequência editada pelo usuário ou, sem ela, a da linha principal. */
+export function lineSequence<T extends { id: string }>(model: Model, items: T[], keepHidden = false): T[] {
+  const rank = flowRank(model);
+  const base = items
+    .map((x, i) => ({ x, k: rank.get(x.id) ?? rank.size + i }))
+    .sort((a, b) => a.k - b.k)
+    .map((e) => e.x);
+  return chartSequence(model, base, keepHidden);
+}
+
 export function CycleTakt() {
   const model = useStore((s) => s.model);
   const kpi = useStore((s) => s.kpi);
@@ -93,7 +117,7 @@ export function CycleTakt() {
   const takt = model.settings.takt || 0;
   const all = useMemo(() => cycleRows(model, kpi), [model, kpi]);
   const rows = useMemo(() => {
-    const r = chartSequence(model, all).filter((x) => (scope === 'all' ? true : scope === 'off' ? x.offline : !x.offline));
+    const r = lineSequence(model, all).filter((x) => (scope === 'all' ? true : scope === 'off' ? x.offline : !x.offline));
     return sorted ? [...r].sort((a, b) => b.plan - a.plan) : r;
   }, [all, scope, sorted, model]);
   const hasReal = rows.some((r) => r.real !== undefined);

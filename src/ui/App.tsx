@@ -8,6 +8,9 @@ import { Palette } from './Palette';
 import { PropertiesPanel } from './PropertiesPanel';
 import { Toolbar } from './Toolbar';
 import { saveCurrent } from './SaveDialog';
+import { setDownloadNotice } from '../io/exporter';
+
+setDownloadNotice((m) => useStore.getState().setMessage(m));
 import { Analysis } from './Analysis';
 import { StationDetail } from './StationDetail';
 import { StationOrder } from './StationOrder';
@@ -48,6 +51,13 @@ export function App() {
       }
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
+        e.preventDefault();
+        const h = useStore.getState();
+        if (e.key.toLowerCase() === 'y' || e.shiftKey) h.redo();
+        else h.undo();
+        return;
+      }
       const st = useStore.getState();
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (st.selected.length || st.selectedLink) st.deleteSelection();

@@ -6,7 +6,8 @@ import type { LineKpi } from '../engine/metrics';
 import type { NodeState } from '../engine/types';
 import { useStore } from '../store';
 import { fmt, fmtTime, pct, STATE_LABEL, useCanvasColors } from './theme';
-import { chartSequence, POOL_LABEL } from '../engine/types';
+import { POOL_LABEL } from '../engine/types';
+import { cycleRows, lineSequence } from './CycleTakt';
 
 const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup'];
 
@@ -72,7 +73,13 @@ function StateChart({ kpi }: { kpi: LineKpi }) {
   const chart = useRef<Chart | null>(null);
   const colors = useCanvasColors();
   const model = useStore((s) => s.model);
-  const procs = chartSequence(model, kpi.nodes.filter((n) => n.type !== 'source' && n.type !== 'sink'));
+  const [mode, setMode] = useState<'estados' | 'takt'>('estados');
+  const takt = model.settings.takt || 0;
+  const procs = lineSequence(model, kpi.nodes.filter((n) => n.type !== 'source' && n.type !== 'sink'));
+  // vs Takt: carga por peça (medida na simulação; antes de rodar, a planejada) em % do takt
+  const ct = new Map(cycleRows(model, kpi).map((r) => [r.id, r.real ?? r.plan]));
+  const loads = lineSequence(model, cycleRows(model, kpi));
+  const pctTakt = (id: string) => (takt > 0 ? ((ct.get(id) ?? 0) / takt) * 100 : 0);
 
   useEffect(() => {
     chart.current = new Chart(ref.current!, {
@@ -81,10 +88,7 @@ function StateChart({ kpi }: { kpi: LineKpi }) {
       options: {
         animation: false,
         maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmt(Number(c.raw), 1)}%` } },
-        },
+        plugins: { legend: { display: false } },
         scales: {
           x: { stacked: true, ticks: { autoSkip: true, maxRotation: 0, font: { size: 10 } }, grid: { display: false } },
           y: { stacked: true, max: 100, ticks: { stepSize: 25, callback: (v) => `${v}%`, font: { size: 10 } } },
@@ -97,18 +101,53 @@ function StateChart({ kpi }: { kpi: LineKpi }) {
   useEffect(() => {
     const c = chart.current;
     if (!c) return;
-    c.data.labels = procs.map((n) => n.name);
-    c.data.datasets = STATES.map((s) => ({
-      label: STATE_LABEL[s],
-      data: procs.map((n) => {
-        const tot = Object.values(n.states).reduce((a, b) => a + b, 0) || 1;
-        return (n.states[s] / tot) * 100;
-      }),
-      backgroundColor: colors.state[s],
-      borderWidth: 0,
-      barPercentage: 0.95,
-      categoryPercentage: 0.95,
-    }));
+    const y = c.options.scales!.y!;
+    if (mode === 'estados') {
+      c.data.labels = procs.map((n) => n.name);
+      c.data.datasets = STATES.map((s) => ({
+        type: 'bar' as const,
+        label: STATE_LABEL[s],
+        data: procs.map((n) => {
+          const tot = Object.values(n.states).reduce((a, b) => a + b, 0) || 1;
+          return (n.states[s] / tot) * 100;
+        }),
+        backgroundColor: colors.state[s],
+        borderWidth: 0,
+        barPercentage: 0.95,
+        categoryPercentage: 0.95,
+      }));
+      y.max = 100;
+      (y as { stacked?: boolean }).stacked = true;
+      c.options.plugins!.tooltip = { callbacks: { label: (t) => `${t.dataset.label}: ${fmt(Number(t.raw), 1)}%` } };
+    } else {
+      const vals = loads.map((r) => pctTakt(r.id));
+      c.data.labels = loads.map((r) => (r.offline ? `${r.name} (off)` : r.name));
+      c.data.datasets = [
+        {
+          type: 'bar' as const,
+          label: 'Carga',
+          data: vals,
+          backgroundColor: vals.map((v) => (v > 100 ? colors.state.down : v >= 90 ? colors.state.starved : colors.state.working)),
+          borderWidth: 0,
+          barPercentage: 0.95,
+          categoryPercentage: 0.95,
+          order: 1,
+        },
+        { type: 'line' as const, label: 'Takt', data: vals.map(() => 100), borderColor: colors.ink, borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, order: 0 },
+      ];
+      // passa de 100% quando algum posto estoura o takt
+      y.max = Math.max(110, Math.ceil(Math.max(0, ...vals) / 10) * 10 + 10);
+      (y as { stacked?: boolean }).stacked = false;
+      c.options.plugins!.tooltip = {
+        callbacks: {
+          label: (t) => {
+            const r = loads[t.dataIndex];
+            return t.dataset.label === 'Takt' ? `Takt ${fmt(takt, 1)} s` : `${fmt(Number(t.raw), 0)}% do takt · ${fmt(ct.get(r.id) ?? 0, 1)} s por peça`;
+          },
+        },
+      };
+    }
+    (c.options.scales!.x as { stacked?: boolean }).stacked = mode === 'estados';
     const sc = c.options.scales!;
     for (const ax of [sc.x!, sc.y!]) {
       ax.ticks!.color = colors.muted;
@@ -120,11 +159,19 @@ function StateChart({ kpi }: { kpi: LineKpi }) {
   return (
     <div className="chart">
       <p className="label">
-        Estados por posto (% do tempo)
+        {mode === 'estados' ? 'Estados por posto (% do tempo)' : `Carga por posto (% do takt de ${fmt(takt, 1)} s)`}
+        <span className="seg mini" role="group" aria-label="Visão do gráfico">
+          <button className={`btn link${mode === 'estados' ? ' on' : ''}`} onClick={() => setMode('estados')}>Estados</button>
+          <button className={`btn link${mode === 'takt' ? ' on' : ''}`} onClick={() => setMode('takt')} disabled={!takt} title={takt ? '' : 'Defina o takt ou a meta UPH na configuração do modelo'}>vs Takt</button>
+        </span>
         <button className="btn link" onClick={() => useStore.getState().setShowOrder(true)} title="Ordenar e escolher os postos dos gráficos">Sequência…</button>
       </p>
       <div className="box">
-        <canvas ref={ref} role="img" aria-label="Gráfico de barras empilhadas com o percentual de tempo em cada estado por posto" />
+        <canvas
+          ref={ref}
+          role="img"
+          aria-label={mode === 'estados' ? 'Gráfico de barras empilhadas com o percentual de tempo em cada estado por posto' : 'Barras com a carga de cada posto em percentual do takt, com a linha do takt em 100%'}
+        />
       </div>
     </div>
   );
