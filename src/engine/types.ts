@@ -46,6 +46,8 @@ export interface NodeDef {
   batchSize?: number;
   /** Ponto de medição da produção da linha (throughput, lead time, takt). */
   outputPoint?: boolean;
+  /** Tempo de ciclo fixo: a calibração para o takt não altera este posto. */
+  fixedTime?: boolean;
 }
 
 /** Posição de cada giga/posto paralelo do nó (1 ou 2 fileiras distribuídas na área). */
@@ -76,6 +78,8 @@ export interface LinkDef {
   poolId?: string;
   /** Distância real (m) quando o trecho não está em escala no desenho. */
   length?: number;
+  /** Cada peça passa no máximo uma vez por este link (ex.: amostra do OBA que volta ao posto). */
+  once?: boolean;
 }
 
 export type PoolKind = 'operator' | 'forklift' | 'agv';
@@ -93,6 +97,10 @@ export interface PoolDef {
   /** Posição inicial (px). */
   x: number;
   y: number;
+  /** Veículos: custo por hora (R$), potência elétrica (kW) e emissão de combustível (kg CO2e/h, escopo 1). */
+  costPerHour?: number;
+  powerKw?: number;
+  fuelCo2?: number;
 }
 
 /** Planta de fundo (DXF) já convertida para pixels do canvas. */
@@ -118,6 +126,18 @@ export interface SimSettings {
   transportSpeed: number;
   /** Pixels do canvas por metro. */
   pxPerMeter: number;
+  /** Começar com a linha cheia (regime): ignora a rampa de enchimento e mostra o UPH real. */
+  startFull?: boolean;
+  /** Custos (R$): mão de obra por operador-hora, energia por kWh, matéria-prima por peça,
+   *  manutenção por hora de parada, estoque em processo por peça-hora. */
+  laborRate?: number;
+  energyPrice?: number;
+  materialCost?: number;
+  maintenanceRate?: number;
+  wipCost?: number;
+  /** Carbono: fator da rede elétrica (kg CO2e/kWh, escopo 2) e da matéria-prima por peça (escopo 3). */
+  gridCo2?: number;
+  materialCo2?: number;
 }
 
 /** Área desenhada no canvas (ex.: expedição fora do layout). */
@@ -211,6 +231,9 @@ export function makePool(kind: PoolKind, partial: Partial<PoolDef> = {}): PoolDe
     loadTime: kind === 'operator' ? 0 : 15,
     x: 0,
     y: 0,
+    costPerHour: kind === 'forklift' ? 45 : kind === 'agv' ? 25 : 0,
+    powerKw: kind === 'forklift' ? 5 : kind === 'agv' ? 0.6 : 0,
+    fuelCo2: 0,
     ...partial,
   };
 }
@@ -222,4 +245,11 @@ export const DEFAULT_SETTINGS: SimSettings = {
   seed: 42,
   transportSpeed: 1,
   pxPerMeter: 40,
+  laborRate: 35,
+  energyPrice: 0.75,
+  materialCost: 0,
+  maintenanceRate: 80,
+  wipCost: 0,
+  gridCo2: 0.0385,
+  materialCo2: 0,
 };

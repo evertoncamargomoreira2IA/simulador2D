@@ -5,6 +5,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Arrow, Circle, Group, Layer, Line, Rect, RegularPolygon, Shape, Stage, Text } from 'react-konva';
 import type { NodeRt, Simulator } from '../engine/simulator';
 import type { Background, NodeDef, NodeType } from '../engine/types';
+import { footprint } from '../engine/analytics';
 import { useStore } from '../store';
 import { mixHex, useCanvasColors, type CanvasColors } from './theme';
 
@@ -137,6 +138,15 @@ export function CanvasView() {
   }
 
   const byId = useMemo(() => new Map(model.nodes.map((n) => [n.id, n])), [model.nodes]);
+  const topIds = kpi.completed > 0 ? kpi.ranking.slice(0, 5).map((r) => r.id) : [];
+  const co2ById = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!layers.co2) return m;
+    const fp = footprint(sim, kpi).nodes;
+    const max = Math.max(1e-9, ...fp.map((n) => n.co2));
+    for (const n of fp) m.set(n.id, n.co2 / max);
+    return m;
+  }, [layers.co2, kpi, sim]);
   const outCount = useMemo(() => {
     const c = new Map<string, number>();
     for (const l of model.links) c.set(l.from, (c.get(l.from) ?? 0) + 1);
@@ -285,6 +295,9 @@ export function CanvasView() {
                 labels={layers.labels}
                 people={layers.people}
                 now={sim.now}
+                topRank={layers.top5 ? topIds.indexOf(n.id) + 1 : 0}
+                co2Heat={layers.co2 ? (co2ById.get(n.id) ?? 0) : 0}
+                dim={layers.top5 && kpi.completed > 0 && !topIds.includes(n.id)}
                 stage={stageRef}
                 onSelect={(add) => {
                   const st = useStore.getState();
@@ -409,9 +422,14 @@ interface NodeShapeProps {
   onSelect: (add: boolean) => void;
   people: boolean;
   now: number;
+  /** Posição no top 5 de gargalos (0 = fora ou camada desligada). */
+  topRank: number;
+  /** Fração do CO2e do maior emissor (0..1) para o mapa de calor. */
+  co2Heat: number;
+  dim: boolean;
 }
 
-function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, stage, onSelect, people, now }: NodeShapeProps) {
+function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, stage, onSelect, people, now, topRank, co2Heat, dim }: NodeShapeProps) {
   const stateColor = colors.state[rt.state];
   const stroke = selected ? colors.accent : stateColor;
   const sw = selected ? 3 : 2;
@@ -432,6 +450,7 @@ function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, s
       id={def.id}
       x={def.x}
       y={def.y}
+      opacity={dim ? 0.35 : 1}
       draggable={draggable}
       onMouseDown={(e) => {
         e.cancelBubble = true;
@@ -440,6 +459,14 @@ function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, s
       onTap={(e) => {
         e.cancelBubble = true;
         onSelect(false);
+      }}
+      onDblClick={(e) => {
+        e.cancelBubble = true;
+        useStore.getState().setDetail(def.id);
+      }}
+      onDblTap={(e) => {
+        e.cancelBubble = true;
+        useStore.getState().setDetail(def.id);
       }}
       onDragStart={(e) => {
         e.cancelBubble = true;
@@ -471,6 +498,14 @@ function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, s
     >
       {def.area && rt.slots.length > 1 && (
         <Slots def={def} rt={rt} colors={colors} />
+      )}
+      {co2Heat > 0 && <Circle radius={22 + co2Heat * 40} fill={colors.state.down} opacity={0.1 + co2Heat * 0.35} listening={false} />}
+      {topRank > 0 && (
+        <Group listening={false}>
+          <Rect x={-W / 2 - 9} y={-H / 2 - 9} width={W + 18} height={H + 18} cornerRadius={9} stroke={topRank === 1 ? colors.state.down : colors.state.blocked} strokeWidth={3} />
+          <Circle x={-W / 2 - 4} y={-H / 2 - 4} radius={11} fill={topRank === 1 ? colors.state.down : colors.state.blocked} />
+          <Text x={-W / 2 - 15} y={-H / 2 - 10} width={22} align="center" text={String(topRank)} fontSize={13} fontStyle="bold" fill={colors.canvas} />
+        </Group>
       )}
       {bottleneck && (
         <Rect x={-W / 2 - 7} y={-H / 2 - 7} width={W + 14} height={H + 14} cornerRadius={8} stroke={colors.state.down} strokeWidth={2} dash={[5, 3]} />

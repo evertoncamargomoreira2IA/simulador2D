@@ -53,6 +53,16 @@ npm run build:single # gera dist-single/index.html (arquivo único, abre direto 
 - **Total cycle time** (conteúdo de trabalho por unidade, com submontagens) separado do lead time (com esperas). Tile de cargas expedidas.
 - Paleta: Source com um posto selecionado entra à esquerda já alimentando o posto; blocos sem seleção entram no centro da tela; ligações inválidas (entrada em Source, saída de Finished Goods) são recusadas.
 
+## Sprints 4 a 8
+
+- **Linha cheia** (`startFull`): a linha enche antes do turno visível; o UPH mostrado é o de regime.
+- **Calibrar para o takt**: escala na mesma proporção os tempos de ciclo (menos os marcados como tempo fixo) até a linha cheia entregar o takt (`src/engine/calibrate.ts`).
+- **Amostragem que volta ao posto** (`once` no link): ex.: OBA de 10% que sai e volta ao mesmo posto, com pista de retorno sem travamento; montagem não consome componentes de novo na volta.
+- **Top 5 gargalos** no layout e no painel; **pop-up de indicadores** por posto (duplo clique no bloco).
+- **Análises** (`src/engine/analytics.ts`): spaghetti (distâncias, cruzamentos, fluxo de volta), custos diretos e indiretos (por peça, processo e turno), energia (kWh por peça, processo e turno; consumo em espera), carbono (escopos 1, 2 e 3; mapa de calor) e cenários Current State × Future State A/B.
+- **Real × simulado**: importação de dados reais por posto (Excel/CSV) ou WebSocket ao vivo (gateway OPC-UA/MQTT), com desvios destacados.
+- **IA** (`src/engine/advisor.ts`): sugestões explicáveis com a evidência numérica, balanceamento, otimização de layout, simulação automática do ganho de cada ação e conversa com o Claude dentro do artefato.
+
 ## Formato da tabela de importação
 
 Uma linha por bloco. Só a coluna `nome` é obrigatória; sem `proximo`, os blocos são ligados em

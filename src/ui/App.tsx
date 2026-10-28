@@ -7,6 +7,8 @@ import { Dashboard } from './Dashboard';
 import { Palette } from './Palette';
 import { PropertiesPanel } from './PropertiesPanel';
 import { Toolbar } from './Toolbar';
+import { Analysis } from './Analysis';
+import { StationDetail } from './StationDetail';
 
 export function App() {
   useEffect(() => {
@@ -58,6 +60,8 @@ export function App() {
       <CanvasView />
       <PropertiesPanel />
       <Dashboard />
+      <StationDetail />
+      <Analysis />
     </div>
   );
 }

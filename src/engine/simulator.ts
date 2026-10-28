@@ -45,6 +45,10 @@ export interface Entity {
   work: number;
   /** Já contada no ponto de medição da produção. */
   counted: boolean;
+  /** Links 'once' já percorridos. */
+  visited?: Set<string>;
+  /** Postos de montagem onde a peça já recebeu os componentes (não consome de novo ao voltar). */
+  assembled?: Set<string>;
 }
 
 interface Job {
@@ -201,6 +205,8 @@ export class Simulator {
   readonly transits = new Set<Transit>();
   readonly timeline: TimelinePoint[] = [];
   now = 0;
+  /** Início do turno visível. Com a linha cheia, o enchimento roda antes deste instante. */
+  t0 = 0;
   statsStart = 0;
   completed = 0;
   completedGood = 0;
@@ -340,7 +346,11 @@ export class Simulator {
   }
 
   get duration(): number {
-    return this.model.settings.duration;
+    return this.t0 + this.model.settings.duration;
+  }
+  /** Relógio do turno (s desde o início visível). */
+  get clock(): number {
+    return this.now - this.t0;
   }
   get finished(): boolean {
     return this.now >= this.duration;
@@ -365,6 +375,18 @@ export class Simulator {
     }
     for (const n of this.nodes) if (n.def.type === 'source' && n.def.interarrival <= 0) this.refillSource(n);
     this.schedule(this.sampleEvery, 'sample');
+    if (this.model.settings.startFull) {
+      // Linha cheia: enche a linha antes do turno visível e zera as estatísticas.
+      const fill = Math.max(7200, 3 * this.model.settings.warmup);
+      this.t0 = fill;
+      this.drainRetry();
+      this.advanceTo(fill);
+      if (!this.error) {
+        this.resetStats();
+        this.timeline.length = 0;
+      }
+      return;
+    }
     if (this.model.settings.warmup > 0) this.schedule(this.model.settings.warmup, 'warmup');
     this.drainRetry();
   }
@@ -477,21 +499,22 @@ export class Simulator {
       work: 0,
       counted: false,
     };
-    e.next = this.route(src);
+    e.next = this.route(src, e);
     return e;
   }
 
-  private route(n: NodeRt): LinkRt | null {
-    if (n.out.length === 0) return null;
-    if (n.out.length === 1) return n.out[0];
-    const total = n.out.reduce((s, l) => s + Math.max(0, l.def.weight), 0);
-    if (total <= 0) return n.out[0];
+  private route(n: NodeRt, e?: Entity): LinkRt | null {
+    const out = e?.visited ? n.out.filter((l) => !e.visited!.has(l.def.id)) : n.out;
+    if (out.length === 0) return n.out.length ? n.out[0] : null;
+    if (out.length === 1) return out[0];
+    const total = out.reduce((s, l) => s + Math.max(0, l.def.weight), 0);
+    if (total <= 0) return out[0];
     let r = this.rng.next() * total;
-    for (const l of n.out) {
+    for (const l of out) {
       r -= Math.max(0, l.def.weight);
       if (r <= 0) return l;
     }
-    return n.out[n.out.length - 1];
+    return out[out.length - 1];
   }
 
   private batchOf(n: NodeRt): number {
@@ -556,8 +579,9 @@ export class Simulator {
         moved = true;
         continue;
       }
-      // Retorno do retrabalho tem prioridade (pista de retorno) para evitar deadlock no loop.
-      if (n.def.type !== 'rework' && !this.canAcceptVia(link)) {
+      // Retorno do retrabalho ou de uma amostragem (OBA) tem prioridade (pista de retorno),
+      // para o loop nunca travar.
+      if (!this.isReturn(n, link) && !this.canAcceptVia(link)) {
         i++;
         continue;
       }
@@ -582,6 +606,10 @@ export class Simulator {
     return moved;
   }
 
+  private isReturn(n: NodeRt, link: LinkRt): boolean {
+    return n.def.type === 'rework' || link.to.out.some((l) => l.def.once && l.to === n);
+  }
+
   private freeSlot(n: NodeRt, e: Entity): void {
     if (e.slot >= 0 && e.slot < n.slotBusy.length) n.slotBusy[e.slot] = false;
     e.slot = -1;
@@ -601,6 +629,7 @@ export class Simulator {
       e.reworks++;
     }
     link.moved++;
+    if (link.def.once) (e.visited ??= new Set()).add(link.def.id);
     e.distance += link.distance * e.qty;
     const tr: Transit = { entity: e, link, start: this.now, end: this.now + travel, unit };
     this.transits.add(tr);
@@ -632,7 +661,7 @@ export class Simulator {
     while (
       n.queue.length > 0 &&
       n.processing.length + n.done.length < servers &&
-      this.partsReady(n) &&
+      (this.partsReady(n) || !!n.queue[0].assembled?.has(n.def.id)) &&
       (!batch || this.queuedUnits(n) >= batch)
     ) {
       let slot = n.slotBusy.indexOf(false);
@@ -660,7 +689,9 @@ export class Simulator {
         n.queueTimeSum += this.now - e.enteredQueueAt;
       }
       n.started++;
-      for (const l of n.partLinks) {
+      const reassembly = !!e.assembled?.has(n.def.id);
+      if (n.partLinks.length && !reassembly) (e.assembled ??= new Set()).add(n.def.id);
+      for (const l of reassembly ? [] : n.partLinks) {
         const part = n.parts.get(l)!.shift();
         if (part) e.work += part.work;
         this.consumed++;
@@ -833,7 +864,7 @@ export class Simulator {
     e.work += n.def.cycleTime;
     n.processed++;
     if (job.unit) this.releaseUnit(job.unit);
-    e.next = this.route(n);
+    e.next = this.route(n, e);
     e.blockedSince = this.now;
     n.done.push(e);
     this.tryPush(n);

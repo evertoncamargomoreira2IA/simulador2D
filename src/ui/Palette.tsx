@@ -57,6 +57,8 @@ const LAYERS: { k: keyof Layers; label: string }[] = [
   { k: 'entities', label: 'Peças em transporte' },
   { k: 'labels', label: 'Nomes' },
   { k: 'heat', label: 'Intensidade de fluxo' },
+  { k: 'top5', label: 'Top 5 gargalos' },
+  { k: 'co2', label: 'Mapa de calor de CO2e' },
 ];
 
 const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup', 'off'];

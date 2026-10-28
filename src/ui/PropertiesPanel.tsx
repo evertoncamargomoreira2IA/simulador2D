@@ -64,6 +64,10 @@ export function PropertiesPanel() {
                 useStore.getState().updateLink(l.id, { length: e.target.value === '' || !(v > 0) ? undefined : v });
               }} />
             </label>
+            <label className="field full check">
+              <input id="link-once" type="checkbox" checked={!!l.once} onChange={(e) => useStore.getState().updateLink(l.id, { once: e.target.checked || undefined })} />
+              <span>Cada peça passa só uma vez (amostra que volta ao posto, ex.: OBA)</span>
+            </label>
             <label className="field full">
               <span>Papel do fluxo</span>
               <select id="link-role" value={l.role ?? 'flow'} onChange={(e) => useStore.getState().updateLink(l.id, { role: e.target.value as LinkDef['role'] })}>
@@ -142,6 +146,12 @@ export function PropertiesPanel() {
                 </label>
               </>
             )}
+            {n.type !== 'source' && n.type !== 'sink' && (
+              <label className="field full check">
+                <input id="node-fixed" type="checkbox" checked={!!n.fixedTime} onChange={(e) => upd({ fixedTime: e.target.checked || undefined })} />
+                <span>Tempo fixo (a calibração para o takt não altera)</span>
+              </label>
+            )}
             {n.type !== 'source' && (
               <label className="field full check">
                 <input id="node-output" type="checkbox" checked={!!n.outputPoint} onChange={(e) => upd({ outputPoint: e.target.checked || undefined })} />
@@ -188,7 +198,8 @@ export function PropertiesPanel() {
               <dt>Falhas</dt><dd>{k.failures}</dd>
             </dl>
           </div>
-          <div className="section">
+          <div className="section row-btns">
+            <button className="btn primary" onClick={() => useStore.getState().setDetail(n.id)}>Todos os indicadores</button>
             <button className="btn" onClick={() => useStore.getState().deleteSelection()}>Apagar bloco</button>
           </div>
         </aside>
@@ -229,6 +240,10 @@ export function PropertiesPanel() {
         <label className="field">
           <span>Transporte (m/s)</span>
           <input id="set-speed" type="number" min={0} step={0.1} value={s.transportSpeed} onChange={(e) => updS({ transportSpeed: Number(e.target.value) })} />
+        </label>
+        <label className="field full check">
+          <input id="set-full" type="checkbox" checked={!!s.startFull} onChange={(e) => updS({ startFull: e.target.checked })} />
+          <span>Linha cheia desde o início (ignora a rampa e mostra o UPH real)</span>
         </label>
         <label className="field">
           <span>Escala (px/m)</span>
@@ -286,6 +301,22 @@ function Resources({ pools }: { pools: PoolDef[] }) {
               <span>Velocidade (m/s)</span>
               <input type="number" min={0.1} step={0.1} value={p.speed} onChange={(e) => upd(p.id, { speed: Math.max(0.1, Number(e.target.value)) })} />
             </label>
+            {p.kind !== 'operator' && (
+              <>
+                <label className="field">
+                  <span>Custo (R$/h)</span>
+                  <input type="number" min={0} step={1} value={p.costPerHour ?? 0} onChange={(e) => upd(p.id, { costPerHour: Math.max(0, Number(e.target.value)) })} />
+                </label>
+                <label className="field">
+                  <span>Potência (kW)</span>
+                  <input type="number" min={0} step={0.1} value={p.powerKw ?? 0} onChange={(e) => upd(p.id, { powerKw: Math.max(0, Number(e.target.value)) })} />
+                </label>
+                <label className="field">
+                  <span>Combustível (kg CO2e/h)</span>
+                  <input type="number" min={0} step={0.1} value={p.fuelCo2 ?? 0} onChange={(e) => upd(p.id, { fuelCo2: Math.max(0, Number(e.target.value)) })} />
+                </label>
+              </>
+            )}
             {p.kind !== 'operator' && (
               <label className="field">
                 <span>Carga/descarga (s)</span>

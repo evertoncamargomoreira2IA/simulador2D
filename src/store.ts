@@ -18,6 +18,19 @@ export interface Layers {
   heat: boolean;
   plant: boolean;
   people: boolean;
+  /** Destaca os 5 maiores gargalos no layout. */
+  top5: boolean;
+  /** Mapa de calor de emissão (CO2e por posto). */
+  co2: boolean;
+}
+
+export type AnalysisTab = 'gargalos' | 'spaghetti' | 'custos' | 'energia' | 'carbono' | 'cenarios' | 'real' | 'ia';
+
+export interface RealRow {
+  name: string;
+  produced?: number;
+  cycle?: number;
+  state?: string;
 }
 
 interface State {
@@ -38,6 +51,15 @@ interface State {
   /** Centro da área visível do canvas (coordenadas do modelo). */
   viewCenter: { x: number; y: number };
   setViewCenter: (p: { x: number; y: number }) => void;
+  /** Aba aberta do painel de análises (null = fechado) e posto do pop-up de indicadores. */
+  analysis: AnalysisTab | null;
+  detailId: string | null;
+  setAnalysis: (t: AnalysisTab | null) => void;
+  setDetail: (id: string | null) => void;
+  /** Dados reais por posto (digital twin), pelo nome do posto normalizado. */
+  real: Record<string, RealRow>;
+  realSource: string;
+  setReal: (rows: Record<string, RealRow>, source: string) => void;
 
   setModel: (m: Model, message?: string) => void;
   updateNode: (id: string, patch: Partial<NodeDef>) => void;
@@ -87,7 +109,7 @@ export const useStore = create<State>((set, get) => {
     connectFrom: null,
     snap: true,
     gridSize: 20,
-    layers: { grid: true, links: true, entities: true, labels: true, heat: false, plant: true, people: true },
+    layers: { grid: true, links: true, entities: true, labels: true, heat: false, plant: true, people: true, top5: false, co2: false },
     run: 'idle',
     speed: 10,
     ...fresh(initial),
@@ -176,6 +198,13 @@ export const useStore = create<State>((set, get) => {
     refresh: (withKpi = false) =>
       set(withKpi ? { tick: get().tick + 1, kpi: lineKpi(get().sim) } : { tick: get().tick + 1 }),
     setViewCenter: (viewCenter) => set({ viewCenter }),
+    analysis: null,
+    detailId: null,
+    setAnalysis: (analysis) => set({ analysis }),
+    setDetail: (detailId) => set({ detailId }),
+    real: {},
+    realSource: '',
+    setReal: (real, realSource) => set({ real, realSource }),
     setMessage: (message) => set({ message }),
   };
 });

@@ -15,6 +15,7 @@ export function Dashboard() {
   const sim = useStore((s) => s.sim);
   const takt = useStore((s) => s.model.settings.takt);
   const warmup = useStore((s) => s.model.settings.warmup);
+  const startFull = useStore((s) => s.model.settings.startFull);
   const [open, setOpen] = useState(true);
   const bottleneck = kpi.nodes.find((n) => n.id === kpi.bottleneckId);
 
@@ -24,7 +25,7 @@ export function Dashboard() {
         <div className="dash-head">
           <p className="label" style={{ margin: 0 }}>
             Indicadores da linha
-            {sim.now < warmup && <span className="warm"> · aquecimento até {fmtTime(warmup).slice(0, 5)}</span>}
+            {!startFull && sim.now < warmup && <span className="warm"> · aquecimento até {fmtTime(warmup).slice(0, 5)}</span>}
           </p>
           <button className="btn" onClick={() => setOpen(!open)} style={{ padding: '1px 8px' }}>
             {open ? 'Recolher' : 'Expandir'}
@@ -188,6 +189,7 @@ function band(u: number): { label: string; color: string } {
 }
 
 function People({ kpi }: { kpi: LineKpi }) {
+  const top5 = useStore((s) => s.layers.top5);
   const top = kpi.ranking.slice(0, 5);
   const max = top[0]?.active || 1;
   return (
@@ -213,12 +215,15 @@ function People({ kpi }: { kpi: LineKpi }) {
           </div>
         );
       })}
-      <p className="label" style={{ marginTop: 8 }}>Ranking de gargalos</p>
+      <div className="dash-head" style={{ marginTop: 8 }}>
+        <p className="label" style={{ margin: 0 }}>Top 5 gargalos</p>
+        <button className={`btn mini${top5 ? ' on' : ''}`} onClick={() => useStore.getState().toggleLayer('top5')}>{top5 ? 'Ocultar no layout' : 'Ver no layout'}</button>
+      </div>
       <ol className="rank">
         {kpi.completed > 0 &&
           top.map((r, i) => (
             <li key={r.id}>
-              <span className="name">{i + 1}. {r.name}</span>
+              <button className="name link" onClick={() => useStore.getState().setDetail(r.id)}>{i + 1}. {r.name}</button>
               <span className="bar"><span style={{ width: `${(r.active / max) * 100}%`, background: i === 0 ? 'var(--st-down)' : 'var(--accent)' }} /></span>
               <b>{pct(r.active)}</b>
             </li>

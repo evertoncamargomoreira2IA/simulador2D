@@ -133,8 +133,8 @@ export function Toolbar() {
         ) : (
           <button className="btn primary" onClick={start} disabled={model.nodes.length === 0}>▶ Start</button>
         )}
-        <button className="btn" onClick={() => st().resetSim()} disabled={sim.now === 0}>■ Stop</button>
-        <button className="btn" onClick={replay} disabled={sim.now === 0} title="Reinicia com a mesma semente: mesma sequência de eventos">↺ Replay</button>
+        <button className="btn" onClick={() => st().resetSim()} disabled={sim.clock === 0}>■ Stop</button>
+        <button className="btn" onClick={replay} disabled={sim.clock === 0} title="Reinicia com a mesma semente: mesma sequência de eventos">↺ Replay</button>
         <button className="btn" onClick={runToEnd} disabled={model.nodes.length === 0 || run === 'done'} title="Calcula até o fim do turno sem animação">⏭ Fim</button>
         <select className="btn" aria-label="Velocidade" value={speed} onChange={(e) => st().setSpeed(Number(e.target.value))}>
           {SPEEDS.map((s) => (
@@ -143,9 +143,17 @@ export function Toolbar() {
         </select>
       </div>
 
+      <label className={`chip-toggle${model.settings.startFull ? ' on' : ''}`} title="Começa com a linha cheia, como na produção: ignora a rampa de enchimento e mostra o UPH real">
+        <input type="checkbox" checked={!!model.settings.startFull} onChange={(e) => st().updateSettings({ startFull: e.target.checked })} />
+        Linha cheia
+      </label>
+      <div className="group" role="group" aria-label="Análises">
+        <button className="btn" onClick={() => st().setAnalysis('gargalos')} title="Gargalos, spaghetti, custos, energia, carbono, cenários e real × simulado">Análises</button>
+        <button className="btn ai" onClick={() => st().setAnalysis('ia')} title="Sugestões de melhoria com IA">✦ IA</button>
+      </div>
       <span className={`live${run === 'running' ? ' on' : ''}`}><i />{run === 'running' ? 'Ao vivo' : run === 'done' ? 'Concluído' : run === 'paused' ? 'Pausado' : 'Pronto'}</span>
       <div className="clock" aria-live="off">
-        {fmtTime(sim.now)} <small>/ {fmtTime(sim.duration)}</small>
+        {fmtTime(sim.clock)} <small>/ {fmtTime(sim.duration - sim.t0)}</small>
       </div>
     </header>
   );
