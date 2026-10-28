@@ -2,7 +2,7 @@
 
 import { nodeKpi } from '../engine/metrics';
 import type { LinkDef, NodeDef, NodeState, NodeType, PoolDef, PoolKind } from '../engine/types';
-import { makePool, POOL_LABEL, TYPE_LABEL } from '../engine/types';
+import { isAssembly, makePool, POOL_LABEL, TYPE_LABEL } from '../engine/types';
 import { useStore } from '../store';
 import { fmt, pct, STATE_LABEL } from './theme';
 
@@ -108,7 +108,7 @@ export function PropertiesPanel() {
       return (
         <aside className="props">
           <h2>{n.name}</h2>
-          <p className="sub">{TYPE_LABEL[n.type]} · ID {n.id}</p>
+          <p className="sub">{isAssembly(n, model.links) ? 'Montagem' : TYPE_LABEL[n.type]} · ID {n.id}</p>
           <div className="fields">
             <label className="field full">
               <span>Nome</span>
@@ -116,12 +116,28 @@ export function PropertiesPanel() {
             </label>
             <label className="field full">
               <span>Tipo</span>
-              <select id="node-type" value={n.type} onChange={(e) => upd({ type: e.target.value as NodeType })}>
-                {(Object.keys(TYPE_LABEL) as NodeType[]).map((t) => (
-                  <option key={t} value={t}>{TYPE_LABEL[t]}</option>
-                ))}
+              <select
+                id="node-type"
+                value={isAssembly(n, model.links) ? 'assembly' : n.type}
+                onChange={(e) =>
+                  e.target.value === 'assembly'
+                    ? upd({ type: 'machine', assembly: true, partBuffer: n.partBuffer ?? 2 })
+                    : upd({ type: e.target.value as NodeType, assembly: false })
+                }
+              >
+                {(Object.keys(TYPE_LABEL) as NodeType[]).flatMap((t) => [
+                  <option key={t} value={t}>{TYPE_LABEL[t]}</option>,
+                  ...(t === 'machine' ? [<option key="assembly" value="assembly">Montagem (junta kits)</option>] : []),
+                ])}
               </select>
             </label>
+            {isAssembly(n, model.links) && (
+              <p className="hint full">
+                {model.links.some((l) => l.to === n.id && l.role === 'part')
+                  ? `Recebe ${model.links.filter((l) => l.to === n.id && l.role === 'part').length} componente(s). Só começa com o produto e um kit de cada.`
+                  : 'Ligue os off-lines a este posto e, na ligação, escolha "Componente (consumido na montagem)".'}
+              </p>
+            )}
             {PROCESS.includes(n.type) && (
               <>
                 <label className="field full">
@@ -133,6 +149,21 @@ export function PropertiesPanel() {
                     ))}
                   </select>
                 </label>
+                {!n.poolId && (n.operators ?? 0) > 0 && (
+                  <>
+                    <label className="field full">
+                      <span>Posição do colaborador</span>
+                      <select id="node-crew" value={n.crewOffset ? 'livre' : n.crewSide ?? 'top'} onChange={(e) => e.target.value !== 'livre' && upd({ crewSide: e.target.value as NodeDef['crewSide'], crewOffset: undefined })}>
+                        <option value="top">Em cima do bloco</option>
+                        <option value="bottom">Embaixo (na frente)</option>
+                        <option value="left">À esquerda</option>
+                        <option value="right">À direita</option>
+                        {n.crewOffset && <option value="livre">Posição livre (arrastada)</option>}
+                      </select>
+                    </label>
+                    <p className="hint full">Também dá para arrastar o bonequinho no layout para qualquer lugar em volta do posto.</p>
+                  </>
+                )}
                 <label className="field">
                   <span>Área das gigas L (px)</span>
                   <input id="node-area-w" type="number" min={0} step={10} value={n.area?.w ?? 0} onChange={(e) => {

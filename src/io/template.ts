@@ -6,7 +6,7 @@
 
 import * as XLSX from 'xlsx';
 import { serpentine } from '../model/builder';
-import { DEFAULT_SETTINGS, makeNode, makePool, newId, type LinkDef, type Model, type NodeDef, type NodeType, type PoolDef, type PoolKind, type SimSettings } from '../engine/types';
+import { DEFAULT_SETTINGS, isAssembly, makeNode, makePool, newId, type LinkDef, type Model, type NodeDef, type NodeType, type PoolDef, type PoolKind, type SimSettings } from '../engine/types';
 
 export const SHEETS = { readme: 'Leia-me', nodes: 'Postos', links: 'Ligações', pools: 'Pessoas e veículos', params: 'Parâmetros' };
 
@@ -20,7 +20,7 @@ const POOL_COLS = ['id', 'nome', 'tipo', 'quantidade', 'velocidade_m_s', 'tempo_
 
 const TIPOS: Record<string, NodeType> = {
   source: 'source', entrada: 'source', fonte: 'source',
-  machine: 'machine', posto: 'machine', maquina: 'machine', máquina: 'machine',
+  machine: 'machine', posto: 'machine', maquina: 'machine', máquina: 'machine', montagem: 'machine',
   buffer: 'buffer', estoque: 'buffer',
   inspection: 'inspection', inspecao: 'inspection', inspeção: 'inspection', teste: 'inspection',
   rework: 'rework', reparo: 'rework', retrabalho: 'rework',
@@ -56,7 +56,7 @@ export const README: [string, string][] = [
   ['5', 'No simulador: Importar → escolha esta planilha. A linha é montada e os erros aparecem na barra de mensagens.'],
   ['', ''],
   ['Colunas da aba Postos', ''],
-  ['tipo', 'entrada, posto, buffer, teste, reparo ou saida'],
+  ['tipo', 'entrada, posto, montagem, buffer, teste, reparo ou saida. Montagem junta o produto com um kit de cada componente (ligações com papel peca).'],
   ['tempo_ciclo_s', 'Tempo de ciclo de UMA peça em UMA giga (s). Com capacidade 6, o posto entrega 6 peças a cada tempo_ciclo.'],
   ['cv', 'Variação do tempo (0,05 = 5%). 0 = tempo fixo.'],
   ['capacidade', 'Gigas ou postos em paralelo. Em buffer, quantas peças cabem.'],
@@ -140,7 +140,7 @@ export function templateWorkbook(model?: Model): XLSX.WorkBook {
       [
         [...NODE_COLS],
         ...m.nodes.map((n) => [
-          n.id, n.name, TIPO_PT[n.type], r3(n.cycleTime), r3(n.cv), n.capacity, n.queueCap, n.operators, r3(n.availability), n.mttr,
+          n.id, n.name, isAssembly(n, m.links) ? 'montagem' : TIPO_PT[n.type], r3(n.cycleTime), r3(n.cv), n.capacity, n.queueCap, n.operators, r3(n.availability), n.mttr,
           n.setupTime, n.interarrival, n.batchSize || '', sn(n.outputPoint), sn(n.fixedTime), n.poolId ?? '', n.handlingTime ?? '',
           n.powerKw || '', n.idlePowerKw || '', n.costPerHour || '', n.partBuffer ?? '', pos ? r3(n.x / ppm) : '', pos ? r3(n.y / ppm) : '',
           n.area ? r3(n.area.w / ppm) : '', n.area ? r3(n.area.h / ppm) : '',
@@ -289,6 +289,10 @@ export function parseTemplate(wb: XLSX.WorkBook, name: string): TemplateResult {
       p.x = x * ppm;
       p.y = y * ppm;
       withXY++;
+    }
+    if (norm(r.tipo) === 'montagem') {
+      p.assembly = true;
+      p.partBuffer ??= 2;
     }
     nodes.push(makeNode(type ?? 'machine', p));
   });

@@ -3,7 +3,7 @@
 import Chart from 'chart.js/auto';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LineKpi } from '../engine/metrics';
-import type { Model, NodeDef } from '../engine/types';
+import { chartSequence, type Model, type NodeDef } from '../engine/types';
 import { useStore } from '../store';
 import { Kpi } from './Modal';
 import { fmt, pct, useCanvasColors } from './theme';
@@ -93,9 +93,9 @@ export function CycleTakt() {
   const takt = model.settings.takt || 0;
   const all = useMemo(() => cycleRows(model, kpi), [model, kpi]);
   const rows = useMemo(() => {
-    const r = all.filter((x) => (scope === 'all' ? true : scope === 'off' ? x.offline : !x.offline));
+    const r = chartSequence(model, all).filter((x) => (scope === 'all' ? true : scope === 'off' ? x.offline : !x.offline));
     return sorted ? [...r].sort((a, b) => b.plan - a.plan) : r;
-  }, [all, scope, sorted]);
+  }, [all, scope, sorted, model]);
   const hasReal = rows.some((r) => r.real !== undefined);
 
   const ref = useRef<HTMLCanvasElement>(null);
@@ -177,7 +177,8 @@ export function CycleTakt() {
             <button key={k} className={`btn${scope === k ? ' on' : ''}`} onClick={() => setScope(k)}>{l}</button>
           ))}
         </div>
-        <button className={`btn${sorted ? ' on' : ''}`} onClick={() => setSorted(!sorted)}>{sorted ? 'Ordem do fluxo' : 'Ordenar do maior para o menor'}</button>
+        <button className={`btn${sorted ? ' on' : ''}`} onClick={() => setSorted(!sorted)}>{sorted ? 'Ordem da sequência' : 'Ordenar do maior para o menor'}</button>
+        <button className="btn" onClick={() => useStore.getState().setShowOrder(true)}>Sequência dos postos…</button>
       </div>
       <div className="chart-scroll section">
         <div style={{ width, height: 340 }}>

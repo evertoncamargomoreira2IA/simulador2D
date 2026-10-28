@@ -185,6 +185,8 @@ export interface TimelinePoint {
   completed: number;
   wip: number;
   throughputPerHour: number;
+  /** Peças (ou cargas) que cada nó já terminou, na ordem de model.nodes. */
+  processed?: number[];
 }
 
 /** Intervalo mínimo (s) entre peças de uma fonte ilimitada quando a saída está livre. */
@@ -1004,6 +1006,7 @@ export class Simulator {
       completed: this.completed,
       wip: this.wip,
       throughputPerHour: dt > 0 ? (dc * 3600) / dt : 0,
+      processed: this.nodes.map((n) => n.processed),
     });
     this.lastSample = { t: this.now, completed: this.completed };
   }

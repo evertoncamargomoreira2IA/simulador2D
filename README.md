@@ -120,3 +120,11 @@ tests        testes (vitest)
 - **Salvar** (ou Ctrl+S) grava o modelo aberto; o botão mostra **Salvar •** quando há mudança não salva e **Salvo ✓** quando está tudo gravado.
 - **Salvos** lista os modelos para abrir, salvar como novo ou apagar.
 - Dentro do artefato do claude.ai os modelos ficam na conta de cada pessoa (banco do artefato, área privada), divididos em partes quando a planta DXF é grande. Fora dele, ou sem permissão de escrita, ficam no navegador.
+
+## Montagem, colaborador e sequência dos gráficos
+
+- **Montagem**: tipo próprio na paleta e no campo Tipo. O posto só começa quando tem o produto e um kit de cada ligação marcada como "Componente".
+- **Operador**: o bloco da paleta cria uma equipe compartilhada e a liga ao posto selecionado.
+- **Colaborador do posto**: escolha em cima, embaixo (na frente), à esquerda ou à direita no painel, ou arraste o boneco no layout.
+- **Throughput por intervalo**: aba de Análises com 15 min, 30 min ou 1 h, total da linha contra a meta do takt e média por posto.
+- **Sequência dos postos**: pop-up para arrastar a ordem e marcar quais postos aparecem nos gráficos (Cycle × Takt, Throughput, Estados por posto). Fica salvo no modelo.

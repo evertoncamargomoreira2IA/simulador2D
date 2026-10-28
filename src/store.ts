@@ -24,7 +24,7 @@ export interface Layers {
   co2: boolean;
 }
 
-export type AnalysisTab = 'ciclo' | 'gargalos' | 'spaghetti' | 'custos' | 'energia' | 'carbono' | 'cenarios' | 'real' | 'ia';
+export type AnalysisTab = 'ciclo' | 'throughput' | 'gargalos' | 'spaghetti' | 'custos' | 'energia' | 'carbono' | 'cenarios' | 'real' | 'ia';
 
 export interface RealRow {
   name: string;
@@ -76,6 +76,10 @@ interface State {
   updateSettings: (patch: Partial<Model['settings']>) => void;
   /** Troca partes do modelo (recursos, planta) sem mexer na seleção. */
   patchModel: (patch: Partial<Model>) => void;
+  /** Ordem e visibilidade dos postos nos gráficos: muda o modelo sem reiniciar a simulação. */
+  setChartView: (order: string[] | undefined, hidden: string[] | undefined) => void;
+  showOrder: boolean;
+  setShowOrder: (v: boolean) => void;
   setRun: (r: RunState) => void;
   setSpeed: (s: number) => void;
   /** Recria o simulador a partir do modelo (Stop/Replay). */
@@ -197,6 +201,9 @@ export const useStore = create<State>((set, get) => {
       edit({ ...m, settings: { ...m.settings, ...patch } });
     },
     patchModel: (patch) => edit({ ...get().model, ...patch }),
+    setChartView: (chartOrder, chartHidden) => set({ model: { ...get().model, chartOrder, chartHidden } }),
+    showOrder: false,
+    setShowOrder: (showOrder) => set({ showOrder }),
     setRun: (run) => set({ run }),
     setSpeed: (speed) => set({ speed }),
     resetSim: () => set({ ...fresh(get().model), run: 'idle', tick: get().tick + 1 }),

@@ -48,6 +48,12 @@ export interface NodeDef {
   outputPoint?: boolean;
   /** Tempo de ciclo fixo: a calibração para o takt não altera este posto. */
   fixedTime?: boolean;
+  /** Posto de montagem: junta o produto com um kit de cada componente (ligações do tipo peça). */
+  assembly?: boolean;
+  /** Onde o operador fixo aparece em relação ao bloco (padrão: em cima). */
+  crewSide?: 'top' | 'bottom' | 'left' | 'right';
+  /** Posição livre do operador (px, relativa ao centro do bloco), definida arrastando o boneco. */
+  crewOffset?: { x: number; y: number };
 }
 
 /** Posição de cada giga/posto paralelo do nó (1 ou 2 fileiras distribuídas na área). */
@@ -158,6 +164,10 @@ export interface Model {
   pools?: PoolDef[];
   background?: Background;
   zones?: ZoneDef[];
+  /** Ordem dos postos nos gráficos (ids). Vazio = ordem do fluxo. */
+  chartOrder?: string[];
+  /** Postos escondidos nos gráficos (ids). */
+  chartHidden?: string[];
 }
 
 export type NodeState = 'working' | 'starved' | 'blocked' | 'resource' | 'down' | 'setup' | 'off';
@@ -170,6 +180,11 @@ export const NODE_DEFAULTS: Record<NodeType, Partial<NodeDef>> = {
   rework: { cycleTime: 60, capacity: 1, queueCap: 5 },
   sink: { cycleTime: 0, capacity: 1, queueCap: 0 },
 };
+
+/** Posto de montagem: marcado como tal ou recebendo componentes (ligações do tipo peça). */
+export function isAssembly(n: Pick<NodeDef, 'id' | 'type' | 'assembly'>, links: Pick<LinkDef, 'to' | 'role'>[]): boolean {
+  return n.type === 'machine' && (!!n.assembly || links.some((l) => l.to === n.id && l.role === 'part'));
+}
 
 export const TYPE_LABEL: Record<NodeType, string> = {
   source: 'Source',
@@ -253,3 +268,14 @@ export const DEFAULT_SETTINGS: SimSettings = {
   gridCo2: 0.0385,
   materialCo2: 0,
 };
+
+/** Postos na ordem escolhida para os gráficos: primeiro os de `chartOrder`, depois o resto na ordem dada. */
+export function chartSequence<T extends { id: string }>(model: Pick<Model, 'chartOrder' | 'chartHidden'>, items: T[], keepHidden = false): T[] {
+  const pos = new Map((model.chartOrder ?? []).map((id, i) => [id, i]));
+  const hidden = new Set(model.chartHidden ?? []);
+  return items
+    .map((it, i) => ({ it, k: pos.has(it.id) ? pos.get(it.id)! : 1e6 + i }))
+    .sort((a, b) => a.k - b.k)
+    .map((x) => x.it)
+    .filter((it) => keepHidden || !hidden.has(it.id));
+}

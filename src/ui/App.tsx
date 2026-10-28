@@ -10,8 +10,10 @@ import { Toolbar } from './Toolbar';
 import { saveCurrent } from './SaveDialog';
 import { Analysis } from './Analysis';
 import { StationDetail } from './StationDetail';
+import { StationOrder } from './StationOrder';
 
 export function App() {
+  const showOrder = useStore((s) => s.showOrder);
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
@@ -70,6 +72,7 @@ export function App() {
       <Dashboard />
       <StationDetail />
       <Analysis />
+      {showOrder && <StationOrder onClose={() => useStore.getState().setShowOrder(false)} />}
     </div>
   );
 }

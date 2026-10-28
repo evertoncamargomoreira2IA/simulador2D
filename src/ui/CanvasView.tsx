@@ -1,6 +1,7 @@
 // Canvas 2D (Konva): grid, blocos arrastáveis, links, peças animadas, zoom/pan e seleção.
 
 import type Konva from 'konva';
+import { isAssembly } from '../engine/types';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Arrow, Circle, Group, Layer, Line, Rect, RegularPolygon, Shape, Stage, Text } from 'react-konva';
 import type { NodeRt, Simulator } from '../engine/simulator';
@@ -129,12 +130,14 @@ export function CanvasView() {
   }
 
   function onDrop(e: React.DragEvent) {
-    const type = e.dataTransfer.getData(DRAG_MIME) as NodeType;
+    const type = e.dataTransfer.getData(DRAG_MIME) as NodeType | 'assembly';
     if (!type) return;
     e.preventDefault();
     const r = wrap.current!.getBoundingClientRect();
     const w = toWorld(e.clientX - r.left, e.clientY - r.top);
-    useStore.getState().addNode(type, w.x, w.y);
+    useStore.getState().addNode(type === 'assembly' ? 'machine' : type, w.x, w.y);
+    const added = useStore.getState().selected[0];
+    if (type === 'assembly' && added) useStore.getState().updateNode(added, { name: 'Montagem', assembly: true, partBuffer: 2 });
   }
 
   const byId = useMemo(() => new Map(model.nodes.map((n) => [n.id, n])), [model.nodes]);
@@ -298,6 +301,7 @@ export function CanvasView() {
                 topRank={layers.top5 ? topIds.indexOf(n.id) + 1 : 0}
                 co2Heat={layers.co2 ? (co2ById.get(n.id) ?? 0) : 0}
                 dim={layers.top5 && kpi.completed > 0 && !topIds.includes(n.id)}
+                assembly={isAssembly(n, model.links)}
                 stage={stageRef}
                 onSelect={(add) => {
                   const st = useStore.getState();
@@ -427,9 +431,25 @@ interface NodeShapeProps {
   /** Fração do CO2e do maior emissor (0..1) para o mapa de calor. */
   co2Heat: number;
   dim: boolean;
+  assembly: boolean;
 }
 
-function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, stage, onSelect, people, now, topRank, co2Heat, dim }: NodeShapeProps) {
+/** Posição do grupo de bonecos e se eles ficam lado a lado (horizontal) ou empilhados. */
+function crewPlace(def: NodeDef, labels: boolean): { x: number; y: number; row: boolean } {
+  if (def.crewOffset) return { ...def.crewOffset, row: true };
+  switch (def.crewSide) {
+    case 'bottom':
+      return { x: 0, y: H / 2 + (labels ? 26 : 13), row: true };
+    case 'left':
+      return { x: -W / 2 - 14, y: 0, row: false };
+    case 'right':
+      return { x: W / 2 + 14, y: 0, row: false };
+    default:
+      return { x: 0, y: -H / 2 - 13, row: true };
+  }
+}
+
+function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, stage, onSelect, people, now, topRank, co2Heat, dim, assembly }: NodeShapeProps) {
   const stateColor = colors.state[rt.state];
   const stroke = selected ? colors.accent : stateColor;
   const sw = selected ? 3 : 2;
@@ -526,7 +546,7 @@ function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, s
         y={-7}
         width={W}
         align="center"
-        text={glyph(def.type)}
+        text={assembly ? 'MT' : glyph(def.type)}
         fontSize={13}
         fontStyle="bold"
         fill={colors.ink}
@@ -543,10 +563,39 @@ function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, s
       {Array.from({ length: Math.min(q, 6) }).map((_, i) => (
         <Rect key={i} x={-W / 2 - 9} y={H / 2 - 8 - i * 7} width={6} height={5} fill={colors.muted} listening={false} />
       ))}
-      {showCrew && (
-        <Group y={-H / 2 - 13} listening={false}>
+      {showCrew && (() => {
+        const pl = crewPlace(def, labels);
+        return (
+        <Group
+          x={pl.x}
+          y={pl.y}
+          draggable={draggable}
+          onMouseDown={(e) => {
+            e.cancelBubble = true;
+          }}
+          onDragStart={(e) => {
+            e.cancelBubble = true;
+          }}
+          onDragMove={(e) => {
+            e.cancelBubble = true;
+          }}
+          onDragEnd={(e) => {
+            e.cancelBubble = true;
+            const g = e.target;
+            useStore.getState().updateNode(def.id, { crewOffset: { x: Math.round(g.x()), y: Math.round(g.y()) } });
+          }}
+          onMouseEnter={(e) => {
+            const c = e.target.getStage()?.container();
+            if (c && draggable) c.style.cursor = 'move';
+          }}
+          onMouseLeave={(e) => {
+            const c = e.target.getStage()?.container();
+            if (c) c.style.cursor = '';
+          }}
+        >
+          <Rect x={-crew * 8 - 4} y={-12} width={crew * 16 + 8} height={24} fill="transparent" />
           {Array.from({ length: crew }).map((_, i) => (
-            <Group key={i} x={(i - (crew - 1) / 2) * 15}>
+            <Group key={i} x={pl.row ? (i - (crew - 1) / 2) * 15 : 0} y={pl.row ? 0 : (i - (crew - 1) / 2) * 18}>
               <Person
                 color={rt.state === 'working' ? colors.human : mixHex(colors.human, colors.muted, 0.6)}
                 outline={colors.canvas}
@@ -555,7 +604,8 @@ function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, s
             </Group>
           ))}
         </Group>
-      )}
+        );
+      })()}
       {batch > 1 && (
         <Group listening={false}>
           <Rect x={-W / 2} y={H / 2 - 7} width={W} height={4} fill={colors.line} />

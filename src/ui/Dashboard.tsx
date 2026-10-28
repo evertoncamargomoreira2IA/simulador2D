@@ -6,7 +6,7 @@ import type { LineKpi } from '../engine/metrics';
 import type { NodeState } from '../engine/types';
 import { useStore } from '../store';
 import { fmt, fmtTime, pct, STATE_LABEL, useCanvasColors } from './theme';
-import { POOL_LABEL } from '../engine/types';
+import { chartSequence, POOL_LABEL } from '../engine/types';
 
 const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup'];
 
@@ -71,7 +71,8 @@ function StateChart({ kpi }: { kpi: LineKpi }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const chart = useRef<Chart | null>(null);
   const colors = useCanvasColors();
-  const procs = kpi.nodes.filter((n) => n.type !== 'source' && n.type !== 'sink');
+  const model = useStore((s) => s.model);
+  const procs = chartSequence(model, kpi.nodes.filter((n) => n.type !== 'source' && n.type !== 'sink'));
 
   useEffect(() => {
     chart.current = new Chart(ref.current!, {
@@ -118,7 +119,10 @@ function StateChart({ kpi }: { kpi: LineKpi }) {
 
   return (
     <div className="chart">
-      <p className="label">Estados por posto (% do tempo)</p>
+      <p className="label">
+        Estados por posto (% do tempo)
+        <button className="btn link" onClick={() => useStore.getState().setShowOrder(true)} title="Ordenar e escolher os postos dos gráficos">Sequência…</button>
+      </p>
       <div className="box">
         <canvas ref={ref} role="img" aria-label="Gráfico de barras empilhadas com o percentual de tempo em cada estado por posto" />
       </div>

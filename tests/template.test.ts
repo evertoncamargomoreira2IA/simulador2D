@@ -5,6 +5,7 @@ import { parseTemplate, templateBytes, templateWorkbook } from '../src/io/templa
 import { lp2Model } from '../src/model/builder';
 import { steadyUph } from '../src/engine/calibrate';
 import { cycleRows } from '../src/ui/CycleTakt';
+import { chartSequence, isAssembly, makeNode } from '../src/engine/types';
 
 describe('planilha padrão', () => {
   it('exemplo vazio gera uma linha que roda', () => {
@@ -45,5 +46,20 @@ describe('cycle × takt', () => {
     expect(rows[0].name).toBe('Posto 1');
     expect(rows.find((x) => x.name === 'Kit off-line')?.offline).toBe(true);
     expect(rows.find((x) => x.name === 'Teste final')?.plan).toBeCloseTo(600 / 14, 3);
+  });
+});
+
+describe('sequência dos gráficos e montagem', () => {
+  it('chartSequence ordena e esconde', () => {
+    const items = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
+    expect(chartSequence({ chartOrder: ['c', 'a'], chartHidden: ['d'] }, items).map((x) => x.id)).toEqual(['c', 'a', 'b']);
+    expect(chartSequence({ chartOrder: ['c', 'a'], chartHidden: ['d'] }, items, true).map((x) => x.id)).toEqual(['c', 'a', 'b', 'd']);
+    expect(chartSequence({}, items).map((x) => x.id)).toEqual(['a', 'b', 'c', 'd']);
+  });
+  it('isAssembly reconhece flag e ligação de componente', () => {
+    const m = makeNode('machine', { id: 'm' });
+    expect(isAssembly(m, [])).toBe(false);
+    expect(isAssembly({ ...m, assembly: true }, [])).toBe(true);
+    expect(isAssembly(m, [{ to: 'm', role: 'part' }])).toBe(true);
   });
 });

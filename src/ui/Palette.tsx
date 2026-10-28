@@ -1,13 +1,17 @@
 // Paleta de blocos (arrastar para o canvas ou clicar para adicionar), legenda e camadas.
 
-import type { NodeType, NodeState } from '../engine/types';
+import { makePool, type NodeType, type NodeState } from '../engine/types';
 import { useStore, type Layers } from '../store';
 import { DRAG_MIME } from './CanvasView';
 import { STATE_LABEL } from './theme';
 
-const BLOCKS: { type: NodeType; label: string; desc: string }[] = [
+type Block = NodeType | 'assembly' | 'operator';
+
+const BLOCKS: { type: Block; label: string; desc: string }[] = [
   { type: 'source', label: 'Source', desc: 'Entrada de material' },
   { type: 'machine', label: 'Machine', desc: 'Posto / máquina' },
+  { type: 'assembly', label: 'Montagem', desc: 'Junta produto + kits' },
+  { type: 'operator', label: 'Operador', desc: 'Equipe compartilhada' },
   { type: 'buffer', label: 'Buffer', desc: 'Estoque / WIP' },
   { type: 'inspection', label: 'Inspection', desc: 'QC / teste' },
   { type: 'rework', label: 'Rework', desc: 'Retrabalho' },
@@ -26,7 +30,9 @@ function freeSpot(x: number, y: number): { x: number; y: number } {
  * Clique na paleta. Com um bloco selecionado: Source entra à esquerda e alimenta o bloco;
  * os demais entram à direita, ligados a partir dele. Sem seleção: no centro da tela.
  */
-function addFromPalette(type: NodeType) {
+function addFromPalette(block: Block) {
+  if (block === 'operator') return addOperator();
+  const type: NodeType = block === 'assembly' ? 'machine' : block;
   const st = useStore.getState();
   const prev = st.selected.length === 1 ? st.model.nodes.find((n) => n.id === st.selected[0]) : undefined;
   const c = st.viewCenter;
@@ -36,6 +42,10 @@ function addFromPalette(type: NodeType) {
   else pos = freeSpot(Math.round(c.x), Math.round(c.y));
   st.addNode(type, pos.x, pos.y);
   const added = useStore.getState().selected[0];
+  if (block === 'assembly' && added) {
+    useStore.getState().updateNode(added, { name: 'Montagem', assembly: true, partBuffer: 2 });
+    useStore.getState().setMessage('Montagem criada. Ligue os off-lines a ela e, em cada ligação, escolha "Componente (consumido na montagem)".');
+  }
   if (!prev || !added) return;
   if (type === 'source') {
     if (prev.type !== 'source') {
@@ -47,6 +57,28 @@ function addFromPalette(type: NodeType) {
     useStore.getState().addLink(prev.id, added);
     useStore.getState().select([added]);
   }
+}
+
+/** Cria um grupo de operadores. Com um posto selecionado, o grupo já passa a atender esse posto. */
+function addOperator() {
+  const st = useStore.getState();
+  const m = st.model;
+  const pools = m.pools ?? [];
+  const sel = st.selected.length === 1 ? m.nodes.find((n) => n.id === st.selected[0]) : undefined;
+  const c = st.viewCenter;
+  const pool = makePool('operator', {
+    name: `Operadores ${pools.filter((p) => p.kind === 'operator').length + 1}`,
+    count: 1,
+    x: Math.round(sel ? sel.x : c.x),
+    y: Math.round(sel ? sel.y + 60 : c.y),
+  });
+  const station = sel && sel.type !== 'source' && sel.type !== 'sink' ? sel : undefined;
+  st.patchModel({ pools: [...pools, pool], ...(station ? { nodes: m.nodes.map((n) => (n.id === station.id ? { ...n, poolId: pool.id } : n)) } : {}) });
+  st.setMessage(
+    station
+      ? `"${pool.name}" criado e ligado a "${station.name}". Para a mesma equipe atender outros postos, selecione o posto e escolha o grupo em "Operadores compartilhados".`
+      : `"${pool.name}" criado em Recursos (painel da direita). Selecione um posto e escolha o grupo em "Operadores compartilhados".`,
+  );
 }
 
 const LAYERS: { k: keyof Layers; label: string }[] = [
@@ -74,7 +106,7 @@ export function Palette() {
             <button
               key={b.type}
               className="block"
-              draggable
+              draggable={b.type !== 'operator'}
               onDragStart={(e) => {
                 e.dataTransfer.setData(DRAG_MIME, b.type);
                 e.dataTransfer.effectAllowed = 'copy';
@@ -125,12 +157,24 @@ export function Palette() {
   );
 }
 
-function Icon({ type }: { type: NodeType }) {
+function Icon({ type }: { type: Block }) {
   const s = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.6 } as const;
   return (
     <svg width="26" height="20" viewBox="0 0 26 20" aria-hidden="true">
       {type === 'source' && <polygon points="3,3 17,3 23,10 17,17 3,17" {...s} />}
       {type === 'machine' && <rect x="3" y="3" width="20" height="14" rx="2" {...s} />}
+      {type === 'assembly' && (
+        <>
+          <rect x="8" y="3" width="15" height="14" rx="2" {...s} />
+          <polyline points="1,6 8,10 1,14" {...s} />
+        </>
+      )}
+      {type === 'operator' && (
+        <>
+          <circle cx="13" cy="6" r="3.2" {...s} />
+          <path d="M6 18 C6 12, 20 12, 20 18" {...s} />
+        </>
+      )}
       {type === 'buffer' && <polyline points="3,3 3,17 23,17 23,3" {...s} />}
       {type === 'inspection' && <polygon points="8,2 18,2 23,10 18,18 8,18 3,10" {...s} />}
       {type === 'rework' && <rect x="3" y="3" width="20" height="14" rx="2" {...s} strokeDasharray="3 2" />}
