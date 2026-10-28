@@ -79,12 +79,7 @@ export function PropertiesPanel() {
             </label>
             <label className="field full">
               <span>Transporte</span>
-              <select id="link-pool" value={l.poolId ?? ''} onChange={(e) => useStore.getState().updateLink(l.id, { poolId: e.target.value || undefined })}>
-                <option value="">Esteira / automático</option>
-                {(model.pools ?? []).filter((p) => p.kind !== 'operator').map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+              <TransportSelect linkId={l.id} />
             </label>
           </div>
           <dl className="kv section">
@@ -220,6 +215,8 @@ export function PropertiesPanel() {
               );
             })}
           </div>
+
+          <Supply nodeId={n.id} />
 
           <div className="section">
             <p className="label">Resultado no momento</p>
@@ -440,6 +437,74 @@ function PlantControls() {
         </div>
       </div>
       <p className="hint">Ajusta só o desenho de fundo; os blocos ficam onde estão. Ctrl+Z desfaz.</p>
+    </div>
+  );
+}
+
+const QUICK: PoolKind[] = ['agv', 'forklift', 'operator'];
+const NEW_LABEL: Record<PoolKind, string> = { agv: '+ Novo AGV', forklift: '+ Nova empilhadeira', operator: '+ Novo operador (busca a pé)' };
+
+/** Cria um recurso perto do posto e devolve o id. */
+function newPoolNear(kind: PoolKind, x: number, y: number): string {
+  const st = useStore.getState();
+  const pools = st.model.pools ?? [];
+  const p = makePool(kind, { name: `${POOL_LABEL[kind]} ${pools.filter((q) => q.kind === kind).length + 1}`, x: Math.round(x), y: Math.round(y + 70) });
+  st.patchModel({ pools: [...pools, p] });
+  return p.id;
+}
+
+/** Quem leva a peça neste fluxo: esteira (automático) ou um recurso (AGV, empilhadeira, operador). */
+function TransportSelect({ linkId }: { linkId: string }) {
+  const model = useStore((s) => s.model);
+  const l = model.links.find((x) => x.id === linkId);
+  if (!l) return null;
+  const from = model.nodes.find((n) => n.id === l.from);
+  const pools = model.pools ?? [];
+  return (
+    <select
+      id={`link-pool-${l.id}`}
+      value={l.poolId ?? ''}
+      onChange={(e) => {
+        const v = e.target.value;
+        const st = useStore.getState();
+        if (v.startsWith('+')) {
+          const id = newPoolNear(v.slice(1) as PoolKind, from?.x ?? 200, from?.y ?? 200);
+          st.updateLink(l.id, { poolId: id });
+        } else st.updateLink(l.id, { poolId: v || undefined });
+      }}
+    >
+      <option value="">Esteira / automático</option>
+      {pools.map((p) => (
+        <option key={p.id} value={p.id}>{p.name} ({POOL_LABEL[p.kind].toLowerCase()}, {p.count})</option>
+      ))}
+      {QUICK.map((k) => (
+        <option key={k} value={`+${k}`}>{NEW_LABEL[k]}</option>
+      ))}
+    </select>
+  );
+}
+
+/** Entradas do posto: de onde vem cada peça e quem busca (AGV, empilhadeira, operador ou esteira). */
+function Supply({ nodeId }: { nodeId: string }) {
+  const model = useStore((s) => s.model);
+  const ins = model.links.filter((l) => l.to === nodeId);
+  if (ins.length === 0) return null;
+  const name = (id: string) => model.nodes.find((n) => n.id === id)?.name ?? id;
+  return (
+    <div className="section">
+      <p className="label">Busca de peça / transporte</p>
+      <div className="fields">
+        {ins.map((l) => (
+          <label key={l.id} className="field full">
+            <span>
+              De {name(l.from)}
+              {l.role === 'part' ? ' (componente)' : ''}
+            </span>
+            <TransportSelect linkId={l.id} />
+          </label>
+        ))}
+      </div>
+      <p className="hint">Com AGV, empilhadeira ou operador, a peça espera pronta no posto de origem até alguém buscar; a distância sai do desenho (ou do campo Distância na ligação).</p>
     </div>
   );
 }

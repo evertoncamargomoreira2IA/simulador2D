@@ -3,7 +3,7 @@
 import type Konva from 'konva';
 import { isAssembly, variantPatch, type BlockVariant } from '../engine/types';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Arrow, Circle, Group, Layer, Line, Rect, RegularPolygon, Shape, Stage, Text } from 'react-konva';
+import { Arrow, Circle, Group, Layer, Line, Rect, RegularPolygon, Shape, Stage, Text, Transformer } from 'react-konva';
 import type { NodeRt, Simulator } from '../engine/simulator';
 import type { Background, NodeDef, NodeType } from '../engine/types';
 import { footprint } from '../engine/analytics';
@@ -25,6 +25,7 @@ export function CanvasView() {
   const stageRef = useRef<Konva.Stage>(null);
   const [size, setSize] = useState({ w: 800, h: 500 });
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 0.75 });
+  const [plantEdit, setPlantEdit] = useState(false);
   const [band, setBand] = useState<{ x0: number; y0: number; x1: number; y1: number; add?: boolean } | null>(null);
   const colors = useCanvasColors();
 
@@ -259,6 +260,11 @@ export function CanvasView() {
             <Plant bg={model.background} line={colors.cad} text={colors.cadText} />
           </Layer>
         )}
+        {model.background && plantEdit && (
+          <Layer>
+            <PlantHandle bg={model.background} color={colors.accent} />
+          </Layer>
+        )}
 
         {(model.zones?.length ?? 0) > 0 && (
           <Layer listening={false}>
@@ -452,6 +458,18 @@ export function CanvasView() {
         <button className="btn" onClick={() => zoomBy(1.2)} aria-label="Aproximar">+</button>
         <button className="btn" onClick={() => zoomBy(1 / 1.2)} aria-label="Afastar">−</button>
         <button className="btn" onClick={fit}>Enquadrar</button>
+        {model.background && (
+          <button
+            className={`btn${plantEdit ? ' on' : ''}`}
+            onClick={() => {
+              setPlantEdit(!plantEdit);
+              useStore.getState().setMessage(plantEdit ? 'Planta travada.' : 'Ajustar planta: puxe os cantos para aumentar ou diminuir e arraste para posicionar. Clique de novo para travar.');
+            }}
+            title="Aumentar, diminuir e mover a planta de fundo direto no layout"
+          >
+            {plantEdit ? 'Travar planta' : 'Ajustar planta'}
+          </button>
+        )}
       </div>
       <div className="toast">
         {tool === 'connect'
@@ -929,3 +947,58 @@ function heatColor(f: number): string {
   return `hsl(${h}, 80%, 50%)`;
 }
 
+
+/** Moldura da planta no modo "Ajustar planta": arrastar move, cantos mudam o tamanho (proporção fixa). */
+function PlantHandle({ bg, color }: { bg: Background; color: string }) {
+  const g = useRef<Konva.Group>(null);
+  const tr = useRef<Konva.Transformer>(null);
+  useEffect(() => {
+    if (g.current && tr.current) {
+      tr.current.nodes([g.current]);
+      tr.current.getLayer()?.batchDraw();
+    }
+  }, [bg]);
+  const k = bg.scale ?? 1;
+  const commit = () => {
+    const node = g.current;
+    if (!node) return;
+    const scale = Math.min(20, Math.max(0.02, node.scaleX()));
+    useStore.getState().patchModel({ background: { ...bg, scale, dx: node.x(), dy: node.y() } });
+  };
+  return (
+    <>
+      <Group
+        ref={g}
+        x={bg.dx ?? 0}
+        y={bg.dy ?? 0}
+        scaleX={k}
+        scaleY={k}
+        draggable
+        onMouseDown={(e) => (e.cancelBubble = true)}
+        onDragEnd={commit}
+        onTransformEnd={commit}
+        onMouseEnter={(e) => {
+          const c = e.target.getStage()?.container();
+          if (c) c.style.cursor = 'move';
+        }}
+        onMouseLeave={(e) => {
+          const c = e.target.getStage()?.container();
+          if (c) c.style.cursor = '';
+        }}
+      >
+        <Rect width={bg.width} height={bg.height} fill={color} opacity={0.06} stroke={color} strokeWidth={2} dash={[10, 6]} strokeScaleEnabled={false} />
+      </Group>
+      <Transformer
+        ref={tr}
+        rotateEnabled={false}
+        keepRatio
+        enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
+        anchorSize={12}
+        anchorStroke={color}
+        borderStroke={color}
+        flipEnabled={false}
+        boundBoxFunc={(oldB, newB) => (newB.width < 20 || newB.height < 20 ? oldB : newB)}
+      />
+    </>
+  );
+}

@@ -139,3 +139,5 @@ tests        testes (vitest)
 - **Ligar arrastando**: passe o mouse no bloco, puxe a bolinha ➜ da lateral até o destino e solte. No modo Conectar, arrastar do próprio bloco também liga.
 - **Tela de início**: o simulador abre em branco e pergunta: trabalho novo (com nome), um dos 10 salvos, abrir arquivo ou exemplo. O botão Início reabre essa tela.
 - **Selecionar vários**: arraste com o botão esquerdo no fundo (Shift soma à seleção) e arraste um dos blocos para mover todos. Botão direito/meio (ou Alt + esquerdo) move a tela.
+- **Busca de peça / transporte** no painel do posto: escolha AGV, empilhadeira, operador ou esteira para cada entrada, ou crie um novo ali mesmo.
+- **Ajustar planta** (botão na tela): puxe os cantos para mudar o tamanho e arraste para posicionar.
