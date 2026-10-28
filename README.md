@@ -136,3 +136,4 @@ tests        testes (vitest)
 - **Eficiência (%)** por posto (padrão 100%): o ciclo real fica tempo ÷ eficiência; coluna `eficiencia` na planilha padrão.
 - **Arrastar arquivo para a tela**: DXF ou imagem (PNG/JPG) do layout vira a planta de fundo (pede a largura real em metros); planilha ou JSON abre o modelo.
 - **Planta de fundo**: no painel Modelo, tamanho (−/+), mover X/Y, opacidade, voltar ao original ou remover, sem mexer nos blocos.
+- **Ligar arrastando**: passe o mouse no bloco, puxe a bolinha ➜ da lateral até o destino e solte. No modo Conectar, arrastar do próprio bloco também liga.

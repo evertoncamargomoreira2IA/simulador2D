@@ -82,6 +82,26 @@ export function CanvasView() {
     });
   }
 
+  // Ligação arrastando: da bolinha do bloco (ou do bloco, no modo Conectar) até o destino.
+  const [wire, setWire] = useState<{ from: string; x: number; y: number; moved: boolean } | null>(null);
+  const nodeAt = (x: number, y: number) =>
+    useStore.getState().model.nodes.find((n) => Math.abs(n.x - x) <= W / 2 + 6 && Math.abs(n.y - y) <= H / 2 + 6);
+  function startWire(from: string) {
+    const n = useStore.getState().model.nodes.find((x) => x.id === from);
+    if (n) setWire({ from, x: n.x, y: n.y, moved: false });
+  }
+  function endWire() {
+    if (!wire) return;
+    const p = stageRef.current!.getPointerPosition();
+    const st = useStore.getState();
+    const target = p ? nodeAt(toWorld(p.x, p.y).x, toWorld(p.x, p.y).y) : undefined;
+    setWire(null);
+    if (target && target.id !== wire.from) {
+      st.addLink(wire.from, target.id);
+      st.setConnectFrom(null);
+    } else if (!wire.moved && st.tool === 'connect') st.setConnectFrom(wire.from);
+  }
+
   const toWorld = (px: number, py: number) => ({ x: (px - view.x) / view.scale, y: (py - view.y) / view.scale });
 
   function onWheel(e: Konva.KonvaEventObject<WheelEvent>) {
@@ -113,12 +133,19 @@ export function CanvasView() {
     }
   }
   function onStageMove() {
+    if (wire) {
+      const p = stageRef.current!.getPointerPosition()!;
+      const w = toWorld(p.x, p.y);
+      setWire({ ...wire, x: w.x, y: w.y, moved: true });
+      return;
+    }
     if (!band) return;
     const p = stageRef.current!.getPointerPosition()!;
     const w = toWorld(p.x, p.y);
     setBand({ ...band, x1: w.x, y1: w.y });
   }
   function onStageUp() {
+    if (wire) return endWire();
     if (!band) return;
     const [x0, x1] = [Math.min(band.x0, band.x1), Math.max(band.x0, band.x1)];
     const [y0, y1] = [Math.min(band.y0, band.y1), Math.max(band.y0, band.y1)];
@@ -167,6 +194,7 @@ export function CanvasView() {
   const movedByLink = new Map(sim.links.map((l) => [l.def.id, l.moved]));
 
   const draggable = tool === 'select' && run !== 'running';
+  const canWire = run !== 'running';
 
   return (
     <div
@@ -185,7 +213,7 @@ export function CanvasView() {
         y={view.y}
         scaleX={view.scale}
         scaleY={view.scale}
-        draggable={!band}
+        draggable={!band && !wire}
         onDragEnd={(e) => {
           if (e.target === stageRef.current) setView({ ...view, x: e.target.x(), y: e.target.y() });
         }}
@@ -193,6 +221,7 @@ export function CanvasView() {
         onMouseDown={onStageDown}
         onMouseMove={onStageMove}
         onMouseUp={onStageUp}
+        onMouseLeave={() => setWire(null)}
         onClick={onStageClick}
         onTap={onStageClick}
       >
@@ -306,14 +335,15 @@ export function CanvasView() {
                 dim={layers.top5 && kpi.completed > 0 && !topIds.includes(n.id)}
                 assembly={isAssembly(n, model.links)}
                 stage={stageRef}
+                onWire={canWire && n.type !== 'sink' ? () => startWire(n.id) : undefined}
+                wireTarget={!!wire && wire.moved && wire.from !== n.id}
                 onSelect={(add) => {
                   const st = useStore.getState();
                   if (st.tool === 'connect') {
-                    if (!st.connectFrom) st.setConnectFrom(n.id);
-                    else {
+                    if (st.connectFrom && st.connectFrom !== n.id) {
                       st.addLink(st.connectFrom, n.id);
                       st.setConnectFrom(null);
-                    }
+                    } else if (n.type !== 'sink') startWire(n.id);
                     return;
                   }
                   if (add) st.select(st.selected.includes(n.id) ? st.selected.filter((i) => i !== n.id) : [...st.selected, n.id]);
@@ -323,6 +353,28 @@ export function CanvasView() {
             );
           })}
         </Layer>
+
+        {wire?.moved && (
+          <Layer listening={false}>
+            {(() => {
+              const a = model.nodes.find((x) => x.id === wire.from);
+              const t = nodeAt(wire.x, wire.y);
+              if (!a) return null;
+              const ok = t && t.id !== wire.from;
+              return (
+                <Arrow
+                  points={[a.x + W / 2, a.y, ok ? t.x - W / 2 - 4 : wire.x, ok ? t.y : wire.y]}
+                  stroke={colors.accent}
+                  fill={colors.accent}
+                  strokeWidth={2.5}
+                  dash={ok ? undefined : [8, 5]}
+                  pointerLength={10}
+                  pointerWidth={10}
+                />
+              );
+            })()}
+          </Layer>
+        )}
 
         {layers.people && sim.pools.length > 0 && (
           <Layer listening={false}>
@@ -380,7 +432,7 @@ export function CanvasView() {
         {tool === 'connect'
           ? connectFrom
             ? 'Conectar: agora clique no bloco de destino.'
-            : 'Conectar: clique no bloco de origem.'
+            : 'Conectar: arraste de um bloco até o outro (ou clique na origem e depois no destino).'
           : message}
       </div>
     </div>
@@ -435,6 +487,10 @@ interface NodeShapeProps {
   co2Heat: number;
   dim: boolean;
   assembly: boolean;
+  /** Começa uma ligação arrastando a bolinha do bloco. */
+  onWire?: () => void;
+  /** Destaque de bloco que recebe a seta sendo arrastada. */
+  wireTarget: boolean;
 }
 
 /** Posição do grupo de bonecos e se eles ficam lado a lado (horizontal) ou empilhados. */
@@ -452,7 +508,8 @@ function crewPlace(def: NodeDef, labels: boolean): { x: number; y: number; row: 
   }
 }
 
-function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, stage, onSelect, people, now, topRank, co2Heat, dim, assembly }: NodeShapeProps) {
+function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, stage, onSelect, people, now, topRank, co2Heat, dim, assembly, onWire, wireTarget }: NodeShapeProps) {
+  const [hover, setHover] = useState(false);
   const stateColor = colors.state[rt.state];
   const stroke = selected ? colors.accent : stateColor;
   const sw = selected ? 3 : 2;
@@ -475,6 +532,8 @@ function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, s
       y={def.y}
       opacity={dim ? 0.35 : 1}
       draggable={draggable}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       onMouseDown={(e) => {
         e.cancelBubble = true;
         onSelect(e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey);
@@ -623,6 +682,30 @@ function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, s
             <Text x={-50} y={-H / 2 - 16} width={100} align="center" text={String(def.type === 'sink' ? rt.processed : rt.released)} fontSize={12} fontStyle="bold" fill={colors.muted} listening={false} />
           )}
         </>
+      )}
+      {wireTarget && <Rect x={-W / 2 - 5} y={-H / 2 - 5} width={W + 10} height={H + 10} cornerRadius={8} stroke={colors.accent} strokeWidth={2} dash={[5, 4]} listening={false} />}
+      {onWire && (hover || selected) && (
+        <Group
+          x={W / 2 + 9}
+          y={0}
+          onMouseDown={(e) => {
+            e.cancelBubble = true;
+            onWire();
+          }}
+          onMouseEnter={(e) => {
+            const c = e.target.getStage()?.container();
+            if (c) c.style.cursor = 'crosshair';
+          }}
+          onMouseLeave={(e) => {
+            const c = e.target.getStage()?.container();
+            if (c) c.style.cursor = '';
+          }}
+        >
+          <Circle radius={11} fill="transparent" />
+          <Circle radius={6.5} fill={colors.accent} stroke={colors.raised} strokeWidth={1.5} />
+          <Line points={[-2.5, 0, 2.5, 0]} stroke={colors.raised} strokeWidth={1.6} />
+          <Line points={[0.5, -2.5, 3, 0, 0.5, 2.5]} stroke={colors.raised} strokeWidth={1.6} />
+        </Group>
       )}
     </Group>
   );
