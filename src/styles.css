@@ -377,3 +377,16 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .modal .tile .v { white-space: normal; }
 .advice li { grid-template-columns: 124px minmax(0, 1fr) auto; }
 .chip { font-size: 9.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Cycle × takt */
+.chart-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--raised); }
+.seg { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+
+/* Tutorial */
+.tutorial { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.tutorial li { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.tutorial li b { display: block; margin-bottom: 4px; }
+.tutorial p { margin: 4px 0; line-height: 1.45; color: var(--ink); }
+.faq { display: grid; gap: 8px; margin: 0; }
+.faq dt { font-weight: 600; }
+.faq dd { margin: 2px 0 0; color: var(--muted); line-height: 1.45; }

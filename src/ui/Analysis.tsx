@@ -10,11 +10,13 @@ import { Simulator } from '../engine/simulator';
 import type { Model } from '../engine/types';
 import { useStore, type AnalysisTab, type RealRow } from '../store';
 import { Advisor } from './Advisor';
+import { CycleTakt } from './CycleTakt';
 import { Bars, Kpi, Modal } from './Modal';
 import { norm } from './StationDetail';
 import { fmt, fmtTime, pct } from './theme';
 
 const TABS: { k: AnalysisTab; label: string }[] = [
+  { k: 'ciclo', label: 'Cycle × Takt' },
   { k: 'gargalos', label: 'Gargalos' },
   { k: 'spaghetti', label: 'Spaghetti' },
   { k: 'custos', label: 'Custos' },
@@ -39,6 +41,7 @@ export function Analysis() {
         ))}
       </nav>
       <div className="tab-body">
+        {tab === 'ciclo' && <CycleTakt />}
         {tab === 'gargalos' && <Bottlenecks />}
         {tab === 'spaghetti' && <SpaghettiTab />}
         {tab === 'custos' && <Costs />}

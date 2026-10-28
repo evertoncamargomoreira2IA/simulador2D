@@ -1,6 +1,6 @@
 // Barra superior: arquivo (modelos, importar, exportar) e controle da simulação.
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { lineKpi } from '../engine/metrics';
 import { exportModelCsv, exportModelJson, exportResultsXlsx } from '../io/exporter';
 import { parseDxf, snapNodesToLabels } from '../io/dxf';
@@ -9,11 +9,13 @@ import { lp2Model, simpleModel } from '../model/builder';
 import { DEFAULT_SETTINGS } from '../engine/types';
 import { privateExample, useStore } from '../store';
 import { fmtTime } from './theme';
+import { Tutorial, downloadTemplate } from './Tutorial';
 
 const SPEEDS = [1, 2, 5, 10, 30, 60, 120, 300, 600];
 
 export function Toolbar() {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [help, setHelp] = useState(false);
   const model = useStore((s) => s.model);
   const run = useStore((s) => s.run);
   const speed = useStore((s) => s.speed);
@@ -40,7 +42,12 @@ export function Toolbar() {
         return;
       }
       const r = await importFile(f, st().model.settings.takt || 12);
-      st().setModel(r.model, r.info);
+      const cur = st().model;
+      if (r.keepBackground && cur.background) {
+        const k = (cur.settings.pxPerMeter || 40) / (r.model.settings.pxPerMeter || 40);
+        const nodes = r.model.nodes.map((n) => ({ ...n, x: n.x * k, y: n.y * k }));
+        st().setModel({ ...r.model, nodes, background: cur.background, zones: cur.zones, settings: { ...r.model.settings, pxPerMeter: cur.settings.pxPerMeter } }, `${r.info} Planta mantida.`);
+      } else st().setModel(r.model, r.info);
     } catch (err) {
       st().setMessage(`Não foi possível importar "${f.name}": ${(err as Error).message}`);
     }
@@ -89,7 +96,7 @@ export function Toolbar() {
           <option value="lp2">Linha LP2 (70 postos)</option>
           <option value="simple">Linha simples</option>
         </select>
-        <button className="btn" onClick={() => fileRef.current?.click()} title="Excel (.xlsx), CSV, JSON do simulador ou planta DXF (AutoCAD)">
+        <button className="btn" onClick={() => fileRef.current?.click()} title="Planilha padrão preenchida, Excel (.xlsx), CSV, JSON do simulador ou planta DXF (AutoCAD)">
           Importar
         </button>
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.txt,.json,.dxf" hidden onChange={onFile} />
@@ -102,9 +109,13 @@ export function Toolbar() {
             if (e.target.value === 'json') exportModelJson(m);
             if (e.target.value === 'csv') exportModelCsv(m);
             if (e.target.value === 'xlsx') exportResultsXlsx(m, lineKpi(st().sim));
+            if (e.target.value === 'tpl') downloadTemplate(false);
+            if (e.target.value === 'tplm') downloadTemplate(true);
           }}
         >
           <option value="" disabled>Exportar…</option>
+          <option value="tpl">Planilha padrão (para preencher)</option>
+          <option value="tplm">Planilha do modelo atual</option>
           <option value="xlsx">Resultados (Excel)</option>
           <option value="csv">Modelo (CSV)</option>
           <option value="json">Modelo (JSON)</option>
@@ -148,9 +159,11 @@ export function Toolbar() {
         Linha cheia
       </label>
       <div className="group" role="group" aria-label="Análises">
-        <button className="btn" onClick={() => st().setAnalysis('gargalos')} title="Gargalos, spaghetti, custos, energia, carbono, cenários e real × simulado">Análises</button>
+        <button className="btn" onClick={() => st().setAnalysis('ciclo')} title="Cycle × takt, gargalos, spaghetti, custos, energia, carbono, cenários e real × simulado">Análises</button>
         <button className="btn ai" onClick={() => st().setAnalysis('ia')} title="Sugestões de melhoria com IA">✦ IA</button>
+        <button className="btn" onClick={() => setHelp(true)} title="Procedimento de uso e planilha padrão">? Como usar</button>
       </div>
+      {help && <Tutorial onClose={() => setHelp(false)} />}
       <span className={`live${run === 'running' ? ' on' : ''}`}><i />{run === 'running' ? 'Ao vivo' : run === 'done' ? 'Concluído' : run === 'paused' ? 'Pausado' : 'Pronto'}</span>
       <div className="clock" aria-live="off">
         {fmtTime(sim.clock)} <small>/ {fmtTime(sim.duration - sim.t0)}</small>

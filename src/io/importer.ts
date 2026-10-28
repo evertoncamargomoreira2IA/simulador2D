@@ -12,10 +12,13 @@
 import * as XLSX from 'xlsx';
 import type { Model, NodeType } from '../engine/types';
 import { buildLine, type StationRow } from '../model/builder';
+import { isTemplate, parseTemplate } from './template';
 
 export interface ImportResult {
   model: Model;
   info: string;
+  /** Planilha padrão com posição de todos os postos: manter a planta DXF aberta. */
+  keepBackground?: boolean;
 }
 
 const ALIASES: Record<keyof StationRow, string[]> = {
@@ -118,6 +121,12 @@ export function parsePcp(wb: XLSX.WorkBook): StationRow[] | null {
 export function importWorkbook(data: ArrayBuffer | string, fileName: string, cycleTime = 12): ImportResult {
   const wb = typeof data === 'string' ? XLSX.read(data, { type: 'string' }) : XLSX.read(data, { type: 'array' });
   const base = fileName.replace(/\.[^.]+$/, '');
+  if (isTemplate(wb)) {
+    const t = parseTemplate(wb, base);
+    const links = t.model.links.length;
+    const warn = t.warnings.length ? ` Atenção: ${t.warnings.slice(0, 4).join(' ')}${t.warnings.length > 4 ? ` (+${t.warnings.length - 4} avisos)` : ''}` : '';
+    return { model: t.model, info: `Planilha padrão: ${t.model.nodes.length} blocos, ${links} ligações, ${t.model.pools?.length ?? 0} grupos de pessoas e veículos.${warn}`, keepBackground: t.hasLayout };
+  }
   const pcp = parsePcp(wb);
   if (pcp) {
     const model = buildLine(pcp, { name: base, cycleTime });
