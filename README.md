@@ -15,7 +15,7 @@ npm run build:single # gera dist-single/index.html (arquivo único, abre direto 
 ## O que tem na Sprint 1
 
 - **Canvas 2D** (React + TypeScript + Konva): arrastar blocos da paleta, mover, zoom (roda do mouse),
-  pan (arrastar o fundo), grid com snap, seleção múltipla (Shift+clique ou Shift+arrastar), camadas,
+  pan (arrastar o fundo), grid com snap, seleção múltipla (arrastar no fundo ou Shift+clique), pan com botão direito/meio, camadas,
   conectar blocos (botão *Conectar*), apagar com Delete.
 - **Blocos**: Source, Machine, Buffer, Inspection, Rework, Finished Goods. Cada bloco guarda nome, ID,
   capacidade, tempo de ciclo, variação, setup, turnos, disponibilidade/MTTR, operadores, OEE meta,
