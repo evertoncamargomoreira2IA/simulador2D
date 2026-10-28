@@ -73,7 +73,7 @@ function StateChart({ kpi }: { kpi: LineKpi }) {
   const chart = useRef<Chart | null>(null);
   const colors = useCanvasColors();
   const model = useStore((s) => s.model);
-  const [mode, setMode] = useState<'estados' | 'takt'>('estados');
+  const [mode, setMode] = useState<'estados' | 'takt'>('takt');
   const takt = model.settings.takt || 0;
   const procs = lineSequence(model, kpi.nodes.filter((n) => n.type !== 'source' && n.type !== 'sink'));
   // vs Takt: carga por peça (medida na simulação; antes de rodar, a planejada) em % do takt
@@ -121,13 +121,17 @@ function StateChart({ kpi }: { kpi: LineKpi }) {
       c.options.plugins!.tooltip = { callbacks: { label: (t) => `${t.dataset.label}: ${fmt(Number(t.raw), 1)}%` } };
     } else {
       const vals = loads.map((r) => pctTakt(r.id));
+      const live = loads.map((r) => r.real !== undefined);
       c.data.labels = loads.map((r) => (r.offline ? `${r.name} (off)` : r.name));
       c.data.datasets = [
         {
           type: 'bar' as const,
           label: 'Carga',
           data: vals,
-          backgroundColor: vals.map((v) => (v > 100 ? colors.state.down : v >= 90 ? colors.state.starved : colors.state.working)),
+          backgroundColor: vals.map((v, i) => {
+            const c = v > 100 ? colors.state.down : v >= 90 ? colors.state.starved : colors.state.working;
+            return live[i] ? c : c + '66'; // claro = ainda sem medição (valor planejado)
+          }),
           borderWidth: 0,
           barPercentage: 0.95,
           categoryPercentage: 0.95,
@@ -142,7 +146,9 @@ function StateChart({ kpi }: { kpi: LineKpi }) {
         callbacks: {
           label: (t) => {
             const r = loads[t.dataIndex];
-            return t.dataset.label === 'Takt' ? `Takt ${fmt(takt, 1)} s` : `${fmt(Number(t.raw), 0)}% do takt · ${fmt(ct.get(r.id) ?? 0, 1)} s por peça`;
+            return t.dataset.label === 'Takt'
+              ? `Takt ${fmt(takt, 1)} s`
+              : `${fmt(Number(t.raw), 0)}% do takt · ${fmt(ct.get(r.id) ?? 0, 1)} s por peça ${r.real !== undefined ? '(medido agora)' : '(planejado)'}`;
           },
         },
       };
@@ -159,12 +165,12 @@ function StateChart({ kpi }: { kpi: LineKpi }) {
   return (
     <div className="chart">
       <p className="label">
-        {mode === 'estados' ? 'Estados por posto (% do tempo)' : `Carga por posto (% do takt de ${fmt(takt, 1)} s)`}
+        {mode === 'estados' ? 'Estados por posto (% do tempo)' : `Performance por posto × takt ${fmt(takt, 1)} s (ao vivo)`}
         <span className="seg mini" role="group" aria-label="Visão do gráfico">
           <button className={`btn link${mode === 'estados' ? ' on' : ''}`} onClick={() => setMode('estados')}>Estados</button>
           <button className={`btn link${mode === 'takt' ? ' on' : ''}`} onClick={() => setMode('takt')} disabled={!takt} title={takt ? '' : 'Defina o takt ou a meta UPH na configuração do modelo'}>vs Takt</button>
         </span>
-        <button className="btn link" onClick={() => useStore.getState().setShowOrder(true)} title="Ordenar e escolher os postos dos gráficos">Sequência…</button>
+        <button className="btn link" onClick={() => useStore.getState().setShowOrder(true)} title="Arrastar para ordenar e escolher os postos dos gráficos">⇅ Sequência dos postos</button>
       </p>
       <div className="box">
         <canvas

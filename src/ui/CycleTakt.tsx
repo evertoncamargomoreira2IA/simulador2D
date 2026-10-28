@@ -78,7 +78,8 @@ export function cycleRows(model: Model, kpi?: LineKpi): CtRow[] {
       const raw = n.cycleTime / (n.efficiency || 1) / Math.max(1, n.capacity);
       const sh = share.get(n.id) ?? 1;
       const ld = load.get(n.id) ?? 1;
-      const real = k && kpi && kpi.completed > 0 ? (k.utilization * elapsed) / kpi.completed : undefined;
+      // ao vivo: tempo ocupado por carga processada, convertido para "por peça da linha"
+      const real = k && k.processed > 0 ? ((k.utilization * elapsed) / k.processed) * (sh / ld) : undefined;
       return { id: n.id, name: n.name, raw, share: sh, load: ld, plan: (raw * sh) / ld, real, offline: feeders.has(n.id) };
     });
 }

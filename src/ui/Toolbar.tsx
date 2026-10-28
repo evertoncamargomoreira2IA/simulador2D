@@ -161,9 +161,33 @@ export function Toolbar() {
       {help && <Tutorial onClose={() => setHelp(false)} />}
       {showSaved && <SavedModels onClose={() => st().setShowSaved(false)} />}
       <span className={`live${run === 'running' ? ' on' : ''}`}><i />{run === 'running' ? 'Ao vivo' : run === 'done' ? 'Concluído' : run === 'paused' ? 'Pausado' : 'Pronto'}</span>
+      <UphField />
       <div className="clock" aria-live="off">
         {fmtTime(sim.clock)} <small>/ {fmtTime(sim.duration - sim.t0)}</small>
       </div>
     </header>
+  );
+}
+
+/** Meta UPH na barra: o takt sai daqui (takt = 3600 / UPH). */
+function UphField() {
+  const takt = useStore((s) => s.model.settings.takt);
+  const uph = takt > 0 ? Math.round((3600 / takt) * 10) / 10 : 0;
+  return (
+    <label className="uph" title="Peças por hora esperadas. O takt é calculado sozinho (3600 / UPH) e aparece como linha nos gráficos.">
+      <span>Meta UPH</span>
+      <input
+        id="bar-uph"
+        type="number"
+        min={0}
+        step={1}
+        value={uph}
+        onChange={(e) => {
+          const u = Number(e.target.value);
+          useStore.getState().updateSettings({ takt: u > 0 ? Math.round((3600 / u) * 1000) / 1000 : 0 });
+        }}
+      />
+      <small>takt {takt > 0 ? `${takt.toFixed(1)} s` : '–'}</small>
+    </label>
   );
 }
