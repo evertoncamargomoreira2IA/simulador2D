@@ -5,8 +5,7 @@ import { create } from 'zustand';
 import { History } from './engine/history';
 import { lineKpi, type LineKpi } from './engine/metrics';
 import { Simulator } from './engine/simulator';
-import { makeNode, newId, type LinkDef, type Model, type NodeDef, type NodeType } from './engine/types';
-import { lp2Model } from './model/builder';
+import { DEFAULT_SETTINGS, makeNode, newId, type LinkDef, type Model, type NodeDef, type NodeType } from './engine/types';
 
 export type Tool = 'select' | 'connect';
 export type RunState = 'idle' | 'running' | 'paused' | 'done';
@@ -85,6 +84,8 @@ interface State {
   redoLabel: string;
   setChartView: (order: string[] | undefined, hidden: string[] | undefined) => void;
   showOrder: boolean;
+  showStart: boolean;
+  setShowStart: (v: boolean) => void;
   setShowOrder: (v: boolean) => void;
   setRun: (r: RunState) => void;
   setSpeed: (s: number) => void;
@@ -109,7 +110,8 @@ const fresh = (m: Model) => {
   return { sim, kpi: lineKpi(sim) };
 };
 
-const initial = privateExample() ?? lp2Model();
+// Abre em branco; a tela de início oferece trabalhos salvos, novo ou exemplos.
+const initial: Model = { name: 'Novo trabalho', nodes: [], links: [], settings: { ...DEFAULT_SETTINGS } };
 
 export const useStore = create<State>((set, get) => {
   const history = new History<Model>();
@@ -149,9 +151,9 @@ export const useStore = create<State>((set, get) => {
     ...fresh(initial),
     tick: 0,
     viewCenter: { x: 200, y: 200 },
-    message: privateExample()
-      ? 'Linha real carregada sobre o layout DXF (PST 6 gigas/2 operadores, Final Test 28 gigas/6 operadores). Clique em ▶ Start.'
-      : 'Modelo exemplo LP2 carregado (70 postos, 12 s por posto). Clique em ▶ Start.',
+    message: 'Escolha um trabalho salvo, comece um novo ou abra um exemplo.',
+    showStart: true,
+    setShowStart: (showStart) => set({ showStart }),
 
     setModel: (m, message) =>
       edit(m, { selected: [], selectedLink: null, connectFrom: null, saved: null, message: message ?? `Modelo "${m.name}" carregado.` }, `abrir "${m.name}"`),

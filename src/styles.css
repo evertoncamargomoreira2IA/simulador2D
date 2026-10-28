@@ -425,3 +425,4 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .drop-hint span { color: var(--muted); font-size: 13px; }
 .stepper { display: flex !important; gap: 6px; align-items: center; }
 .stepper input { flex: 1; min-width: 0; }
+.start .saved { max-height: 40vh; overflow: auto; }

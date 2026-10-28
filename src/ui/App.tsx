@@ -15,9 +15,11 @@ setDownloadNotice((m) => useStore.getState().setMessage(m));
 import { Analysis } from './Analysis';
 import { StationDetail } from './StationDetail';
 import { StationOrder } from './StationOrder';
+import { StartScreen } from './StartScreen';
 
 export function App() {
   const showOrder = useStore((s) => s.showOrder);
+  const showStart = useStore((s) => s.showStart);
   const [dropping, setDropping] = useState(false);
   useEffect(() => {
     let raf = 0;
@@ -110,6 +112,7 @@ export function App() {
       <Dashboard />
       <StationDetail />
       <Analysis />
+      {showStart && <StartScreen onClose={() => useStore.getState().setShowStart(false)} />}
       {showOrder && <StationOrder onClose={() => useStore.getState().setShowOrder(false)} />}
     </div>
   );

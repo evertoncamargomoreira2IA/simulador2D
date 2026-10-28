@@ -5,7 +5,6 @@ import { lineKpi } from '../engine/metrics';
 import { exportModelCsv, exportModelJson, exportResultsXlsx } from '../io/exporter';
 import { ACCEPT, importAnyFile } from './fileImport';
 import { lp2Model, simpleModel } from '../model/builder';
-import { DEFAULT_SETTINGS } from '../engine/types';
 import { privateExample, useStore } from '../store';
 import { fmtTime } from './theme';
 import { Tutorial, downloadTemplate } from './Tutorial';
@@ -60,8 +59,8 @@ export function Toolbar() {
       </div>
 
       <div className="group" role="group" aria-label="Arquivo">
-        <button className="btn" onClick={() => st().setModel({ name: 'Novo modelo', nodes: [], links: [], settings: { ...DEFAULT_SETTINGS } }, 'Modelo vazio. Clique em Source na paleta e depois em Machine, Buffer… Cada bloco novo já sai ligado ao anterior.')}>
-          Novo
+        <button className="btn" onClick={() => st().setShowStart(true)} title="Novo trabalho, trabalhos salvos ou exemplos">
+          Início
         </button>
         <select
           className="btn"
