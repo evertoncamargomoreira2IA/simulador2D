@@ -1,10 +1,10 @@
 // Canvas 2D (Konva): grid, blocos arrastáveis, links, peças animadas, zoom/pan e seleção.
 
 import type Konva from 'konva';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Arrow, Circle, Group, Layer, Line, Rect, RegularPolygon, Shape, Stage, Text } from 'react-konva';
-import type { NodeRt } from '../engine/simulator';
-import type { NodeDef, NodeType } from '../engine/types';
+import type { NodeRt, Simulator } from '../engine/simulator';
+import type { Background, NodeDef, NodeType } from '../engine/types';
 import { useStore } from '../store';
 import { mixHex, useCanvasColors, type CanvasColors } from './theme';
 
@@ -47,15 +47,17 @@ export function CanvasView() {
   }, []);
 
   // Enquadra o modelo ao carregar outro modelo.
-  const fitKey = model.name + model.nodes.length;
+  const fitKey = model.name + model.nodes.length + (model.background ? 'bg' : '');
   useEffect(() => fit(), [fitKey, size.w > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function fit() {
     const ns = useStore.getState().model.nodes;
     const el = wrap.current;
     if (!el || ns.length === 0) return;
+    const bg = useStore.getState().model.background;
     const xs = ns.map((n) => n.x);
     const ys = ns.map((n) => n.y);
+    if (bg) xs.push(0, bg.width), ys.push(0, bg.height);
     const minX = Math.min(...xs) - 80;
     const maxX = Math.max(...xs) + 80;
     const minY = Math.min(...ys) - 80;
@@ -176,6 +178,11 @@ export function CanvasView() {
           <Rect x={-view.x / view.scale} y={-view.y / view.scale} width={size.w / view.scale} height={size.h / view.scale} fill={colors.canvas} />
           {layers.grid && <Grid view={view} size={size} step={gridSize} colors={colors} />}
         </Layer>
+        {model.background && layers.plant && (
+          <Layer listening={false}>
+            <Plant bg={model.background} line={colors.cad} text={colors.cadText} />
+          </Layer>
+        )}
 
         {layers.links && (
           <Layer>
@@ -185,10 +192,18 @@ export function CanvasView() {
               if (!a || !b) return null;
               const pts = edgePoints(a, b);
               const isReturn = a.type === 'rework';
+              const isPart = l.role === 'part';
+              const byVehicle = !!l.poolId;
               const sel = selectedLink === l.id;
               const moved = movedByLink.get(l.id) ?? 0;
               const heatW = layers.heat ? 1.5 + (moved / maxMoved) * 9 : 1.6;
-              const heatC = layers.heat ? heatColor(moved / maxMoved) : colors.muted;
+              const heatC = layers.heat
+                ? heatColor(moved / maxMoved)
+                : isPart
+                  ? colors.accent
+                  : byVehicle
+                    ? colors.human
+                    : colors.muted;
               const multi = (outCount.get(l.from) ?? 0) > 1;
               const share = multi ? Math.max(0, l.weight) / (outWeight.get(l.from) || 1) : 1;
               return (
@@ -200,8 +215,8 @@ export function CanvasView() {
                     strokeWidth={sel ? Math.max(3, heatW) : heatW}
                     pointerLength={7}
                     pointerWidth={7}
-                    dash={isReturn ? [6, 4] : undefined}
-                    opacity={layers.heat ? 0.85 : 1}
+                    dash={isReturn ? [6, 4] : isPart ? [3, 3] : byVehicle ? [10, 4] : undefined}
+                    opacity={layers.heat ? 0.85 : isPart ? 0.75 : 1}
                     hitStrokeWidth={12}
                     onClick={(e) => {
                       e.cancelBubble = true;
@@ -256,9 +271,15 @@ export function CanvasView() {
           })}
         </Layer>
 
+        {layers.people && sim.pools.length > 0 && (
+          <Layer listening={false}>
+            <Units sim={sim} colors={colors} labels={layers.labels} />
+          </Layer>
+        )}
+
         {layers.entities && (
           <Layer listening={false}>
-            {[...sim.transits].map((t) => {
+            {[...sim.transits].filter((t) => !t.unit).map((t) => {
               const a = t.link.from.def;
               const b = t.link.to.def;
               const span = t.end - t.start;
@@ -405,6 +426,9 @@ function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, s
         useStore.getState().moveNodes([def.id, ...s.others.map((o) => o.id)], dx, dy);
       }}
     >
+      {def.area && rt.slots.length > 1 && (
+        <Slots def={def} rt={rt} colors={colors} />
+      )}
       {bottleneck && (
         <Rect x={-W / 2 - 7} y={-H / 2 - 7} width={W + 14} height={H + 14} cornerRadius={8} stroke={colors.state.down} strokeWidth={2} dash={[5, 3]} />
       )}
@@ -450,6 +474,106 @@ function NodeShape({ def, rt, colors, selected, bottleneck, draggable, labels, s
         </>
       )}
     </Group>
+  );
+}
+
+function Slots({ def, rt, colors }: { def: NodeDef; rt: NodeRt; colors: CanvasColors }) {
+  const a = def.area!;
+  const doneSlots = new Set(rt.done.map((e) => e.slot));
+  const n = rt.slots.length;
+  const rows = a.h >= 30 ? 2 : 1;
+  const cols = Math.ceil(n / rows);
+  const sw = Math.max(6, Math.min(22, a.w / cols - 4));
+  const sh = Math.max(6, Math.min(16, rows === 2 ? a.h / 2 - 6 : a.h - 8));
+  return (
+    <Group listening={false}>
+      <Rect x={-a.w / 2 - 6} y={-a.h / 2 - sh / 2 - 6} width={a.w + 12} height={a.h + sh + 12} cornerRadius={6} stroke={colors.accent} strokeWidth={1} dash={[4, 4]} opacity={0.55} />
+      {rt.slots.map((p, i) => {
+        const busy = rt.slotBusy[i];
+        const c = !busy ? colors.line : doneSlots.has(i) ? colors.state.blocked : colors.state.working;
+        return (
+          <Rect
+            key={i}
+            x={p.x - def.x - sw / 2}
+            y={p.y - def.y - sh / 2}
+            width={sw}
+            height={sh}
+            cornerRadius={2}
+            fill={busy ? mixHex(c, colors.raised, 0.55) : colors.raised}
+            stroke={c}
+            strokeWidth={1}
+          />
+        );
+      })}
+    </Group>
+  );
+}
+
+/** Planta do DXF: um único Shape desenhado direto no canvas (milhares de linhas). */
+const Plant = memo(function Plant({ bg, line, text }: { bg: Background; line: string; text: string }) {
+  return (
+    <Shape
+      listening={false}
+      perfectDrawEnabled={false}
+      sceneFunc={(ctx) => {
+        const c = ctx._context;
+        c.save();
+        c.strokeStyle = line;
+        c.lineWidth = 1;
+        c.beginPath();
+        for (const p of bg.paths) {
+          c.moveTo(p[0], p[1]);
+          for (let i = 2; i < p.length; i += 2) c.lineTo(p[i], p[i + 1]);
+        }
+        for (const [x, y, r] of bg.circles) {
+          c.moveTo(x + r, y);
+          c.arc(x, y, r, 0, Math.PI * 2);
+        }
+        c.stroke();
+        c.fillStyle = text;
+        c.textBaseline = 'bottom';
+        for (const t of bg.texts) {
+          const h = Math.max(4, t.h);
+          c.font = `${h}px system-ui, sans-serif`;
+          if (t.r) {
+            c.save();
+            c.translate(t.x, t.y);
+            c.rotate((t.r * Math.PI) / 180);
+            c.fillText(t.t, 0, 0);
+            c.restore();
+          } else c.fillText(t.t, t.x, t.y);
+        }
+        c.restore();
+      }}
+    />
+  );
+});
+
+/** Operadores (círculos) e veículos (retângulos) nas posições atuais. */
+function Units({ sim, colors, labels }: { sim: Simulator; colors: CanvasColors; labels: boolean }) {
+  return (
+    <>
+      {sim.pools.flatMap((p) =>
+        p.units.map((u, i) => {
+          const pos = sim.positionOf(u, sim.now);
+          const c = u.busy ? colors.human : mixHex(colors.human, colors.muted, 0.5);
+          if (p.def.kind === 'operator')
+            return (
+              <Group key={u.id} x={pos.x} y={pos.y}>
+                <Circle radius={7} fill={c} stroke={colors.canvas} strokeWidth={2} />
+                <Circle y={-2} radius={2.5} fill={colors.canvas} />
+                {labels && <Text x={-12} y={9} width={24} align="center" text={`${i + 1}`} fontSize={9} fill={colors.human} />}
+              </Group>
+            );
+          return (
+            <Group key={u.id} x={pos.x} y={pos.y}>
+              <Rect x={-11} y={-7} width={22} height={14} cornerRadius={3} fill={c} stroke={colors.canvas} strokeWidth={2} />
+              {u.loaded && <Rect x={-5} y={-4} width={10} height={8} fill={colors.transport} />}
+            </Group>
+          );
+        }),
+      )}
+    </>
   );
 }
 

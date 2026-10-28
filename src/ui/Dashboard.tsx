@@ -6,13 +6,15 @@ import type { LineKpi } from '../engine/metrics';
 import type { NodeState } from '../engine/types';
 import { useStore } from '../store';
 import { fmt, fmtTime, pct, STATE_LABEL, useCanvasColors } from './theme';
+import { POOL_LABEL } from '../engine/types';
 
-const STATES: NodeState[] = ['working', 'starved', 'blocked', 'down', 'setup'];
+const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup'];
 
 export function Dashboard() {
   const kpi = useStore((s) => s.kpi);
   const sim = useStore((s) => s.sim);
   const takt = useStore((s) => s.model.settings.takt);
+  const warmup = useStore((s) => s.model.settings.warmup);
   const [open, setOpen] = useState(true);
   const bottleneck = kpi.nodes.find((n) => n.id === kpi.bottleneckId);
 
@@ -20,7 +22,10 @@ export function Dashboard() {
     <section className={`dash${open ? '' : ' collapsed'}`} aria-label="Dashboard">
       <div style={{ display: 'grid', gap: 6, alignContent: 'start', minWidth: 0 }}>
         <div className="dash-head">
-          <p className="label" style={{ margin: 0 }}>Indicadores da linha</p>
+          <p className="label" style={{ margin: 0 }}>
+            Indicadores da linha
+            {sim.now < warmup && <span className="warm"> · aquecimento até {fmtTime(warmup).slice(0, 5)}</span>}
+          </p>
           <button className="btn" onClick={() => setOpen(!open)} style={{ padding: '1px 8px' }}>
             {open ? 'Recolher' : 'Expandir'}
           </button>
@@ -41,6 +46,7 @@ export function Dashboard() {
       </div>
       {open && <StateChart kpi={kpi} />}
       {open && <TimeChart tick={sim.timeline.length} sim={sim} takt={takt} />}
+      {open && <People kpi={kpi} />}
     </section>
   );
 }
@@ -167,6 +173,55 @@ function TimeChart({ sim, takt }: { tick: number; sim: ReturnType<typeof useStor
       <div className="box">
         <canvas ref={ref} role="img" aria-label="Gráfico de linhas com throughput por hora e WIP ao longo do turno" />
       </div>
+    </div>
+  );
+}
+
+/** Faixa ergonômica de ocupação de pessoas e veículos. */
+function band(u: number): { label: string; color: string } {
+  if (u > 0.85) return { label: 'Sobrecarga', color: 'var(--st-down)' };
+  if (u >= 0.5) return { label: 'Equilibrado', color: 'var(--st-working)' };
+  return { label: 'Ocioso', color: 'var(--st-starved)' };
+}
+
+function People({ kpi }: { kpi: LineKpi }) {
+  const top = kpi.ranking.slice(0, 5);
+  const max = top[0]?.active || 1;
+  return (
+    <div className="people">
+      <p className="label">Pessoas e recursos</p>
+      {kpi.pools.length === 0 && <p className="hint">Sem recursos compartilhados no modelo. Adicione operadores ou veículos no painel Modelo.</p>}
+      {kpi.pools.map((p) => {
+        const b = band(p.utilization);
+        return (
+          <div key={p.id} className="meter" title={`${p.name}: ${pct(p.utilization, 1)} ocupado · ${b.label} · ${fmt(p.distance / 1000, 2)} km · ${p.tasks} tarefas`}>
+            <div className="meter-row">
+              <i className={`kind ${p.kind}`} />
+              <span className="name">{p.name}</span>
+              <span className="muted">{p.count}× {POOL_LABEL[p.kind].toLowerCase()}</span>
+              <b>{pct(p.utilization)}</b>
+            </div>
+            <div className="bar"><div style={{ width: `${Math.min(100, p.utilization * 100)}%`, background: b.color }} /></div>
+            <div className="meter-sub">
+              <span style={{ color: b.color }}>{b.label}</span>
+              <span>{fmt(p.distance / Math.max(1, p.count), 0)} m/pessoa</span>
+              {p.waiting > 0 && <span>{p.waiting} esperando</span>}
+            </div>
+          </div>
+        );
+      })}
+      <p className="label" style={{ marginTop: 8 }}>Ranking de gargalos</p>
+      <ol className="rank">
+        {kpi.completed > 0 &&
+          top.map((r, i) => (
+            <li key={r.id}>
+              <span className="name">{i + 1}. {r.name}</span>
+              <span className="bar"><span style={{ width: `${(r.active / max) * 100}%`, background: i === 0 ? 'var(--st-down)' : 'var(--accent)' }} /></span>
+              <b>{pct(r.active)}</b>
+            </li>
+          ))}
+        {kpi.completed === 0 && <li className="hint">Rode a simulação para ver o ranking.</li>}
+      </ol>
     </div>
   );
 }

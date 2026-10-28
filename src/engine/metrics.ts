@@ -1,7 +1,7 @@
 // Indicadores calculados a partir do estado do simulador.
 
 import type { NodeRt, Simulator } from './simulator';
-import type { NodeState, NodeType } from './types';
+import type { NodeState, NodeType, PoolKind } from './types';
 
 export interface NodeKpi {
   id: string;
@@ -17,6 +17,22 @@ export interface NodeKpi {
   processed: number;
   wip: number;
   failures: number;
+  /** Tempo médio na fila de entrada (s). */
+  avgQueue: number;
+}
+
+export interface PoolKpi {
+  id: string;
+  name: string;
+  kind: PoolKind;
+  count: number;
+  utilization: number;
+  /** Distância total percorrida (m). */
+  distance: number;
+  tasks: number;
+  /** Pedidos esperando um operador/veículo agora. */
+  waiting: number;
+  units: { id: string; utilization: number; distance: number; tasks: number; busy: boolean; where: string }[];
 }
 
 export interface LineKpi {
@@ -39,7 +55,12 @@ export interface LineKpi {
   capacityUtilization: number;
   bottleneckId: string | null;
   distancePerUnit: number;
+  /** Componentes consumidos em montagens. */
+  consumed: number;
   nodes: NodeKpi[];
+  pools: PoolKpi[];
+  /** Postos ordenados por fração de tempo ativo (maior primeiro). */
+  ranking: { id: string; name: string; active: number }[];
 }
 
 const PROCESS_TYPES: NodeType[] = ['machine', 'inspection', 'rework', 'buffer'];
@@ -60,7 +81,7 @@ export function nodeKpi(sim: Simulator, n: NodeRt): NodeKpi {
     type: n.def.type,
     state: n.state,
     states: st,
-    utilization: st.working / elapsed,
+    utilization: sim.workUtilization(n),
     availability,
     performance,
     quality,
@@ -68,6 +89,7 @@ export function nodeKpi(sim: Simulator, n: NodeRt): NodeKpi {
     processed: n.processed,
     wip: sim.nodeWip(n),
     failures: n.failures,
+    avgQueue: n.started > 0 ? n.queueTimeSum / n.started : 0,
   };
 }
 
@@ -81,16 +103,33 @@ export function lineKpi(sim: Simulator): LineKpi {
   const transport = avg(sim.transSum);
 
   // Gargalo pelo método do período ativo: maior fração de tempo ativo (trabalhando, em falha ou setup).
-  let bottleneckId: string | null = null;
-  let best = -1;
-  for (const k of nodes) {
-    if (!PROCESS_TYPES.includes(k.type) || k.type === 'buffer' || k.type === 'rework') continue;
-    const active = (k.states.working + k.states.down + k.states.setup) / elapsed;
-    if (active > best + 1e-9) {
-      best = active;
-      bottleneckId = k.id;
-    }
-  }
+  const ranking = nodes
+    .filter((k) => PROCESS_TYPES.includes(k.type) && k.type !== 'buffer' && k.type !== 'rework')
+    .map((k) => ({ id: k.id, name: k.name, active: Math.min(1, k.utilization + (k.states.down + k.states.setup) / elapsed) }))
+    .sort((a, b) => b.active - a.active);
+  const bottleneckId = ranking.length ? ranking[0].id : null;
+
+  const pools: PoolKpi[] = sim.pools.map((p) => {
+    const units = p.units.map((u) => ({
+      id: u.id,
+      utilization: Math.min(1, sim.unitBusyTime(u) / elapsed),
+      distance: u.distance,
+      tasks: u.tasks,
+      busy: u.busy,
+      where: u.where,
+    }));
+    return {
+      id: p.def.id,
+      name: p.def.name,
+      kind: p.def.kind,
+      count: units.length,
+      utilization: units.length ? units.reduce((s, u) => s + u.utilization, 0) / units.length : 0,
+      distance: units.reduce((s, u) => s + u.distance, 0),
+      tasks: units.reduce((s, u) => s + u.tasks, 0),
+      waiting: p.queue.length,
+      units,
+    };
+  });
 
   const takt = sim.model.settings.takt;
   const procNodes = nodes.filter((k) => k.type === 'machine' || k.type === 'inspection');
@@ -114,7 +153,10 @@ export function lineKpi(sim: Simulator): LineKpi {
     capacityUtilization: capUtil,
     bottleneckId,
     distancePerUnit: avg(sim.distanceSum),
+    consumed: sim.consumed,
     nodes,
+    pools,
+    ranking,
   };
 }
 

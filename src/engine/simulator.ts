@@ -1,16 +1,22 @@
 // Motor de simulação de eventos discretos (DES).
 //
 // Semântica:
-// - Cada nó tem `capacity` postos (servidores) e uma fila de entrada `queueCap`.
+// - Cada nó tem `capacity` postos (servidores/gigas) e uma fila de entrada `queueCap`.
 // - Uma peça terminada fica no posto (bloqueio após serviço) até o destino aceitar.
 // - O destino é escolhido no fim do processamento pelos pesos dos links.
 // - Ao sair, a peça reserva lugar no destino e viaja pelo link (transporte).
+// - Links de componente ('part') abastecem o estoque ao lado do posto; o posto só começa
+//   quando tem a peça principal e um componente de cada link (montagem).
+// - Postos com pool de operadores precisam de um operador livre: ele anda até o posto,
+//   faz a carga/descarga (handlingTime) e fica livre; com handlingTime 0 fica o ciclo todo.
+// - Links com pool de transporte (empilhadeira/AGV) esperam um veículo, que vai vazio até
+//   a origem, carrega e leva a peça ao destino.
 // - Peças saindo do retrabalho sempre entram no destino (pista de retorno), evitando deadlock.
 // - Falhas: MTBF derivado de disponibilidade e MTTR; processamento é pausado.
 
 import { MinHeap } from './heap';
 import { Rng } from './rng';
-import type { LinkDef, Model, NodeDef, NodeState } from './types';
+import { slotPositions, type LinkDef, type Model, type NodeDef, type NodeState, type PoolDef } from './types';
 
 export interface Entity {
   id: number;
@@ -24,6 +30,10 @@ export interface Entity {
   enteredQueueAt: number;
   blockedSince: number;
   next: LinkRt | null;
+  /** Aguardando o veículo que vai buscá-la. */
+  awaitingPickup: boolean;
+  /** Giga ocupada no nó atual (-1 = nenhuma). */
+  slot: number;
 }
 
 interface Job {
@@ -33,6 +43,8 @@ interface Job {
   duration: number;
   remaining: number;
   token: number;
+  /** Operador preso até o fim do ciclo (handlingTime 0). */
+  unit?: UnitRt;
 }
 
 export interface LinkRt {
@@ -42,12 +54,18 @@ export interface LinkRt {
   distance: number;
   travelTime: number;
   moved: number;
+  isPart: boolean;
+  /** Componentes a caminho do estoque do posto (links de montagem). */
+  reserved: number;
+  pool: PoolRt | null;
 }
 
 export interface NodeRt {
   def: NodeDef;
   out: LinkRt[];
   inLinks: LinkRt[];
+  partLinks: LinkRt[];
+  parts: Map<LinkRt, Entity[]>;
   queue: Entity[];
   processing: Job[];
   done: Entity[];
@@ -58,12 +76,58 @@ export interface NodeRt {
   stateSince: number;
   stateTime: Record<NodeState, number>;
   entered: number;
+  started: number;
   processed: number;
   failures: number;
   /** Peças que a inspeção mandou para retrabalho. */
   rejected: number;
   released: number;
   refillPending: boolean;
+  queueTimeSum: number;
+  pool: PoolRt | null;
+  /** Já está na fila do pool esperando operador. */
+  waitingPool: boolean;
+  /** Integral no tempo das gigas/postos em processamento (para utilização com capacidade > 1). */
+  workArea: number;
+  workSince: number;
+  workCount: number;
+  slots: { x: number; y: number }[];
+  slotBusy: boolean[];
+}
+
+export interface Move {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  t0: number;
+  t1: number;
+}
+
+export interface UnitRt {
+  id: string;
+  pool: PoolRt;
+  x: number;
+  y: number;
+  move: Move | null;
+  busy: boolean;
+  busySince: number;
+  busyTime: number;
+  distance: number;
+  tasks: number;
+  /** Carregando uma peça (veículos). */
+  loaded: boolean;
+  where: string;
+}
+
+type PoolRequest = { kind: 'station'; node: NodeRt } | { kind: 'move'; node: NodeRt; entity: Entity; link: LinkRt };
+
+export interface PoolRt {
+  def: PoolDef;
+  units: UnitRt[];
+  queue: PoolRequest[];
+  waitSum: number;
+  requests: number;
 }
 
 export interface Transit {
@@ -71,9 +135,21 @@ export interface Transit {
   link: LinkRt;
   start: number;
   end: number;
+  unit?: UnitRt;
 }
 
-type EvKind = 'create' | 'refill' | 'end' | 'arrive' | 'fail' | 'repair' | 'wake' | 'sample' | 'warmup';
+type EvKind =
+  | 'create'
+  | 'refill'
+  | 'end'
+  | 'arrive'
+  | 'fail'
+  | 'repair'
+  | 'wake'
+  | 'sample'
+  | 'warmup'
+  | 'unitFree'
+  | 'pickup';
 interface SimEvent {
   t: number;
   seq: number;
@@ -82,6 +158,9 @@ interface SimEvent {
   job?: Job;
   token?: number;
   transit?: Transit;
+  unit?: UnitRt;
+  entity?: Entity;
+  link?: LinkRt;
 }
 
 export interface TimelinePoint {
@@ -96,7 +175,7 @@ const SOURCE_MIN_GAP = 1;
 /** Proteção contra loops de tempo zero (modelo com ciclo sem tempo). */
 const MAX_SAME_TIME_EVENTS = 200_000;
 
-const STATES: NodeState[] = ['working', 'starved', 'blocked', 'down', 'setup', 'off'];
+const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup', 'off'];
 const zeroStates = (): Record<NodeState, number> =>
   Object.fromEntries(STATES.map((s) => [s, 0])) as Record<NodeState, number>;
 
@@ -104,6 +183,7 @@ export class Simulator {
   readonly model: Model;
   readonly nodes: NodeRt[] = [];
   readonly links: LinkRt[] = [];
+  readonly pools: PoolRt[] = [];
   readonly byId = new Map<string, NodeRt>();
   readonly transits = new Set<Transit>();
   readonly timeline: TimelinePoint[] = [];
@@ -111,6 +191,7 @@ export class Simulator {
   statsStart = 0;
   completed = 0;
   completedGood = 0;
+  consumed = 0;
   leadTimeSum = 0;
   procSum = 0;
   queueSum = 0;
@@ -131,6 +212,7 @@ export class Simulator {
   private entitySeq = 0;
   private lastSample = { t: 0, completed: 0 };
   readonly sampleEvery: number;
+  readonly ppm: number;
   /** Preenchido quando a simulação é interrompida por um modelo inválido. */
   error: string | null = null;
   private sameTimeEvents = 0;
@@ -138,12 +220,36 @@ export class Simulator {
   constructor(model: Model) {
     this.model = model;
     this.rng = new Rng(model.settings.seed);
-    const ppm = model.settings.pxPerMeter || 40;
+    const ppm = (this.ppm = model.settings.pxPerMeter || 40);
+    const poolById = new Map<string, PoolRt>();
+    for (const def of model.pools ?? []) {
+      const pool: PoolRt = { def, units: [], queue: [], waitSum: 0, requests: 0 };
+      for (let i = 0; i < Math.max(0, Math.round(def.count)); i++) {
+        pool.units.push({
+          id: `${def.id}#${i + 1}`,
+          pool,
+          x: def.x + (i % 4) * 14,
+          y: def.y + Math.floor(i / 4) * 14,
+          move: null,
+          busy: false,
+          busySince: 0,
+          busyTime: 0,
+          distance: 0,
+          tasks: 0,
+          loaded: false,
+          where: '',
+        });
+      }
+      this.pools.push(pool);
+      poolById.set(def.id, pool);
+    }
     for (const def of model.nodes) {
       const n: NodeRt = {
         def,
         out: [],
         inLinks: [],
+        partLinks: [],
+        parts: new Map(),
         queue: [],
         processing: [],
         done: [],
@@ -154,12 +260,22 @@ export class Simulator {
         stateSince: 0,
         stateTime: zeroStates(),
         entered: 0,
+        started: 0,
         processed: 0,
         failures: 0,
         rejected: 0,
         released: 0,
         refillPending: false,
+        queueTimeSum: 0,
+        pool: def.poolId ? poolById.get(def.poolId) ?? null : null,
+        waitingPool: false,
+        workArea: 0,
+        workSince: 0,
+        workCount: 0,
+        slots: slotPositions(def),
+        slotBusy: slotPositions(def).map(() => false),
       };
+      if (n.pool && n.pool.def.kind !== 'operator') n.pool = null;
       this.nodes.push(n);
       this.byId.set(def.id, n);
     }
@@ -168,10 +284,27 @@ export class Simulator {
       const to = this.byId.get(def.to);
       if (!from || !to || from === to) continue;
       const distance = Math.hypot(to.def.x - from.def.x, to.def.y - from.def.y) / ppm;
-      const speed = model.settings.transportSpeed > 0 ? model.settings.transportSpeed : Infinity;
-      const l: LinkRt = { def, from, to, distance, travelTime: distance / speed, moved: 0 };
+      const pool = def.poolId ? poolById.get(def.poolId) ?? null : null;
+      const vehicle = pool && pool.def.kind !== 'operator' ? pool : null;
+      const speed = vehicle ? vehicle.def.speed : model.settings.transportSpeed;
+      const isPart = def.role === 'part' && to.def.type !== 'sink' && to.def.type !== 'source';
+      const l: LinkRt = {
+        def,
+        from,
+        to,
+        distance,
+        travelTime: speed > 0 ? distance / speed : 0,
+        moved: 0,
+        isPart,
+        reserved: 0,
+        pool: vehicle,
+      };
       from.out.push(l);
       to.inLinks.push(l);
+      if (isPart) {
+        to.partLinks.push(l);
+        to.parts.set(l, []);
+      }
       this.links.push(l);
     }
     this.sampleEvery = Math.max(60, Math.round(model.settings.duration / 240));
@@ -269,6 +402,12 @@ export class Simulator {
         this.tryStart(n!);
         this.updateState(n!);
         break;
+      case 'unitFree':
+        this.releaseUnit(ev.unit!);
+        break;
+      case 'pickup':
+        this.onPickup(ev.node!, ev.entity!, ev.link!, ev.unit!);
+        break;
       case 'sample':
         this.sample();
         this.schedule(this.now + this.sampleEvery, 'sample');
@@ -304,6 +443,8 @@ export class Simulator {
       enteredQueueAt: this.now,
       blockedSince: this.now,
       next: null,
+      awaitingPickup: false,
+      slot: -1,
     };
     e.next = this.route(src);
     return e;
@@ -330,6 +471,11 @@ export class Simulator {
     return occ < Math.max(1, n.def.capacity) + Math.max(0, n.def.queueCap);
   }
 
+  private canAcceptVia(l: LinkRt): boolean {
+    if (!l.isPart) return this.canAccept(l.to);
+    return l.to.parts.get(l)!.length + l.reserved < Math.max(1, l.to.def.partBuffer ?? 2);
+  }
+
   /**
    * Fonte ilimitada: mantém sempre uma peça pronta na saída. Se a peça sair na hora
    * (destino com folga, ex.: ligado direto ao produto acabado), a próxima só é criada
@@ -352,60 +498,125 @@ export class Simulator {
     let moved = false;
     for (let i = 0; i < n.done.length; ) {
       const e = n.done[i];
+      if (e.awaitingPickup) {
+        i++;
+        continue;
+      }
       const link = e.next;
       if (!link) {
         // Sem saída definida: a peça deixa o sistema neste ponto.
         n.done.splice(i, 1);
-        this.exitSystem(e);
+        this.freeSlot(n, e);
+        if (n.def.type !== 'source') this.exitSystem(e);
         moved = true;
         continue;
       }
       // Retorno do retrabalho tem prioridade (pista de retorno) para evitar deadlock no loop.
-      if (n.def.type !== 'rework' && !this.canAccept(link.to)) {
+      if (n.def.type !== 'rework' && !this.canAcceptVia(link)) {
+        i++;
+        continue;
+      }
+      if (link.isPart) link.reserved++;
+      else link.to.reserved++;
+      if (link.pool) {
+        // Transporte por veículo: a peça espera no posto até ser buscada.
+        e.awaitingPickup = true;
+        this.requestVehicle(n, e, link);
         i++;
         continue;
       }
       n.done.splice(i, 1);
       moved = true;
-      if (n.def.type === 'source') {
-        e.releasedAt = this.now;
-        n.released++;
-        this.setWip(this.wip + 1);
-      } else {
-        e.blockedTime += this.now - e.blockedSince;
-      }
-      if (link.to.def.type === 'rework') {
-        n.rejected++;
-        e.reworks++;
-      }
-      link.to.reserved++;
-      link.moved++;
-      e.distance += link.distance;
-      const tr: Transit = { entity: e, link, start: this.now, end: this.now + link.travelTime };
-      this.transits.add(tr);
-      this.schedule(tr.end, 'arrive', { transit: tr });
+      this.depart(n, e, link, link.travelTime);
     }
-    if (moved) {
-      if (n.def.type === 'source') {
-        if (refill && n.def.interarrival <= 0) this.refillSource(n);
-      } else {
-        this.tryStart(n);
-        this.notifyUpstream(n);
-      }
-    }
+    if (moved) this.afterDeparture(n, refill);
     this.updateState(n);
     return moved;
   }
 
+  private freeSlot(n: NodeRt, e: Entity): void {
+    if (e.slot >= 0 && e.slot < n.slotBusy.length) n.slotBusy[e.slot] = false;
+    e.slot = -1;
+  }
+
+  private depart(n: NodeRt, e: Entity, link: LinkRt, travel: number, unit?: UnitRt): void {
+    this.freeSlot(n, e);
+    if (n.def.type === 'source') {
+      e.releasedAt = this.now;
+      n.released++;
+      this.setWip(this.wip + 1);
+    } else {
+      e.blockedTime += this.now - e.blockedSince;
+    }
+    if (link.to.def.type === 'rework') {
+      n.rejected++;
+      e.reworks++;
+    }
+    link.moved++;
+    e.distance += link.distance;
+    const tr: Transit = { entity: e, link, start: this.now, end: this.now + travel, unit };
+    this.transits.add(tr);
+    this.schedule(tr.end, 'arrive', { transit: tr });
+  }
+
+  private afterDeparture(n: NodeRt, refill = true): void {
+    if (n.def.type === 'source') {
+      if (refill && n.def.interarrival <= 0) this.refillSource(n);
+    } else {
+      this.tryStart(n);
+      this.notifyUpstream(n);
+    }
+  }
+
+  private partsReady(n: NodeRt): boolean {
+    for (const l of n.partLinks) if (n.parts.get(l)!.length === 0) return false;
+    return true;
+  }
+
   private tryStart(n: NodeRt): void {
-    if (n.down || this.now < n.setupUntil) return;
+    if (n.down || this.now < n.setupUntil) {
+      this.updateState(n);
+      return;
+    }
     const servers = Math.max(1, n.def.capacity);
     let pulled = false;
-    while (n.queue.length > 0 && n.processing.length + n.done.length < servers) {
+    while (n.queue.length > 0 && n.processing.length + n.done.length < servers && this.partsReady(n)) {
+      let slot = n.slotBusy.indexOf(false);
+      if (slot < 0) slot = 0;
+      const sp = n.slots[slot] ?? { x: n.def.x, y: n.def.y };
+      let unit: UnitRt | undefined;
+      let walk = 0;
+      if (n.pool) {
+        unit = this.freeUnit(n.pool, sp.x, sp.y);
+        if (!unit) {
+          if (!n.waitingPool) {
+            n.waitingPool = true;
+            n.pool.queue.push({ kind: 'station', node: n });
+            n.pool.requests++;
+          }
+          break;
+        }
+        walk = this.sendUnit(unit, sp.x, sp.y, n.def.name);
+      }
       const e = n.queue.shift()!;
+      e.slot = slot;
+      if (slot < n.slotBusy.length) n.slotBusy[slot] = true;
       e.queueTime += this.now - e.enteredQueueAt;
-      const duration = this.rng.lognormal(n.def.cycleTime, n.def.cv);
+      n.queueTimeSum += this.now - e.enteredQueueAt;
+      n.started++;
+      for (const l of n.partLinks) {
+        n.parts.get(l)!.shift();
+        this.consumed++;
+        this.setWip(this.wip - 1);
+        this.retry.add(l.from);
+      }
+      const handling = n.def.handlingTime ?? 0;
+      const duration = walk + (unit ? handling : 0) + this.rng.lognormal(n.def.cycleTime, n.def.cv);
       const job: Job = { entity: e, start: this.now, end: this.now + duration, duration, remaining: duration, token: 0 };
+      if (unit) {
+        if (handling > 0) this.schedule(this.now + walk + handling, 'unitFree', { unit });
+        else job.unit = unit;
+      }
       n.processing.push(job);
       this.schedule(job.end, 'end', { node: n, job, token: job.token });
       pulled = true;
@@ -413,6 +624,96 @@ export class Simulator {
     this.updateState(n);
     if (pulled) this.notifyUpstream(n);
   }
+
+  // ---- Recursos (operadores e veículos) ----
+
+  /** Posição de um operador/veículo no instante t (interpolada durante deslocamentos). */
+  positionOf(u: UnitRt, t: number): { x: number; y: number } {
+    const m = u.move;
+    if (!m || t >= m.t1) return { x: u.x, y: u.y };
+    if (t <= m.t0) return { x: m.x0, y: m.y0 };
+    const f = (t - m.t0) / (m.t1 - m.t0);
+    return { x: m.x0 + (m.x1 - m.x0) * f, y: m.y0 + (m.y1 - m.y0) * f };
+  }
+
+  private freeUnit(pool: PoolRt, x: number, y: number): UnitRt | undefined {
+    let best: UnitRt | undefined;
+    let bestD = Infinity;
+    for (const u of pool.units) {
+      if (u.busy) continue;
+      const d = Math.hypot(u.x - x, u.y - y);
+      if (d < bestD) {
+        bestD = d;
+        best = u;
+      }
+    }
+    if (best) {
+      best.busy = true;
+      best.busySince = this.now;
+      best.tasks++;
+    }
+    return best;
+  }
+
+  /** Desloca a unidade até (x, y) a partir de agora; retorna o tempo de deslocamento (s). */
+  private sendUnit(u: UnitRt, x: number, y: number, where: string, t0 = this.now): number {
+    const p = this.positionOf(u, t0);
+    const meters = Math.hypot(x - p.x, y - p.y) / this.ppm;
+    const speed = u.pool.def.speed > 0 ? u.pool.def.speed : Infinity;
+    const dt = meters / speed;
+    u.distance += meters;
+    u.move = { x0: p.x, y0: p.y, x1: x, y1: y, t0, t1: t0 + dt };
+    u.x = x;
+    u.y = y;
+    u.where = where;
+    return dt;
+  }
+
+  private releaseUnit(u: UnitRt): void {
+    u.busy = false;
+    u.loaded = false;
+    u.busyTime += this.now - u.busySince;
+    this.servePool(u.pool);
+  }
+
+  private servePool(pool: PoolRt): void {
+    while (pool.queue.length > 0 && pool.units.some((u) => !u.busy)) {
+      const req = pool.queue.shift()!;
+      if (req.kind === 'station') {
+        req.node.waitingPool = false;
+        this.tryStart(req.node);
+      } else {
+        this.assignVehicle(req.node, req.entity, req.link);
+      }
+    }
+  }
+
+  private requestVehicle(n: NodeRt, e: Entity, link: LinkRt): void {
+    const pool = link.pool!;
+    pool.requests++;
+    if (pool.units.some((u) => !u.busy)) this.assignVehicle(n, e, link);
+    else pool.queue.push({ kind: 'move', node: n, entity: e, link });
+  }
+
+  private assignVehicle(n: NodeRt, e: Entity, link: LinkRt): void {
+    const pool = link.pool!;
+    const u = this.freeUnit(pool, n.def.x, n.def.y)!;
+    const dt = this.sendUnit(u, n.def.x, n.def.y, n.def.name);
+    this.schedule(this.now + dt + pool.def.loadTime, 'pickup', { node: n, entity: e, link, unit: u });
+  }
+
+  private onPickup(n: NodeRt, e: Entity, link: LinkRt, u: UnitRt): void {
+    const idx = n.done.indexOf(e);
+    if (idx >= 0) n.done.splice(idx, 1);
+    e.awaitingPickup = false;
+    u.loaded = true;
+    const travel = this.sendUnit(u, link.to.def.x, link.to.def.y, link.to.def.name);
+    this.depart(n, e, link, travel, u);
+    this.afterDeparture(n);
+    this.updateState(n);
+  }
+
+  // ---- Fluxo ----
 
   private onEnd(n: NodeRt, job: Job, token: number): void {
     if (token !== job.token) return;
@@ -422,6 +723,7 @@ export class Simulator {
     const e = job.entity;
     e.procTime += job.duration;
     n.processed++;
+    if (job.unit) this.releaseUnit(job.unit);
     e.next = this.route(n);
     e.blockedSince = this.now;
     n.done.push(e);
@@ -432,10 +734,22 @@ export class Simulator {
   private onArrive(tr: Transit): void {
     this.transits.delete(tr);
     const e = tr.entity;
-    const to = tr.link.to;
-    to.reserved--;
+    const l = tr.link;
+    const to = l.to;
     e.transTime += tr.end - tr.start;
+    if (tr.unit) {
+      const pool = tr.unit.pool;
+      // Descarga no destino: o veículo fica livre depois do tempo de descarga.
+      this.schedule(this.now + pool.def.loadTime, 'unitFree', { unit: tr.unit });
+    }
     to.entered++;
+    if (l.isPart) {
+      l.reserved--;
+      to.parts.get(l)!.push(e);
+      this.tryStart(to);
+      return;
+    }
+    to.reserved--;
     if (to.def.type === 'sink') {
       to.processed++;
       this.exitSystem(e);
@@ -489,16 +803,25 @@ export class Simulator {
   private computeState(n: NodeRt): NodeState {
     const t = n.def.type;
     if (t === 'sink') return n.processed > 0 ? 'working' : 'off';
-    if (t === 'source') return n.done.length > 0 && n.released > 0 ? 'blocked' : n.released > 0 ? 'working' : 'off';
+    if (t === 'source') {
+      if (n.done.some((e) => e.awaitingPickup)) return 'resource';
+      return n.done.length > 0 && n.released > 0 ? 'blocked' : n.released > 0 ? 'working' : 'off';
+    }
     if (n.down) return 'down';
     if (this.now < n.setupUntil) return 'setup';
     if (n.processing.length > 0) return 'working';
-    if (n.done.length > 0) return 'blocked';
+    if (n.done.length > 0) return n.done.some((e) => e.awaitingPickup) ? 'resource' : 'blocked';
+    if (n.waitingPool) return 'resource';
     if (n.entered === 0) return 'off';
     return 'starved';
   }
 
   private updateState(n: NodeRt): void {
+    if (n.processing.length !== n.workCount) {
+      n.workArea += n.workCount * (this.now - n.workSince);
+      n.workSince = this.now;
+      n.workCount = n.processing.length;
+    }
     const s = this.computeState(n);
     if (s === n.state) return;
     n.stateTime[n.state] += this.now - n.stateSince;
@@ -536,13 +859,27 @@ export class Simulator {
     for (const n of this.nodes) {
       n.stateTime = zeroStates();
       n.stateSince = this.now;
+      n.workArea = 0;
+      n.workSince = this.now;
       n.processed = 0;
+      n.started = 0;
+      n.queueTimeSum = 0;
       n.rejected = 0;
       n.failures = 0;
     }
     for (const l of this.links) l.moved = 0;
+    for (const p of this.pools) {
+      p.waitSum = 0;
+      p.requests = 0;
+      for (const u of p.units) {
+        u.busyTime = 0;
+        if (u.busy) u.busySince = this.now;
+        u.distance = 0;
+        u.tasks = 0;
+      }
+    }
     this.statsStart = this.now;
-    this.completed = this.completedGood = 0;
+    this.completed = this.completedGood = this.consumed = 0;
     this.leadTimeSum = this.procSum = this.queueSum = this.blockedSum = this.transSum = this.distanceSum = 0;
     this.taktOk = this.intervals = 0;
     this.wipIntegral = 0;
@@ -557,6 +894,19 @@ export class Simulator {
     return r;
   }
 
+  /** Utilização média dos postos/gigas do nó (0..1). */
+  workUtilization(n: NodeRt): number {
+    const elapsed = this.now - this.statsStart;
+    if (elapsed <= 0) return 0;
+    const area = n.workArea + n.workCount * (this.now - Math.max(n.workSince, this.statsStart));
+    return area / (elapsed * Math.max(1, n.def.capacity));
+  }
+
+  /** Tempo ocupado de uma unidade, incluindo a tarefa em andamento. */
+  unitBusyTime(u: UnitRt): number {
+    return u.busyTime + (u.busy ? this.now - Math.max(u.busySince, this.statsStart) : 0);
+  }
+
   /** WIP médio ponderado no tempo desde o início das estatísticas. */
   avgWip(): number {
     const elapsed = this.now - this.statsStart;
@@ -564,9 +914,11 @@ export class Simulator {
     return (this.wipIntegral + this.wip * (this.now - this.wipSince)) / elapsed;
   }
 
-  /** WIP de um nó (fila + processo + bloqueadas + reservadas a caminho). */
+  /** WIP de um nó (fila + processo + bloqueadas + estoque de componentes). */
   nodeWip(n: NodeRt): number {
     if (n.def.type === 'source' || n.def.type === 'sink') return 0;
-    return n.queue.length + n.processing.length + n.done.length;
+    let parts = 0;
+    for (const arr of n.parts.values()) parts += arr.length;
+    return n.queue.length + n.processing.length + n.done.length + parts;
   }
 }

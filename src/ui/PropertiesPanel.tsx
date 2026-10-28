@@ -1,8 +1,8 @@
 // Painel de propriedades: bloco selecionado, link selecionado ou configuração do modelo.
 
 import { nodeKpi } from '../engine/metrics';
-import type { NodeDef, NodeState, NodeType } from '../engine/types';
-import { TYPE_LABEL } from '../engine/types';
+import type { LinkDef, NodeDef, NodeState, NodeType, PoolDef, PoolKind } from '../engine/types';
+import { makePool, POOL_LABEL, TYPE_LABEL } from '../engine/types';
 import { useStore } from '../store';
 import { fmt, pct, STATE_LABEL } from './theme';
 
@@ -20,6 +20,8 @@ const FIELDS: FieldDef[] = [
   { k: 'interarrival', label: 'Intervalo chegadas (s, 0 = ilimitado)', step: 1, types: ['source'] },
   { k: 'maxArrivals', label: 'Limite de peças (0 = sem)', step: 1, types: ['source'] },
   { k: 'operators', label: 'Operadores', step: 1 },
+  { k: 'handlingTime', label: 'Carga+descarga operador (s)', step: 5, types: PROCESS },
+  { k: 'partBuffer', label: 'Estoque de componentes', step: 1, types: PROCESS },
   { k: 'shifts', label: 'Turnos', step: 1 },
   { k: 'oeeTarget', label: 'OEE meta (%)', scale: 100 },
   { k: 'powerKw', label: 'Potência (kW)', step: 0.1 },
@@ -30,7 +32,7 @@ const FIELDS: FieldDef[] = [
   { k: 'y', label: 'Y', step: 20 },
 ];
 
-const STATES: NodeState[] = ['working', 'starved', 'blocked', 'down', 'setup', 'off'];
+const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup', 'off'];
 
 export function PropertiesPanel() {
   const model = useStore((s) => s.model);
@@ -53,6 +55,22 @@ export function PropertiesPanel() {
             <label className="field full">
               <span>Peso de roteamento (proporção entre saídas)</span>
               <input id="link-weight" type="number" min={0} step={1} value={l.weight} onChange={(e) => useStore.getState().updateLink(l.id, { weight: Number(e.target.value) })} />
+            </label>
+            <label className="field full">
+              <span>Papel do fluxo</span>
+              <select id="link-role" value={l.role ?? 'flow'} onChange={(e) => useStore.getState().updateLink(l.id, { role: e.target.value as LinkDef['role'] })}>
+                <option value="flow">Fluxo principal (a peça segue)</option>
+                <option value="part">Componente (consumido na montagem)</option>
+              </select>
+            </label>
+            <label className="field full">
+              <span>Transporte</span>
+              <select id="link-pool" value={l.poolId ?? ''} onChange={(e) => useStore.getState().updateLink(l.id, { poolId: e.target.value || undefined })}>
+                <option value="">Esteira / automático</option>
+                {(model.pools ?? []).filter((p) => p.kind !== 'operator').map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
             </label>
           </div>
           <dl className="kv section">
@@ -92,8 +110,32 @@ export function PropertiesPanel() {
                 ))}
               </select>
             </label>
+            {PROCESS.includes(n.type) && (
+              <>
+                <label className="field full">
+                  <span>Operadores compartilhados (pool)</span>
+                  <select id="node-pool" value={n.poolId ?? ''} onChange={(e) => upd({ poolId: e.target.value || undefined })}>
+                    <option value="">Nenhum (operador fixo no posto)</option>
+                    {(model.pools ?? []).filter((p) => p.kind === 'operator').map((p) => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.count})</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Área das gigas L (px)</span>
+                  <input id="node-area-w" type="number" min={0} step={10} value={n.area?.w ?? 0} onChange={(e) => {
+                    const w = Number(e.target.value);
+                    upd({ area: w > 0 ? { w, h: n.area?.h ?? 40 } : undefined });
+                  }} />
+                </label>
+                <label className="field">
+                  <span>Área das gigas A (px)</span>
+                  <input id="node-area-h" type="number" min={0} step={10} value={n.area?.h ?? 0} disabled={!n.area} onChange={(e) => n.area && upd({ area: { ...n.area, h: Math.max(0, Number(e.target.value)) } })} />
+                </label>
+              </>
+            )}
             {FIELDS.filter((f) => !f.types || f.types.includes(n.type)).map((f) => {
-              const raw = n[f.k] as number;
+              const raw = (n[f.k] as number | undefined) ?? 0;
               const scale = f.scale ?? 1;
               return (
                 <label key={f.k} className="field">
@@ -179,10 +221,71 @@ export function PropertiesPanel() {
           <input id="set-ppm" type="number" min={1} step={5} value={s.pxPerMeter} onChange={(e) => updS({ pxPerMeter: Math.max(1, Number(e.target.value)) })} />
         </label>
       </div>
+      <Resources pools={model.pools ?? []} />
       <p className="hint section">
         Selecione um bloco para editar tempo de ciclo, capacidade, disponibilidade e os dados de custo, energia e CO2e
         (usados nas próximas sprints). Qualquer edição reinicia a simulação.
       </p>
     </aside>
+  );
+}
+
+const KINDS: PoolKind[] = ['operator', 'forklift', 'agv'];
+
+function Resources({ pools }: { pools: PoolDef[] }) {
+  const st = useStore.getState;
+  const set = (next: PoolDef[]) => st().patchModel({ pools: next });
+  const upd = (id: string, patch: Partial<PoolDef>) => set(pools.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  const add = (kind: PoolKind) => {
+    const m = st().model;
+    const xs = m.nodes.map((n) => n.x);
+    const ys = m.nodes.map((n) => n.y);
+    const x = xs.length ? (Math.min(...xs) + Math.max(...xs)) / 2 : 200;
+    const y = ys.length ? Math.max(...ys) + 80 : 200;
+    set([...pools, makePool(kind, { name: `${POOL_LABEL[kind]} ${pools.filter((p) => p.kind === kind).length + 1}`, x: Math.round(x), y: Math.round(y) })]);
+  };
+  const remove = (id: string) => {
+    const m = st().model;
+    st().patchModel({
+      pools: pools.filter((p) => p.id !== id),
+      nodes: m.nodes.map((n) => (n.poolId === id ? { ...n, poolId: undefined } : n)),
+      links: m.links.map((l) => (l.poolId === id ? { ...l, poolId: undefined } : l)),
+    });
+  };
+  return (
+    <div className="section">
+      <p className="label">Recursos (pessoas e veículos)</p>
+      {pools.length === 0 && <p className="hint">Nenhum recurso. Adicione um grupo de operadores e ligue-o aos postos, ou um veículo e ligue-o a um fluxo.</p>}
+      {pools.map((p) => (
+        <div key={p.id} className="pool">
+          <div className="pool-head">
+            <i className={`kind ${p.kind}`} />
+            <input aria-label="Nome do recurso" value={p.name} onChange={(e) => upd(p.id, { name: e.target.value })} />
+            <button className="btn icon" onClick={() => remove(p.id)} title="Remover recurso" aria-label="Remover recurso">×</button>
+          </div>
+          <div className="fields">
+            <label className="field">
+              <span>Quantidade</span>
+              <input type="number" min={1} step={1} value={p.count} onChange={(e) => upd(p.id, { count: Math.max(1, Math.round(Number(e.target.value))) })} />
+            </label>
+            <label className="field">
+              <span>Velocidade (m/s)</span>
+              <input type="number" min={0.1} step={0.1} value={p.speed} onChange={(e) => upd(p.id, { speed: Math.max(0.1, Number(e.target.value)) })} />
+            </label>
+            {p.kind !== 'operator' && (
+              <label className="field">
+                <span>Carga/descarga (s)</span>
+                <input type="number" min={0} step={5} value={p.loadTime} onChange={(e) => upd(p.id, { loadTime: Math.max(0, Number(e.target.value)) })} />
+              </label>
+            )}
+          </div>
+        </div>
+      ))}
+      <div className="row-btns">
+        {KINDS.map((k) => (
+          <button key={k} className="btn" onClick={() => add(k)}>+ {POOL_LABEL[k]}</button>
+        ))}
+      </div>
+    </div>
   );
 }

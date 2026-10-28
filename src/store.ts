@@ -16,6 +16,8 @@ export interface Layers {
   entities: boolean;
   labels: boolean;
   heat: boolean;
+  plant: boolean;
+  people: boolean;
 }
 
 interface State {
@@ -47,6 +49,8 @@ interface State {
   setSnap: (v: boolean) => void;
   toggleLayer: (k: keyof Layers) => void;
   updateSettings: (patch: Partial<Model['settings']>) => void;
+  /** Troca partes do modelo (recursos, planta) sem mexer na seleção. */
+  patchModel: (patch: Partial<Model>) => void;
   setRun: (r: RunState) => void;
   setSpeed: (s: number) => void;
   /** Recria o simulador a partir do modelo (Stop/Replay). */
@@ -55,12 +59,17 @@ interface State {
   setMessage: (m: string) => void;
 }
 
+/** Exemplo da linha real, embutido só no build privado. */
+export function privateExample(): Model | null {
+  return typeof __EXAMPLE__ !== 'undefined' && __EXAMPLE__ ? structuredClone(__EXAMPLE__) : null;
+}
+
 const fresh = (m: Model) => {
   const sim = new Simulator(structuredClone(m));
   return { sim, kpi: lineKpi(sim) };
 };
 
-const initial = lp2Model();
+const initial = privateExample() ?? lp2Model();
 
 export const useStore = create<State>((set, get) => {
   /** Toda edição do modelo invalida a simulação em andamento. */
@@ -75,12 +84,14 @@ export const useStore = create<State>((set, get) => {
     connectFrom: null,
     snap: true,
     gridSize: 20,
-    layers: { grid: true, links: true, entities: true, labels: true, heat: false },
+    layers: { grid: true, links: true, entities: true, labels: true, heat: false, plant: true, people: true },
     run: 'idle',
     speed: 10,
     ...fresh(initial),
     tick: 0,
-    message: 'Modelo exemplo LP2 carregado (70 postos, 12 s por posto). Clique em ▶ Start.',
+    message: privateExample()
+      ? 'Linha real carregada sobre o layout DXF (PST 6 gigas/2 operadores, Final Test 28 gigas/6 operadores). Clique em ▶ Start.'
+      : 'Modelo exemplo LP2 carregado (70 postos, 12 s por posto). Clique em ▶ Start.',
 
     setModel: (m, message) =>
       edit(m, { selected: [], selectedLink: null, connectFrom: null, message: message ?? `Modelo "${m.name}" carregado.` }),
@@ -144,6 +155,7 @@ export const useStore = create<State>((set, get) => {
       const m = get().model;
       edit({ ...m, settings: { ...m.settings, ...patch } });
     },
+    patchModel: (patch) => edit({ ...get().model, ...patch }),
     setRun: (run) => set({ run }),
     setSpeed: (speed) => set({ speed }),
     resetSim: () => set({ ...fresh(get().model), run: 'idle', tick: get().tick + 1 }),

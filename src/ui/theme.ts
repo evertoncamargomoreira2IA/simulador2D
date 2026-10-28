@@ -12,6 +12,9 @@ export interface CanvasColors {
   line: string;
   accent: string;
   transport: string;
+  human: string;
+  cad: string;
+  cadText: string;
   state: Record<NodeState, string>;
 }
 
@@ -28,10 +31,14 @@ function read(): CanvasColors {
     line: v('--line'),
     accent: v('--accent'),
     transport: v('--st-transport'),
+    human: v('--human'),
+    cad: v('--cad'),
+    cadText: v('--cad-text'),
     state: {
       working: v('--st-working'),
       starved: v('--st-starved'),
       blocked: v('--st-blocked'),
+      resource: v('--st-resource'),
       down: v('--st-down'),
       setup: v('--st-setup'),
       off: v('--st-off'),
@@ -59,6 +66,7 @@ export const STATE_LABEL: Record<NodeState, string> = {
   working: 'Operando',
   starved: 'Espera (sem peça)',
   blocked: 'Espera (bloqueado)',
+  resource: 'Espera (operador/transporte)',
   down: 'Parado (falha)',
   setup: 'Setup',
   off: 'Sem produção',

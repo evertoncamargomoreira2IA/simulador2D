@@ -3,10 +3,11 @@
 import { useRef } from 'react';
 import { lineKpi } from '../engine/metrics';
 import { exportModelCsv, exportModelJson, exportResultsXlsx } from '../io/exporter';
+import { parseDxf, snapNodesToLabels } from '../io/dxf';
 import { importFile } from '../io/importer';
 import { lp2Model, simpleModel } from '../model/builder';
 import { DEFAULT_SETTINGS } from '../engine/types';
-import { useStore } from '../store';
+import { privateExample, useStore } from '../store';
 import { fmtTime } from './theme';
 
 const SPEEDS = [1, 2, 5, 10, 30, 60, 120, 300, 600];
@@ -27,6 +28,17 @@ export function Toolbar() {
     e.target.value = '';
     if (!f) return;
     try {
+      if (/\.dxf$/i.test(f.name)) {
+        const m = st().model;
+        const bg = parseDxf(await f.text(), m.settings.pxPerMeter || 40);
+        const nodes = m.nodes.map((n) => ({ ...n }));
+        const moved = snapNodesToLabels(bg, nodes);
+        st().setModel(
+          { ...m, nodes, background: bg },
+          `Planta "${f.name}" carregada (${(bg.width / bg.pxPerMeter).toFixed(0)} × ${(bg.height / bg.pxPerMeter).toFixed(0)} m). ${moved ? `${moved} blocos posicionados pelo nome no desenho.` : 'Arraste os blocos sobre a planta.'}`,
+        );
+        return;
+      }
       const r = await importFile(f, st().model.settings.takt || 12);
       st().setModel(r.model, r.info);
     } catch (err) {
@@ -53,6 +65,7 @@ export function Toolbar() {
     <header className="topbar">
       <div className="brand">
         <b>Simulador 2D</b>
+        <span className="tag" title="Gêmeo digital centrado nas pessoas">Indústria 5.0</span>
         <span title={model.name}>{model.name}</span>
       </div>
 
@@ -65,18 +78,21 @@ export function Toolbar() {
           aria-label="Modelos de exemplo"
           value=""
           onChange={(e) => {
+            const ex = privateExample();
+            if (e.target.value === 'real' && ex) st().setModel(ex, 'Linha real carregada sobre o layout DXF.');
             if (e.target.value === 'lp2') st().setModel(lp2Model(), 'Exemplo LP2 carregado (70 postos, 12 s por posto).');
             if (e.target.value === 'simple') st().setModel(simpleModel(), 'Linha exemplo simples carregada.');
           }}
         >
           <option value="" disabled>Exemplos…</option>
+          {__EXAMPLE__ && <option value="real">Linha real (layout DXF)</option>}
           <option value="lp2">Linha LP2 (70 postos)</option>
           <option value="simple">Linha simples</option>
         </select>
-        <button className="btn" onClick={() => fileRef.current?.click()} title="Excel (.xlsx), CSV ou JSON do simulador">
-          Importar Excel/CSV
+        <button className="btn" onClick={() => fileRef.current?.click()} title="Excel (.xlsx), CSV, JSON do simulador ou planta DXF (AutoCAD)">
+          Importar
         </button>
-        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.txt,.json" hidden onChange={onFile} />
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.txt,.json,.dxf" hidden onChange={onFile} />
         <select
           className="btn"
           aria-label="Exportar"
@@ -127,6 +143,7 @@ export function Toolbar() {
         </select>
       </div>
 
+      <span className={`live${run === 'running' ? ' on' : ''}`}><i />{run === 'running' ? 'Ao vivo' : run === 'done' ? 'Concluído' : run === 'paused' ? 'Pausado' : 'Pronto'}</span>
       <div className="clock" aria-live="off">
         {fmtTime(sim.now)} <small>/ {fmtTime(sim.duration)}</small>
       </div>

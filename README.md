@@ -33,6 +33,16 @@ npm run build:single # gera dist-single/index.html (arquivo único, abre direto 
   (cabeçalho com *Station* e *Manpower*, aba *Top Level*).
 - **Exportação**: resultados em Excel, modelo em CSV ou JSON.
 
+## O que tem na Sprint 2
+
+- **Planta DXF**: Importar aceita `.dxf` (AutoCAD). Linhas, polilinhas, arcos, círculos, textos e blocos viram a planta de fundo, em escala (px/m do modelo). Blocos cujo nome coincide com um texto do desenho são posicionados sobre ele.
+- **Operadores compartilhados**: grupos de operadores (quantidade, velocidade) ligados a postos. O operador anda até o posto, faz carga/descarga (`handlingTime`) e fica livre enquanto a máquina/teste roda. Espera por operador aparece como estado próprio.
+- **Gigas (fixtures)**: posto com capacidade N e `area` desenha N gigas lado a lado, cada uma com seu estado (livre, testando, pronta).
+- **Montagem**: fluxos do tipo "Componente" entregam peças consumidas no posto de destino (estoque de componentes por posto).
+- **Veículos**: empilhadeira e AGV/AMR ligados a um fluxo buscam e levam a peça, com tempo de carga e deslocamento vazio.
+- **Painel de pessoas**: ocupação por grupo (ocioso / equilibrado / sobrecarga), distância percorrida e ranking dos 5 gargalos.
+- Modelo de exemplo privado opcional: se existir `private/example.json` (fora do git), ele vira o modelo inicial do build.
+
 ## Formato da tabela de importação
 
 Uma linha por bloco. Só a coluna `nome` é obrigatória; sem `proximo`, os blocos são ligados em

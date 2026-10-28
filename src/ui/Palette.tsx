@@ -15,6 +15,8 @@ const BLOCKS: { type: NodeType; label: string; desc: string }[] = [
 ];
 
 const LAYERS: { k: keyof Layers; label: string }[] = [
+  { k: 'plant', label: 'Planta (DXF)' },
+  { k: 'people', label: 'Operadores e veículos' },
   { k: 'grid', label: 'Grid' },
   { k: 'links', label: 'Fluxos' },
   { k: 'entities', label: 'Peças em transporte' },
@@ -22,7 +24,7 @@ const LAYERS: { k: keyof Layers; label: string }[] = [
   { k: 'heat', label: 'Intensidade de fluxo' },
 ];
 
-const STATES: NodeState[] = ['working', 'starved', 'blocked', 'down', 'setup', 'off'];
+const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup', 'off'];
 
 export function Palette() {
   const layers = useStore((s) => s.layers);
