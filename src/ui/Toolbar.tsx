@@ -3,8 +3,7 @@
 import { useRef, useState } from 'react';
 import { lineKpi } from '../engine/metrics';
 import { exportModelCsv, exportModelJson, exportResultsXlsx } from '../io/exporter';
-import { parseDxf, snapNodesToLabels } from '../io/dxf';
-import { importFile } from '../io/importer';
+import { ACCEPT, importAnyFile } from './fileImport';
 import { lp2Model, simpleModel } from '../model/builder';
 import { DEFAULT_SETTINGS } from '../engine/types';
 import { privateExample, useStore } from '../store';
@@ -34,29 +33,7 @@ export function Toolbar() {
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     e.target.value = '';
-    if (!f) return;
-    try {
-      if (/\.dxf$/i.test(f.name)) {
-        const m = st().model;
-        const bg = parseDxf(await f.text(), m.settings.pxPerMeter || 40);
-        const nodes = m.nodes.map((n) => ({ ...n }));
-        const moved = snapNodesToLabels(bg, nodes);
-        st().setModel(
-          { ...m, nodes, background: bg },
-          `Planta "${f.name}" carregada (${(bg.width / bg.pxPerMeter).toFixed(0)} × ${(bg.height / bg.pxPerMeter).toFixed(0)} m). ${moved ? `${moved} blocos posicionados pelo nome no desenho.` : 'Arraste os blocos sobre a planta.'}`,
-        );
-        return;
-      }
-      const r = await importFile(f, st().model.settings.takt || 12);
-      const cur = st().model;
-      if (r.keepBackground && cur.background) {
-        const k = (cur.settings.pxPerMeter || 40) / (r.model.settings.pxPerMeter || 40);
-        const nodes = r.model.nodes.map((n) => ({ ...n, x: n.x * k, y: n.y * k }));
-        st().setModel({ ...r.model, nodes, background: cur.background, zones: cur.zones, settings: { ...r.model.settings, pxPerMeter: cur.settings.pxPerMeter } }, `${r.info} Planta mantida.`);
-      } else st().setModel(r.model, r.info);
-    } catch (err) {
-      st().setMessage(`Não foi possível importar "${f.name}": ${(err as Error).message}`);
-    }
+    if (f) await importAnyFile(f);
   }
 
   const start = () => {
@@ -115,10 +92,10 @@ export function Toolbar() {
           Salvos
         </button>
         <RecentSelect />
-        <button className="btn" onClick={() => fileRef.current?.click()} title="Planilha padrão preenchida, Excel (.xlsx), CSV, JSON do simulador ou planta DXF (AutoCAD)">
+        <button className="btn" onClick={() => fileRef.current?.click()} title="Planilha padrão preenchida, Excel (.xlsx), CSV, JSON do simulador, planta DXF (AutoCAD) ou imagem do layout. Também dá para arrastar o arquivo para a tela.">
           Importar
         </button>
-        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,.txt,.json,.dxf" hidden onChange={onFile} />
+        <input ref={fileRef} type="file" accept={ACCEPT} hidden onChange={onFile} />
         <select
           className="btn"
           aria-label="Exportar"

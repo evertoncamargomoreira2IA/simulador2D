@@ -125,6 +125,13 @@ export interface Background {
   originX: number;
   originY: number;
   pxPerMeter: number;
+  /** Layout em imagem (data URL JPEG), esticado em width × height. */
+  image?: string;
+  /** Ajuste do fundo sobre o modelo: tamanho (1 = 100%), deslocamento em px e opacidade (0-1). */
+  scale?: number;
+  dx?: number;
+  dy?: number;
+  opacity?: number;
 }
 
 export interface SimSettings {

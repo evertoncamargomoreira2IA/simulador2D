@@ -1,6 +1,7 @@
 // Layout principal e laço de animação (requestAnimationFrame).
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { importAnyFile } from './fileImport';
 import { useStore } from '../store';
 import { CanvasView } from './CanvasView';
 import { Dashboard } from './Dashboard';
@@ -17,6 +18,7 @@ import { StationOrder } from './StationOrder';
 
 export function App() {
   const showOrder = useStore((s) => s.showOrder);
+  const [dropping, setDropping] = useState(false);
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
@@ -74,7 +76,33 @@ export function App() {
   }, []);
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('Files')) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        if (!dropping) setDropping(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.relatedTarget === null || !(e.currentTarget as Node).contains(e.relatedTarget as Node)) setDropping(false);
+      }}
+      onDrop={(e) => {
+        const f = e.dataTransfer.files?.[0];
+        setDropping(false);
+        if (!f) return;
+        e.preventDefault();
+        importAnyFile(f);
+      }}
+    >
+      {dropping && (
+        <div className="drop-hint" aria-hidden="true">
+          <div>
+            <b>Solte para carregar</b>
+            <span>DXF ou imagem do layout vira a planta de fundo · planilha ou JSON abre o modelo</span>
+          </div>
+        </div>
+      )}
       <Toolbar />
       <Palette />
       <CanvasView />

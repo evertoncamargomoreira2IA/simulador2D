@@ -306,6 +306,7 @@ export function PropertiesPanel() {
           <input id="set-ppm" type="number" min={1} step={5} value={s.pxPerMeter} onChange={(e) => updS({ pxPerMeter: Math.max(1, Number(e.target.value)) })} />
         </label>
       </div>
+      {model.background && <PlantControls />}
       <Resources pools={model.pools ?? []} />
       <p className="hint section">
         Selecione um bloco para editar tempo de ciclo, capacidade, disponibilidade e os dados de custo, energia e CO2e
@@ -387,6 +388,58 @@ function Resources({ pools }: { pools: PoolDef[] }) {
           <button key={k} className="btn" onClick={() => add(k)}>+ {POOL_LABEL[k]}</button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Ajuste da planta de fundo (DXF ou imagem): tamanho, posição e transparência, sem mexer nos blocos. */
+function PlantControls() {
+  const bg = useStore((s) => s.model.background)!;
+  const ppm = useStore((s) => s.model.settings.pxPerMeter) || 40;
+  const set = (patch: Partial<NonNullable<typeof bg>>) => useStore.getState().patchModel({ background: { ...bg, ...patch } });
+  const scale = bg.scale ?? 1;
+  const zoom = (f: number) => {
+    // mantém o centro da planta no lugar
+    const k = Math.min(20, Math.max(0.05, scale * f));
+    const cx = (bg.dx ?? 0) + (bg.width * scale) / 2;
+    const cy = (bg.dy ?? 0) + (bg.height * scale) / 2;
+    set({ scale: k, dx: cx - (bg.width * k) / 2, dy: cy - (bg.height * k) / 2 });
+  };
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  return (
+    <div className="section">
+      <p className="label">Planta de fundo</p>
+      <div className="fields">
+        <label className="field full">
+          <span>Tamanho (%)</span>
+          <span className="stepper">
+            <button className="btn icon" onClick={() => zoom(1 / 1.1)} aria-label="Diminuir planta">−</button>
+            <input id="bg-scale" type="number" min={5} step={5} value={r1(scale * 100)} onChange={(e) => Number(e.target.value) > 0 && zoom(Number(e.target.value) / 100 / scale)} />
+            <button className="btn icon" onClick={() => zoom(1.1)} aria-label="Aumentar planta">+</button>
+          </span>
+        </label>
+        <label className="field">
+          <span>Mover X (m)</span>
+          <input id="bg-dx" type="number" step={0.5} value={r1((bg.dx ?? 0) / ppm)} onChange={(e) => set({ dx: Number(e.target.value) * ppm })} />
+        </label>
+        <label className="field">
+          <span>Mover Y (m)</span>
+          <input id="bg-dy" type="number" step={0.5} value={r1((bg.dy ?? 0) / ppm)} onChange={(e) => set({ dy: Number(e.target.value) * ppm })} />
+        </label>
+        <label className="field">
+          <span>Opacidade (%)</span>
+          <input id="bg-op" type="number" min={5} max={100} step={5} value={Math.round((bg.opacity ?? (bg.image ? 0.55 : 1)) * 100)} onChange={(e) => set({ opacity: Math.min(1, Math.max(0.05, Number(e.target.value) / 100)) })} />
+        </label>
+        <label className="field">
+          <span>Largura (m)</span>
+          <input readOnly value={r1((bg.width * scale) / ppm)} />
+        </label>
+        <div className="row-btns full">
+          <button className="btn" onClick={() => set({ scale: 1, dx: 0, dy: 0, opacity: undefined })}>Original</button>
+          <button className="btn danger" onClick={() => useStore.getState().patchModel({ background: undefined })}>Remover planta</button>
+        </div>
+      </div>
+      <p className="hint">Ajusta só o desenho de fundo; os blocos ficam onde estão. Ctrl+Z desfaz.</p>
     </div>
   );
 }

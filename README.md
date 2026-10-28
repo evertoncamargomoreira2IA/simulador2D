@@ -134,3 +134,5 @@ tests        testes (vitest)
 - **Meta UPH** ao lado do takt na configuração do modelo.
 - **Gráfico da frente**: ordem da linha principal por padrão (off-lines depois) e chave Estados / vs Takt (carga de cada posto em % do takt, passa de 100% quando estoura).
 - **Eficiência (%)** por posto (padrão 100%): o ciclo real fica tempo ÷ eficiência; coluna `eficiencia` na planilha padrão.
+- **Arrastar arquivo para a tela**: DXF ou imagem (PNG/JPG) do layout vira a planta de fundo (pede a largura real em metros); planilha ou JSON abre o modelo.
+- **Planta de fundo**: no painel Modelo, tamanho (−/+), mover X/Y, opacidade, voltar ao original ou remover, sem mexer nos blocos.

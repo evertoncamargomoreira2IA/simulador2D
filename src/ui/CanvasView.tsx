@@ -64,7 +64,11 @@ export function CanvasView() {
     const bg = useStore.getState().model.background;
     const xs = ns.map((n) => n.x);
     const ys = ns.map((n) => n.y);
-    if (bg) xs.push(0, bg.width), ys.push(0, bg.height);
+    if (bg) {
+      const k = bg.scale ?? 1;
+      xs.push(bg.dx ?? 0, (bg.dx ?? 0) + bg.width * k);
+      ys.push(bg.dy ?? 0, (bg.dy ?? 0) + bg.height * k);
+    }
     for (const z of useStore.getState().model.zones ?? []) xs.push(z.x, z.x + z.w), ys.push(z.y, z.y + z.h);
     const minX = Math.min(...xs) - 80;
     const maxX = Math.max(...xs) + 80;
@@ -657,7 +661,18 @@ function Slots({ def, rt, colors }: { def: NodeDef; rt: NodeRt; colors: CanvasCo
 }
 
 /** Planta do DXF: um único Shape desenhado direto no canvas (milhares de linhas). */
+const images = new Map<string, HTMLImageElement>();
+
 const Plant = memo(function Plant({ bg, line, text }: { bg: Background; line: string; text: string }) {
+  const [, loaded] = useState(0);
+  let img = bg.image ? images.get(bg.image) : undefined;
+  if (bg.image && !img) {
+    img = new Image();
+    img.onload = () => loaded((x) => x + 1);
+    img.src = bg.image;
+    images.clear();
+    images.set(bg.image, img);
+  }
   return (
     <Shape
       listening={false}
@@ -665,8 +680,12 @@ const Plant = memo(function Plant({ bg, line, text }: { bg: Background; line: st
       sceneFunc={(ctx) => {
         const c = ctx._context;
         c.save();
+        c.translate(bg.dx ?? 0, bg.dy ?? 0);
+        c.scale(bg.scale ?? 1, bg.scale ?? 1);
+        c.globalAlpha = bg.opacity ?? (bg.image ? 0.55 : 1);
+        if (img?.complete && img.naturalWidth) c.drawImage(img, 0, 0, bg.width, bg.height);
         c.strokeStyle = line;
-        c.lineWidth = 1;
+        c.lineWidth = 1 / (bg.scale ?? 1);
         c.beginPath();
         for (const p of bg.paths) {
           c.moveTo(p[0], p[1]);

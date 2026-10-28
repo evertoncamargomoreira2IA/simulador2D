@@ -419,3 +419,9 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .seg.mini { display: inline-flex; gap: 0; margin-left: 8px; }
 .seg.mini .btn.link { padding: 0 6px; color: var(--muted); }
 .seg.mini .btn.link.on { color: var(--accent); font-weight: 700; }
+.drop-hint { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: color-mix(in srgb, var(--bg, #0b1016) 70%, transparent); border: 3px dashed var(--accent); pointer-events: none; }
+.drop-hint div { display: grid; gap: 6px; text-align: center; padding: 20px 28px; background: var(--panel); border-radius: 12px; border: 1px solid var(--line); }
+.drop-hint b { font-size: 18px; color: var(--accent); }
+.drop-hint span { color: var(--muted); font-size: 13px; }
+.stepper { display: flex !important; gap: 6px; align-items: center; }
+.stepper input { flex: 1; min-width: 0; }
