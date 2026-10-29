@@ -18,7 +18,7 @@ const FIELDS: FieldDef[] = [
   { k: 'cycleTime', label: 'Tempo de ciclo (s)', step: 0.5, types: PROCESS },
   { k: 'cv', label: 'Variação CV (%)', scale: 100, types: PROCESS },
   { k: 'efficiency', label: 'Eficiência (%)', scale: 100, types: ['machine', 'inspection', 'rework'] },
-  { k: 'capacity', label: 'Capacidade', step: 1, types: PROCESS },
+  { k: 'capacity', label: 'Número de gigas', step: 1, types: PROCESS },
   { k: 'queueCap', label: 'Fila de entrada', step: 1, types: ['machine', 'inspection', 'rework'] },
   { k: 'setupTime', label: 'Setup (s)', step: 10, types: PROCESS, machine: true },
   { k: 'availability', label: 'Disponibilidade (%)', scale: 100, types: ['machine', 'inspection', 'rework'], machine: true },
@@ -216,7 +216,7 @@ export function PropertiesPanel() {
               const scale = f.scale ?? 1;
               return (
                 <label key={f.k} className="field">
-                  <span>{f.label}</span>
+                  <span>{f.k === 'capacity' && n.type === 'buffer' ? 'Capacidade (peças)' : f.label}{f.k === 'capacity' && n.type !== 'buffer' && <GigasInfo />}</span>
                   <input
                     id={`node-${f.k}`}
                     type="number"
@@ -335,7 +335,7 @@ export function PropertiesPanel() {
       <Resources pools={model.pools ?? []} />
       <TransportTasks />
       <p className="hint section">
-        Selecione um bloco para editar tempo de ciclo, capacidade, disponibilidade e os dados de custo, energia e CO2e
+        Selecione um bloco para editar tempo de ciclo, gigas, disponibilidade e os dados de custo, energia e CO2e
         (usados nas próximas sprints). Qualquer edição reinicia a simulação.
       </p>
     </aside>
@@ -758,5 +758,25 @@ function Combine({ nodeId }: { nodeId: string }) {
       )}
       {parts.length === 0 && <p className="hint">Hoje as entradas só se somam (cada peça que chega é processada sozinha). Marque Componente para juntar.</p>}
     </div>
+  );
+}
+
+/** Pop-up do número de gigas: o que é, como calcular e diferença para buffer. */
+function GigasInfo() {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="info-tip">
+      <button type="button" className="info-btn" aria-label="O que é número de gigas" aria-expanded={open} onClick={(e) => { e.preventDefault(); setOpen(!open); }}>i</button>
+      {open && (
+        <span className="info-pop" role="dialog">
+          <b>Número de gigas</b>
+          <span>Quantas peças o posto processa ao mesmo tempo (fixtures / posições paralelas). Não é buffer: a espera antes do posto é a <b>Fila de entrada</b>.</span>
+          <span className="info-calc">Gigas = arredondar para cima (ciclo ÷ eficiência ÷ takt)</span>
+          <span>Exemplo: 150 s ÷ 0,9 ÷ 32 s = 5,2 → <b>6 gigas</b>.</span>
+          <span>Fila de entrada: comece com 2 (ou tempo de reparo ÷ takt) e confirme simulando.</span>
+          <button type="button" className="btn small" onClick={(e) => { e.preventDefault(); setOpen(false); }}>Entendi</button>
+        </span>
+      )}
+    </span>
   );
 }

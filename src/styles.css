@@ -680,3 +680,9 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .combine-table td:first-child { word-break: break-word; }
 .combine-table td:nth-child(2) { width: 42%; }
 .combine-table td:nth-child(3) { width: 22%; }
+
+.info-tip { position: relative; display: inline-block; margin-left: 6px; }
+.info-btn { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--accent, #3aa0ff); background: transparent; color: var(--accent, #3aa0ff); font: 700 10px/14px system-ui; padding: 0; cursor: pointer; }
+.info-pop { position: absolute; z-index: 50; top: 22px; right: -12px; width: 260px; display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 10px; background: #0b1730; color: #e6eefc; border: 1px solid var(--accent, #3aa0ff); box-shadow: 0 8px 24px rgba(0,0,0,.45), 0 0 12px rgba(58,160,255,.35); font-size: 12px; line-height: 1.4; text-transform: none; letter-spacing: 0; font-weight: 400; white-space: normal; }
+.info-calc { font-family: ui-monospace, monospace; background: rgba(58,160,255,.12); padding: 4px 6px; border-radius: 6px; }
+.info-pop .btn { align-self: flex-end; }

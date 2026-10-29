@@ -36,7 +36,7 @@ const STEPS: { t: string; body: string[] }[] = [
   {
     t: "3. Ajuste postos, pessoas e veículos",
     body: [
-      "Clique num posto para editar tempo de ciclo, gigas (capacidade), fila, operadores, falhas, lote e energia no painel da direita.",
+      "Clique num posto para editar tempo de ciclo, gigas, fila, operadores, falhas, lote e energia no painel da direita.",
       'Clique numa ligação para dar peso (yield, amostra), distância real, transporte por empilhadeira ou AGV e marcar "uma vez" para amostras que voltam.',
       "Em Pessoas e veículos (painel da direita, sem nada selecionado) você cadastra operadores compartilhados, empilhadeiras e AGVs.",
       "Yamazumi: Operações → escolha o posto → 📋 Colar tabela do Excel (operação | atividade | tempo | tipo). Para todos os postos de uma vez, preencha a aba Atividades da planilha padrão e ponha estudo = elemento na aba Parâmetros.",

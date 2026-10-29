@@ -29,7 +29,7 @@ export const SIGLAS: [string, string, string][] = [
   ['OQA', 'Outgoing quality assurance', 'Inspeção de qualidade no fim da linha.'],
   ['OBA', 'Out of box audit', 'Auditoria por amostragem do produto embalado; volta ao mesmo posto.'],
   ['QC', 'Quality control', 'Bloco Inspection: inspeção ou teste, com reprova para retrabalho.'],
-  ['Giga', 'Fixture / posto paralelo', 'Capacidade do posto: quantas peças processa ao mesmo tempo (não é buffer). Gigas ≈ arredondar para cima (ciclo ÷ eficiência ÷ takt).'],
+  ['Número de gigas', 'Fixture / posto paralelo', 'Capacidade do posto: quantas peças processa ao mesmo tempo (não é buffer). Gigas ≈ arredondar para cima (ciclo ÷ eficiência ÷ takt).'],
   ['Fila de entrada', 'Buffer do posto (queueCap)', 'Quantas peças esperam antes do posto. Dimensione para cobrir variação e paradas (≥ 2, ou ≈ tempo de reparo ÷ takt) e confirme simulando.'],
   ['Peças por viagem', 'Trip quantity', 'No vínculo de transporte: o operador/AGV/AMR espera juntar N peças prontas e leva todas de uma vez. Menos viagens, mais WIP.'],
   ['Combinar peças', 'Kit / integração', 'Posto recebe peças de vários postos: uma entrada Principal vira o produto e as Componentes são consumidas na quantidade por produto.'],
