@@ -49,6 +49,7 @@ export const FUNCOES: [string, string, string][] = [
   ['Simulação', '⚠ Linha travada', 'Se um bloco para de andar por configuração (componente que não chega, agrupamento que não completa, recurso com 0 unidades, montagem sem Principal, linha sem produto acabado), a simulação pausa e mostra o que fazer, com botão para ajustar.'],
   ['Barra', 'Salvar / Salvos / Recentes', 'Guarda o trabalho e reabre os 10 últimos.'],
   ['Barra', 'Importar / Exportar', 'Planilha padrão, SOE, Excel, JSON, DXF ou imagem; exporta planilha e resultados.'],
+  ['Barra', 'Salvar / Salvar como…', 'Salvar grava na lista de trabalhos salvos (Ctrl+S). Salvar como… grava um arquivo .json no computador escolhendo a pasta (Ctrl+Shift+S); abre de volta em Importar.'],
   ['Barra', 'Start / Stop / Reset / Replay / Fim', 'Roda a simulação ao vivo, para mantendo os resultados (Stop), zera o relógio e os indicadores (Reset), recomeça com a mesma semente ou pula para o fim do turno.'],
   ['Barra', 'Linha cheia', 'Começa com a linha já abastecida (UPH de regime, sem rampa).'],
   ['Barra', 'Análises', 'Abre as abas de análise (abaixo).'],

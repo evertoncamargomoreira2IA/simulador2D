@@ -8,7 +8,7 @@ import { Dashboard } from './Dashboard';
 import { Palette } from './Palette';
 import { PropertiesPanel } from './PropertiesPanel';
 import { Toolbar } from './Toolbar';
-import { saveCurrent } from './SaveDialog';
+import { saveAsLocal, saveCurrent } from './SaveDialog';
 import { setDownloadNotice } from '../io/exporter';
 
 setDownloadNotice((m) => useStore.getState().setMessage(m));
@@ -56,7 +56,8 @@ export function App() {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         const st = useStore.getState();
-        if (st.saved) saveCurrent();
+        if (e.shiftKey) saveAsLocal();
+        else if (st.saved) saveCurrent();
         else st.setShowSaved(true);
         return;
       }

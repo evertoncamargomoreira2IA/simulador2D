@@ -10,7 +10,7 @@ import { applyTheme, fmtTime, loadTheme } from './theme';
 import { effectiveTakt } from '../engine/balance';
 import { Tutorial, downloadSoeForm, downloadTemplate } from './Tutorial';
 import { Library } from './Library';
-import { RecentSelect, SavedModels, saveCurrent } from './SaveDialog';
+import { RecentSelect, SavedModels, saveAsLocal, saveCurrent } from './SaveDialog';
 
 const SPEEDS = [1, 2, 5, 10, 30, 60, 120, 300, 600];
 
@@ -104,6 +104,9 @@ export function Toolbar() {
           title={saved ? 'Grava por cima do modelo salvo (Ctrl+S)' : 'Dar um nome e salvar (Ctrl+S)'}
         >
           {dirty ? 'Salvar •' : 'Salvo ✓'}
+        </button>
+        <button className="btn" onClick={() => saveAsLocal()} title="Salvar como arquivo no computador, escolhendo a pasta (Ctrl+Shift+S)">
+          Salvar como…
         </button>
         <button className="btn" onClick={() => st().setShowSaved(true)} title="Abrir, salvar como novo ou apagar modelos salvos">
           Salvos

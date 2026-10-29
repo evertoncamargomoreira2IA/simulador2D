@@ -60,6 +60,31 @@ export async function downloadCurrent(): Promise<void> {
   useStore.getState().setMessage(`Arquivo "${file}" gerado. Para abrir depois: Importar → escolha o arquivo.`);
 }
 
+/**
+ * Salvar como: escolhe a pasta e o nome do arquivo no computador (janela do sistema).
+ * Onde o navegador não deixa abrir essa janela (dentro do artefato), baixa o arquivo pelo navegador.
+ */
+export async function saveAsLocal(): Promise<void> {
+  const m = useStore.getState().model;
+  const file = `${m.name.replace(/[\\/:*?"<>|]+/g, '-').trim() || 'modelo'}.sim2d.json`;
+  const picker = (window as unknown as { showSaveFilePicker?: (o: unknown) => Promise<{ name: string; createWritable: () => Promise<{ write: (d: string) => Promise<void>; close: () => Promise<void> }> }> }).showSaveFilePicker;
+  if (picker) {
+    try {
+      const h = await picker({ suggestedName: file, types: [{ description: 'Modelo do simulador', accept: { 'application/json': ['.json'] } }] });
+      const w = await h.createWritable();
+      await w.write(JSON.stringify(m));
+      await w.close();
+      useStore.getState().setMessage(`"${h.name}" salvo na pasta escolhida. Para abrir depois: Importar → escolha o arquivo.`);
+      return;
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return;
+      // janela de pasta bloqueada aqui: segue pelo download
+    }
+  }
+  if (!(await download(file, JSON.stringify(m), 'application/json'))) return;
+  useStore.getState().setMessage(`"${file}" baixado. Ele vai para a pasta de downloads; para escolher a pasta toda vez, ative "Perguntar onde salvar cada arquivo" nas configurações do navegador. Para abrir: Importar.`);
+}
+
 /** Campo da barra com os 10 últimos trabalhos salvos. */
 export function RecentSelect() {
   const saved = useStore((s) => s.saved);

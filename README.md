@@ -26,6 +26,7 @@ npm run build:single # gera dist-single/index.html (arquivo único, abre direto 
 - **Indicadores**: throughput, cycle time real, lead time, tempo em fila, bloqueado e transporte,
   WIP atual e médio, utilização, OEE por posto e da linha, aderência ao takt, first pass yield e
   gargalo (método do período ativo).
+- **Salvar / Salvar como…**: Salvar grava na lista de trabalhos salvos (Ctrl+S); Salvar como… grava o modelo em arquivo `.sim2d.json` escolhendo a pasta (Ctrl+Shift+S), ou baixa pelo navegador quando a janela de pasta não é permitida.
 - **Controles**: Start, Pause, Stop (mantém os resultados), Reset (zera), Replay, Fim (calcula o turno inteiro) e velocidade de 1× a 600×.
 - **Animação**: cor do posto pelo estado (verde operando, amarelo espera, laranja bloqueado,
   vermelho parado, roxo setup, cinza sem produção) e peças em azul durante o transporte.
