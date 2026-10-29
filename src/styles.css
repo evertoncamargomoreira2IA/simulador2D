@@ -438,7 +438,7 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .ref-tile.ref { border-color: #8b5cf6; box-shadow: inset 0 0 0 1px #8b5cf6; }
 .ref-tile.ref .k { color: #8b5cf6; }
 .rank .uph-col { font-size: 11px; white-space: nowrap; min-width: 52px; text-align: right; }
-.quick-add { position: absolute; z-index: 30; display: grid; gap: 4px; min-width: 150px; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.quick-add { position: absolute; z-index: 30; display: grid; overflow-y: auto; gap: 4px; min-width: 150px; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
 .quick-add .btn { justify-content: flex-start; text-align: left; }
 .quick-add .label { margin: 0 0 2px; }
 .ops .op { border: 1px solid var(--line); border-radius: 8px; padding: 6px; margin-bottom: 6px; display: grid; gap: 4px; }

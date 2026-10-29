@@ -591,7 +591,22 @@ export function CanvasView() {
         )}
       </Stage>
       {quick && (
-        <div className="quick-add" style={{ left: quick.sx, top: quick.sy }} role="menu" aria-label="Adicionar bloco ligado">
+        <div
+          className="quick-add"
+          style={{ left: quick.sx, top: quick.sy }}
+          role="menu"
+          aria-label="Adicionar bloco ligado"
+          ref={(el) => {
+            // cabe inteiro na área do layout: sobe ou vai para a esquerda quando encosta no painel de baixo ou da direita
+            const box = el?.parentElement;
+            if (!el || !box) return;
+            const pad = 8;
+            const h = Math.min(el.scrollHeight, box.clientHeight - 2 * pad);
+            el.style.maxHeight = `${h}px`;
+            el.style.top = `${Math.max(pad, Math.min(quick.sy, box.clientHeight - h - pad))}px`;
+            el.style.left = `${Math.max(pad, Math.min(quick.sx, box.clientWidth - el.offsetWidth - pad))}px`;
+          }}
+        >
           <p className="label">Adicionar ligado</p>
           {QUICK.map((q) => (
             <button key={q.type} role="menuitem" className="btn" onClick={() => quickAdd(q.type)}>
