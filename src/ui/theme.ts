@@ -101,3 +101,22 @@ export function mixHex(a: string, b: string, t: number): string {
     return b;
   }
 }
+
+/** Tema escolhido pela pessoa (escuro é o padrão, independente do Windows/navegador). */
+export type ThemePref = 'dark' | 'light';
+const THEME_KEY = 'sim2d-theme';
+export function loadTheme(): ThemePref {
+  try {
+    return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
+  } catch {
+    return 'dark';
+  }
+}
+export function applyTheme(t: ThemePref) {
+  document.documentElement.setAttribute('data-theme', t);
+  try {
+    localStorage.setItem(THEME_KEY, t);
+  } catch {
+    /* sem armazenamento: vale só nesta sessão */
+  }
+}

@@ -6,7 +6,7 @@ import { exportModelCsv, exportModelJson, exportResultsXlsx } from '../io/export
 import { ACCEPT, importAnyFile } from './fileImport';
 import { elementsModel, lp2Model, simpleModel, combineModel } from '../model/builder';
 import { privateExample, useStore } from '../store';
-import { fmtTime } from './theme';
+import { applyTheme, fmtTime, loadTheme } from './theme';
 import { effectiveTakt } from '../engine/balance';
 import { Tutorial, downloadTemplate } from './Tutorial';
 import { RecentSelect, SavedModels, saveCurrent } from './SaveDialog';
@@ -137,6 +137,7 @@ export function Toolbar() {
         <button className={`btn${snap ? ' on' : ''}`} onClick={() => st().setSnap(!snap)} title="Encaixar no grid">
           Snap
         </button>
+        <ThemeButton />
       </div>
 
       <span className="sep" />
@@ -203,5 +204,15 @@ function UphField() {
         {takt > 0 ? `takt ${takt.toFixed(1)} s` : eff > 0 ? `takt da operação ${eff.toFixed(1)} s` : 'takt –'}
       </small>
     </label>
+  );
+}
+
+function ThemeButton() {
+  const [t, setT] = useState(loadTheme);
+  const next = t === 'dark' ? 'light' : 'dark';
+  return (
+    <button className="btn" onClick={() => { applyTheme(next); setT(next); }} title={`Mudar para fundo ${next === 'dark' ? 'escuro' : 'claro'}`} aria-label="Alternar fundo claro/escuro">
+      {t === 'dark' ? '☀ Claro' : '🌙 Escuro'}
+    </button>
   );
 }
