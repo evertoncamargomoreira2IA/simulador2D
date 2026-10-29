@@ -665,3 +665,12 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .auto-note { border-left: 3px solid var(--frame-b); padding-left: 8px; }
 .auto-note.bad { border-left-color: var(--st-down); }
 .grid-table input, .grid-table select { width: 100%; min-width: 0; }
+
+/* ---- Vínculo de transporte ---- */
+.bind-flow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px; border-radius: 10px; background: color-mix(in srgb, var(--frame-b) 8%, var(--raised)); border: 1px solid color-mix(in srgb, var(--frame-b) 35%, var(--line)); }
+.bind-node { display: grid; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--accent); background: var(--panel); font-weight: 600; box-shadow: 0 0 10px rgb(34 211 238 / 0.25); }
+.bind-node small { font-weight: 400; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.bind-arrow { flex: 1; min-width: 160px; text-align: center; font-size: 12px; color: var(--muted); border-bottom: 2px dashed var(--accent); padding-bottom: 3px; position: relative; }
+.bind-arrow::after { content: '▶'; position: absolute; right: -8px; bottom: -9px; color: var(--accent); font-size: 12px; }
+.bind-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.props .btn.full { grid-column: 1 / -1; width: 100%; }

@@ -1,5 +1,6 @@
 // Dashboard: indicadores da linha e gráficos (estados por posto, throughput e WIP no tempo).
 
+import { effLabel } from '../engine/types';
 import Chart from 'chart.js/auto';
 import { useEffect, useRef, useState } from 'react';
 import type { LineKpi } from '../engine/metrics';
@@ -44,7 +45,11 @@ export function Dashboard() {
             <Tile k="Lead time" v={kpi.leadTime ? fmtTime(kpi.leadTime) : '–'} hint="Tempo de uma máquina desde a entrada até o fim da linha, com filas, esperas e transporte." />
             <Tile k="Total cycle time" v={kpi.totalCycleTime ? fmtTime(kpi.totalCycleTime) : '–'} hint="Soma dos tempos de ciclo para montar uma máquina, incluindo as submontagens." />
             <Tile k="WIP" v={String(kpi.wip)} u={`méd ${fmt(kpi.avgWip, 0)}`} />
-            <Tile k="OEE (gargalo)" v={pct(kpi.oee)} hint="OEE do posto gargalo: disponibilidade × performance × qualidade." />
+            <Tile
+              k={`${effLabel(sim.model.nodes.find((n) => n.id === kpi.bottleneckId))} (gargalo)`}
+              v={pct(kpi.oee)}
+              hint="Do posto gargalo: disponibilidade × performance × qualidade. Posto manual mostra OLE (eficácia da mão de obra); máquina mostra OEE."
+            />
             <Tile
               k="UPH real × meta"
               v={`${fmt(kpi.throughputPerHour, 0)} / ${fmt(takt ? 3600 / takt : 0, 0)}`}

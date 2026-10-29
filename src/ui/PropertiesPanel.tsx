@@ -1,3 +1,5 @@
+import { effLabel } from '../engine/types';
+import { effectiveTakt } from '../engine/balance';
 // Painel de propriedades: bloco selecionado, link selecionado ou configuração do modelo.
 
 import { useState } from 'react';
@@ -44,6 +46,10 @@ export function PropertiesPanel() {
   const selectedLink = useStore((s) => s.selectedLink);
   useStore((s) => s.kpi);
   const sim = useStore((s) => s.sim);
+  const selectedPool = useStore((s) => s.selectedPool);
+
+  const pool = selectedPool ? model.pools?.find((p) => p.id === selectedPool) : undefined;
+  if (pool) return <PoolPanel p={pool} />;
 
   if (selectedLink) {
     const l = model.links.find((x) => x.id === selectedLink);
@@ -67,6 +73,9 @@ export function PropertiesPanel() {
                 useStore.getState().updateLink(l.id, { length: e.target.value === '' || !(v > 0) ? undefined : v });
               }} />
             </label>
+            <button className="btn primary full" onClick={() => useStore.getState().setTransportFor({ linkId: l.id, poolId: l.poolId })}>
+              🚚 Vincular transporte (operador, AGV, AMR)…
+            </button>
             <label className="field full check">
               <input id="link-once" type="checkbox" checked={!!l.once} onChange={(e) => useStore.getState().updateLink(l.id, { once: e.target.checked || undefined })} />
               <span>Cada peça passa só uma vez (amostra que volta ao posto, ex.: OBA)</span>
@@ -238,7 +247,7 @@ export function PropertiesPanel() {
               <dt>Disponibilidade</dt><dd>{pct(k.availability, 1)}</dd>
               <dt>Performance</dt><dd>{pct(k.performance, 1)}</dd>
               <dt>Qualidade</dt><dd>{pct(k.quality, 1)}</dd>
-              <dt>OEE</dt><dd>{pct(k.oee, 1)}</dd>
+              <dt title={n.manual ? 'Overall labor effectiveness: disponibilidade × desempenho × qualidade da mão de obra' : 'Overall equipment effectiveness'}>{effLabel(n)}</dt><dd>{pct(k.oee, 1)}</dd>
               <dt>WIP no posto</dt><dd>{k.wip}</dd>
               <dt>Falhas</dt><dd>{k.failures}</dd>
             </dl>
@@ -281,7 +290,8 @@ export function PropertiesPanel() {
             type="number"
             min={0}
             step={1}
-            value={s.takt > 0 ? Math.round((3600 / s.takt) * 10) / 10 : 0}
+            value={s.takt > 0 ? Math.round((3600 / s.takt) * 10) / 10 : ''}
+            placeholder="auto"
             onChange={(e) => {
               const u = Number(e.target.value);
               updS({ takt: u > 0 ? Math.round((3600 / u) * 1000) / 1000 : 0 });
@@ -290,7 +300,7 @@ export function PropertiesPanel() {
         </label>
         <label className="field">
           <span>Takt (s)</span>
-          <input id="set-takt" type="number" min={0} step={0.5} value={s.takt} onChange={(e) => updS({ takt: Number(e.target.value) })} />
+          <input id="set-takt" type="number" min={0} step={0.5} value={s.takt || ''} placeholder={`auto ${effectiveTakt(model).toFixed(1)}`} onChange={(e) => updS({ takt: Number(e.target.value) })} />
         </label>
         <label className="field">
           <span>Semente</span>
@@ -403,6 +413,71 @@ function Resources({ pools }: { pools: PoolDef[] }) {
         ))}
       </div>
     </div>
+  );
+}
+
+/** Operador, empilhadeira, AGV ou AMR selecionado no layout: editar tudo, ver vínculos e apagar. */
+function PoolPanel({ p }: { p: PoolDef }) {
+  const model = useStore((s) => s.model);
+  const st = useStore.getState;
+  const upd = (patch: Partial<PoolDef>) => st().patchModel({ pools: (model.pools ?? []).map((x) => (x.id === p.id ? { ...x, ...patch } : x)) });
+  const name = (id: string) => model.nodes.find((n) => n.id === id)?.name ?? id;
+  const posts = model.nodes.filter((n) => n.poolId === p.id);
+  const trips = model.links.filter((l) => l.poolId === p.id);
+  const num = (k: keyof PoolDef, label: string, min: number, step: number, int = false) => (
+    <label className="field">
+      <span>{label}</span>
+      <input type="number" min={min} step={step} value={Number(p[k] ?? 0)} onChange={(e) => upd({ [k]: Math.max(min, int ? Math.round(Number(e.target.value)) : Number(e.target.value)) } as Partial<PoolDef>)} />
+    </label>
+  );
+  return (
+    <aside className="props">
+      <h2>{POOL_LABEL[p.kind]}</h2>
+      <p className="sub">Recurso compartilhado · {posts.length} posto(s) · {trips.length} trecho(s) de transporte</p>
+      <div className="fields">
+        <label className="field full">
+          <span>Nome</span>
+          <input value={p.name} onChange={(e) => upd({ name: e.target.value })} />
+        </label>
+        <label className="field full">
+          <span>Tipo</span>
+          <select value={p.kind} onChange={(e) => upd({ kind: e.target.value as PoolKind })}>
+            {KINDS.map((k) => (
+              <option key={k} value={k}>{POOL_LABEL[k]}</option>
+            ))}
+          </select>
+        </label>
+        {num('count', 'Quantidade', 1, 1, true)}
+        {num('speed', 'Velocidade (m/s)', 0.05, 0.1)}
+        {num('loadTime', 'Pegar/soltar (s)', 0, 1)}
+        {num('costPerHour', 'Custo (R$/h)', 0, 1)}
+        {p.kind !== 'operator' && num('powerKw', 'Potência (kW)', 0, 0.1)}
+        {p.kind !== 'operator' && num('fuelCo2', 'Combustível (kg CO2e/h)', 0, 0.1)}
+      </div>
+      <div className="section">
+        <p className="label">Postos que ele opera</p>
+        {posts.length === 0 && <p className="hint">Nenhum. Arraste o recurso até um posto para ele operar o posto.</p>}
+        {posts.map((n) => (
+          <div key={n.id} className="bind-row">
+            <span>{n.name}</span>
+            <button className="btn icon" aria-label={`Desvincular de ${n.name}`} onClick={() => st().updateNode(n.id, { poolId: undefined })}>×</button>
+          </div>
+        ))}
+        <p className="label">Transportes (entrada → saída)</p>
+        {trips.length === 0 && <p className="hint">Nenhum. Ctrl+clique no recurso e na seta, ou use o botão abaixo.</p>}
+        {trips.map((l) => (
+          <div key={l.id} className="bind-row">
+            <button className="link" onClick={() => st().setTransportFor({ poolId: p.id, linkId: l.id })}>{name(l.from)} → {name(l.to)}{l.role === 'part' ? ' (kit)' : ''}</button>
+            <button className="btn icon" aria-label="Tirar este transporte" onClick={() => st().updateLink(l.id, { poolId: undefined })}>×</button>
+          </div>
+        ))}
+      </div>
+      <div className="row-btns section">
+        <button className="btn primary" onClick={() => st().setTransportFor({ poolId: p.id })}>Vincular a um transporte…</button>
+        <button className="btn danger" onClick={() => st().deleteSelection()}>Apagar {POOL_LABEL[p.kind].toLowerCase()}</button>
+      </div>
+      <p className="hint">Delete também apaga. Ctrl+Z desfaz. Clique no fundo do layout para voltar ao painel do modelo.</p>
+    </aside>
   );
 }
 

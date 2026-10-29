@@ -37,6 +37,9 @@ interface State {
   model: Model;
   selected: string[];
   selectedLink: string | null;
+  /** Operador/veículo selecionado no layout (grupo de recursos). */
+  selectedPool: string | null;
+  selectPool: (id: string | null) => void;
   tool: Tool;
   connectFrom: string | null;
   snap: boolean;
@@ -94,6 +97,13 @@ interface State {
   showOrder: boolean;
   /** Janela de operações e atividades aberta (id do posto, '' = primeiro). */
   opsFor: string | null;
+  /** Ctrl+clique: operador/veículo e seta escolhidos para o vínculo de transporte. */
+  bindPick: { poolId?: string; linkId?: string } | null;
+  /** Janela de vínculo de transporte aberta. */
+  transportFor: { poolId?: string; linkId?: string } | null;
+  setTransportFor: (v: { poolId?: string; linkId?: string } | null) => void;
+  /** Ctrl+clique num operador/veículo ou numa seta: com os dois escolhidos, abre a janela. */
+  ctrlPick: (p: { poolId?: string; linkId?: string }) => void;
   showSoe: boolean;
   setShowSoe: (v: boolean) => void;
   setOpsFor: (id: string | null) => void;
@@ -168,6 +178,8 @@ export const useStore = create<State>((set, get) => {
     model: initial,
     selected: [],
     selectedLink: null,
+    selectedPool: null,
+    selectPool: (selectedPool) => set({ selectedPool, selected: [], selectedLink: null }),
     tool: 'select',
     connectFrom: null,
     snap: true,
@@ -202,7 +214,7 @@ export const useStore = create<State>((set, get) => {
     // Abrir trabalho (novo, exemplo, salvo, importado): a meta começa zerada e o takt vem da operação (gargalo).
     openModel: (m, message) => get().setModel({ ...m, settings: { ...m.settings, takt: 0 } }, message),
     setModel: (m, message) =>
-      edit(m, { selected: [], selectedLink: null, connectFrom: null, saved: null, message: message ?? `Modelo "${m.name}" carregado.` }, `abrir "${m.name}"`),
+      edit(m, { selected: [], selectedLink: null, selectedPool: null, connectFrom: null, saved: null, message: message ?? `Modelo "${m.name}" carregado.` }, `abrir "${m.name}"`),
 
     updateNode: (id, patch) => {
       const m = get().model;
@@ -298,7 +310,21 @@ export const useStore = create<State>((set, get) => {
       );
     },
     deleteSelection: () => {
-      const { model: m, selected, selectedLink } = get();
+      const { model: m, selected, selectedLink, selectedPool } = get();
+      if (selectedPool) {
+        const p = m.pools?.find((x) => x.id === selectedPool);
+        edit(
+          {
+            ...m,
+            pools: (m.pools ?? []).filter((x) => x.id !== selectedPool),
+            nodes: m.nodes.map((n) => (n.poolId === selectedPool ? { ...n, poolId: undefined } : n)),
+            links: m.links.map((l) => (l.poolId === selectedPool ? { ...l, poolId: undefined } : l)),
+          },
+          { selectedPool: null, message: `"${p?.name}" apagado. Os postos e trechos dele voltaram ao padrão (Ctrl+Z desfaz).` },
+          `apagar ${p?.name ?? 'recurso'}`,
+        );
+        return;
+      }
       const del = new Set(selected);
       edit(
         {
@@ -311,7 +337,7 @@ export const useStore = create<State>((set, get) => {
       );
     },
 
-    select: (ids, link = null) => set({ selected: ids, selectedLink: link }),
+    select: (ids, link = null) => set({ selected: ids, selectedLink: link, selectedPool: null }),
     setTool: (tool) => set({ tool, connectFrom: null }),
     setConnectFrom: (connectFrom) => set({ connectFrom }),
     setSnap: (snap) => set({ snap }),
@@ -342,6 +368,20 @@ export const useStore = create<State>((set, get) => {
     },
     showOrder: false,
     opsFor: null,
+    bindPick: null,
+    transportFor: null,
+    setTransportFor: (transportFor) => set({ transportFor, bindPick: null }),
+    ctrlPick: (p) => {
+      const cur = { ...(get().bindPick ?? {}), ...p };
+      if (cur.poolId && cur.linkId) {
+        set({ bindPick: null, transportFor: cur });
+        return;
+      }
+      set({
+        bindPick: cur,
+        message: cur.poolId ? 'Recurso escolhido. Agora segure Ctrl e clique na seta do trecho que ele vai transportar (Esc cancela).' : 'Seta escolhida. Agora segure Ctrl e clique no operador ou veículo (Esc cancela).',
+      });
+    },
     showSoe: false,
     setShowSoe: (showSoe) => set({ showSoe }),
     setOpsFor: (opsFor) => set({ opsFor }),

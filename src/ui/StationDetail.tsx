@@ -1,5 +1,6 @@
 // Pop-up com todos os indicadores de um posto (breakdown por posto).
 
+import { effLabel } from '../engine/types';
 import { footprint } from '../engine/analytics';
 import { nodeKpi } from '../engine/metrics';
 import type { NodeState } from '../engine/types';
@@ -38,7 +39,7 @@ export function StationDetail() {
         <Kpi k="Tempo de ciclo" v={fmt(d.cycleTime, 1)} u={`s · real ${fmt(realCt, 1)}`} />
         <Kpi k="Tempo por peça" v={fmt(effCt, 1)} u={`s · takt ${fmt(takt, 1)}`} tone={effCt > takt ? 'bad' : undefined} />
         <Kpi k="Utilização" v={pct(k.utilization, 1)} />
-        <Kpi k="OEE" v={pct(k.oee, 1)} u={`D ${pct(k.availability)} · P ${pct(k.performance)} · Q ${pct(k.quality)}`} />
+        <Kpi k={effLabel(d)} v={pct(k.oee, 1)} u={`D ${pct(k.availability)} · P ${pct(k.performance)} · Q ${pct(k.quality)}`} />
         <Kpi k="WIP no posto" v={String(k.wip)} u={`fila méd. ${fmt(k.avgQueue, 0)} s`} />
         <Kpi k="Falhas" v={String(k.failures)} u={`MTTR ${fmt(d.mttr, 0)} s`} />
         <Kpi k="Reprovadas" v={String(rt.rejected)} />

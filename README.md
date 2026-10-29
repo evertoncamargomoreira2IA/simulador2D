@@ -162,5 +162,9 @@ tests        testes (vitest)
 - **Balanceamento automático** (Rebalancear → ⚡): reparte as atividades na ordem, enchendo cada posto até o takt; postos que sobram ficam sem pessoa.
 - **Réplicas**: 10 a 30 turnos com sementes diferentes; UPH médio com intervalo de 95%, P5–P95 e turnos na meta.
 - **Turnos e paradas**: almoço, ginástica laboral (param os postos com gente) e troca de modelo (para a linha) entram na simulação e no UPH real.
+- **Vínculo de transporte**: Ctrl+clique no operador/AGV/AMR e na seta abre a janela com posto de entrada (output), posto de saída (input), produto ou componente de montagem, peças por viagem e ocupação estimada. Operador também faz transporte de trecho.
+- **Recursos editáveis**: clique no operador/AGV/AMR para editar tudo no painel, ver os vínculos e apagar (Delete).
+- **OLE** no lugar de OEE para posto manual.
+- **Meta UPH zerada** ao abrir um trabalho: o takt vem da operação (gargalo planejado).
 - **Como usar** didático em cada tela nova e moldura azul cintilante.
 - **Como usar → Siglas / Funções**: tabelas com todas as siglas (significado e uso) e as funções da aplicação.

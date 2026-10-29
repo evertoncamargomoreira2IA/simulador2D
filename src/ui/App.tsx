@@ -14,6 +14,7 @@ import { setDownloadNotice } from '../io/exporter';
 setDownloadNotice((m) => useStore.getState().setMessage(m));
 import { Analysis } from './Analysis';
 import { StationDetail } from './StationDetail';
+import { TransportBind } from './TransportBind';
 import { OpsEditor } from './OpsEditor';
 import { SoeImport } from './SoeImport';
 import { StationOrder } from './StationOrder';
@@ -22,6 +23,7 @@ import { StartScreen } from './StartScreen';
 export function App() {
   const showOrder = useStore((s) => s.showOrder);
   const opsFor = useStore((s) => s.opsFor);
+  const transportFor = useStore((s) => s.transportFor);
   const showSoe = useStore((s) => s.showSoe);
   const showStart = useStore((s) => s.showStart);
   const [dropping, setDropping] = useState(false);
@@ -78,9 +80,10 @@ export function App() {
         return;
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (st.selected.length || st.selectedLink) st.deleteSelection();
+        if (st.selected.length || st.selectedLink || st.selectedPool) st.deleteSelection();
       } else if (e.key === 'Escape') {
         st.setPendingPool(null);
+        useStore.setState({ bindPick: null });
         st.setTool('select');
         st.select([]);
       } else if (e.key === ' ') {
@@ -130,6 +133,7 @@ export function App() {
       {showStart && <StartScreen onClose={() => useStore.getState().setShowStart(false)} />}
       {showOrder && <StationOrder onClose={() => useStore.getState().setShowOrder(false)} />}
       {showSoe && <SoeImport onClose={() => useStore.getState().setShowSoe(false)} />}
+      {transportFor && <TransportBind start={transportFor} onClose={() => useStore.getState().setTransportFor(null)} />}
       {opsFor !== null && <OpsEditor start={opsFor} onClose={() => useStore.getState().setOpsFor(null)} />}
     </div>
   );

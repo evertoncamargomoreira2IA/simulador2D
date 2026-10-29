@@ -165,7 +165,6 @@ export function simpleModel(): Model {
   const insp = m.nodes.find((n) => n.type === 'inspection')!;
   rw.x = insp.x;
   rw.y = 330;
-  m.settings.takt = 15;
   return m;
 }
 

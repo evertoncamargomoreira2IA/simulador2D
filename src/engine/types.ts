@@ -307,6 +307,9 @@ export function makeNode(type: NodeType, partial: Partial<NodeDef> = {}): NodeDe
   };
 }
 
+/** Posto manual (só gente) mede OLE (eficácia da mão de obra); máquina mede OEE. */
+export const effLabel = (n: Pick<NodeDef, 'manual'> | undefined): 'OLE' | 'OEE' => (n?.manual ? 'OLE' : 'OEE');
+
 export const POOL_LABEL: Record<PoolKind, string> = {
   operator: 'Operadores',
   forklift: 'Empilhadeira',

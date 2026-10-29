@@ -55,6 +55,7 @@ export function CanvasView() {
   const gridSize = useStore((s) => s.gridSize);
   const message = useStore((s) => s.message);
   const run = useStore((s) => s.run);
+  const selectedPool = useStore((s) => s.selectedPool);
 
   useEffect(() => {
     const el = wrap.current!;
@@ -397,7 +398,8 @@ export function CanvasView() {
                     hitStrokeWidth={12}
                     onClick={(e) => {
                       e.cancelBubble = true;
-                      useStore.getState().select([], l.id);
+                      if (e.evt.ctrlKey || e.evt.metaKey) useStore.getState().ctrlPick({ linkId: l.id });
+                      else useStore.getState().select([], l.id);
                     }}
                   />
                   {sel && !wire && (
@@ -543,7 +545,7 @@ export function CanvasView() {
 
         {layers.people && sim.pools.length > 0 && (
           <Layer listening={draggable}>
-            <Units sim={sim} colors={colors} labels={layers.labels} draggable={draggable} onDrop={dropPool} />
+            <Units sim={sim} colors={colors} labels={layers.labels} draggable={draggable} onDrop={dropPool} selectedPool={selectedPool} />
           </Layer>
         )}
 
@@ -996,7 +998,7 @@ const Plant = memo(function Plant({ bg, line, text }: { bg: Background; line: st
 });
 
 /** Operadores (círculos) e veículos (retângulos) nas posições atuais. */
-function Units({ sim, colors, labels, draggable, onDrop }: { sim: Simulator; colors: CanvasColors; labels: boolean; draggable: boolean; onDrop: (poolId: string, x: number, y: number) => void }) {
+function Units({ sim, colors, labels, draggable, onDrop, selectedPool }: { sim: Simulator; colors: CanvasColors; labels: boolean; draggable: boolean; onDrop: (poolId: string, x: number, y: number) => void; selectedPool: string | null }) {
   const carrying = new Map<string, number>();
   for (const t of sim.transits) if (t.unit) carrying.set(t.unit.id, t.entity.qty);
   return (
@@ -1023,13 +1025,18 @@ function Units({ sim, colors, labels, draggable, onDrop }: { sim: Simulator; col
             },
             onClick: (e: Konva.KonvaEventObject<MouseEvent>) => {
               e.cancelBubble = true;
-              useStore.getState().setMessage(`"${p.def.name}": arraste até um posto para ele atender o posto, ou até uma seta para fazer o transporte.`);
+              if (e.evt.ctrlKey || e.evt.metaKey) useStore.getState().ctrlPick({ poolId: p.def.id });
+              else {
+                useStore.getState().selectPool(p.def.id);
+                useStore.getState().setMessage(`"${p.def.name}" selecionado: edite ou apague no painel da direita (Delete apaga). Arraste até um posto ou seta, ou Ctrl+clique nele e na seta para o vínculo.`);
+              }
             },
           };
           if (p.def.kind === 'operator')
             return (
               <Group key={u.id} x={pos.x} y={pos.y} {...drag}>
                 <Rect x={-10} y={-11} width={20} height={22} fill="transparent" />
+                {selectedPool === p.def.id && <Circle radius={15} stroke={colors.accent} strokeWidth={2.5} dash={[4, 3]} />}
                 <Person color={c} outline={colors.canvas} phase={u.busy ? sim.now + i : 0} scale={1.3} />
                 {labels && <Text x={-12} y={12} width={24} align="center" text={`${i + 1}`} fontSize={9} fill={colors.human} />}
               </Group>
@@ -1037,6 +1044,7 @@ function Units({ sim, colors, labels, draggable, onDrop }: { sim: Simulator; col
           const qty = carrying.get(u.id) ?? 0;
           return (
             <Group key={u.id} x={pos.x} y={pos.y} {...drag}>
+              {selectedPool === p.def.id && <Rect x={-18} y={-13} width={36} height={26} cornerRadius={5} stroke={colors.accent} strokeWidth={2.5} dash={[4, 3]} />}
               <Rect x={-13} y={-8} width={26} height={16} cornerRadius={3} fill={c} stroke={colors.canvas} strokeWidth={2} />
               {p.def.kind === 'forklift' && <Rect x={13} y={-6} width={7} height={2.5} fill={c} />}
               {p.def.kind === 'forklift' && <Rect x={13} y={3.5} width={7} height={2.5} fill={c} />}

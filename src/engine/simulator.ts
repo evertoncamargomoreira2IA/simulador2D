@@ -328,7 +328,8 @@ export class Simulator {
         this.lengths.set(`${to.def.x},${to.def.y}|${from.def.x},${from.def.y}`, def.length);
       }
       const pool = def.poolId ? poolById.get(def.poolId) ?? null : null;
-      const vehicle = pool && pool.def.kind !== 'operator' ? pool : null;
+      // operador também pode fazer o transporte do trecho (pega no posto de entrada e entrega no de saída)
+      const vehicle = pool;
       const speed = vehicle ? vehicle.def.speed : model.settings.transportSpeed;
       const isPart = def.role === 'part' && to.def.type !== 'sink' && to.def.type !== 'source';
       const l: LinkRt = {
