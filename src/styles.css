@@ -686,3 +686,24 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .info-pop { position: absolute; z-index: 50; top: 22px; right: -12px; width: 260px; display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 10px; background: #0b1730; color: #e6eefc; border: 1px solid var(--accent, #3aa0ff); box-shadow: 0 8px 24px rgba(0,0,0,.45), 0 0 12px rgba(58,160,255,.35); font-size: 12px; line-height: 1.4; text-transform: none; letter-spacing: 0; font-weight: 400; white-space: normal; }
 .info-calc { font-family: ui-monospace, monospace; background: rgba(58,160,255,.12); padding: 4px 6px; border-radius: 6px; }
 .info-pop .btn { align-self: flex-end; }
+
+/* Biblioteca de soluções */
+.lib-btn { border-color: #f5c542 !important; color: #ffd866 !important; box-shadow: 0 0 10px rgb(245 197 66 / 0.35); }
+.lib { display: grid; grid-template-columns: 260px 1fr; gap: 16px; min-height: 0; }
+.lib-list { display: flex; flex-direction: column; gap: 6px; overflow: auto; max-height: 70vh; padding-right: 4px; }
+.lib-search { width: 100%; }
+.lib-item { text-align: left; background: var(--raised, rgb(255 255 255 / 0.04)); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.3; cursor: pointer; }
+.lib-item small { display: block; color: var(--accent); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+.lib-item.on, .lib-item:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.lib-body { overflow: auto; max-height: 70vh; padding-right: 6px; }
+.lib-body h3 { margin: 0 0 8px; font-size: 18px; }
+.lib-why { background: rgb(47 140 255 / 0.1); border-left: 3px solid var(--accent); padding: 8px 10px; border-radius: 6px; font-size: 13px; }
+.lib-steps { list-style: none; padding: 0; margin: 12px 0; display: flex; flex-direction: column; gap: 14px; }
+.lib-steps li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; }
+.lib-steps p { margin: 3px 0 6px; font-size: 13px; }
+.lib-n { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 13px; }
+.lib-shot { padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: none; cursor: zoom-in; display: block; max-width: 100%; }
+.lib-shot img { display: block; max-width: 100%; height: auto; }
+.lib-zoom { position: fixed; inset: 0; z-index: 2000; background: rgb(0 0 0 / 0.8); display: grid; place-items: center; cursor: zoom-out; padding: 20px; }
+.lib-zoom img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 0 40px rgb(47 140 255 / 0.4); }
+@media (max-width: 760px) { .lib { grid-template-columns: 1fr; } .lib-list { max-height: 30vh; } }

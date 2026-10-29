@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_SETTINGS } from '../engine/types';
 import { modelStore, type SavedMeta } from '../io/storage';
-import { elementsModel, lp2Model, simpleModel, combineModel } from '../model/builder';
+import { elementsModel, lp2Model, simpleModel, combineModel, transportModel } from '../model/builder';
 import { privateExample, useStore } from '../store';
 import { ACCEPT, importAnyFile } from './fileImport';
 import { Modal } from './Modal';
@@ -32,13 +32,14 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
     st().openModel(blankModel(name.trim() || 'Novo trabalho'), 'Trabalho novo. Arraste a planta (DXF ou imagem) para a tela e monte a linha pela paleta: cada bloco novo já sai ligado ao anterior.');
     onClose();
   };
-  const example = (k: 'real' | 'main' | 'lp2' | 'simple' | 'elements' | 'combine') => {
+  const example = (k: 'real' | 'main' | 'lp2' | 'simple' | 'elements' | 'combine' | 'transport') => {
     const ex = privateExample();
     const main = k === 'main' ? privateExample('main') : null;
     if (main) st().openModel(main, 'Main line com operações e atividades de cada posto. Veja Análises → Yamazumi.');
     if (k === 'real' && ex) st().openModel(ex, 'Linha real carregada sobre o layout DXF. Clique em ▶ Start.');
     if (k === 'lp2') st().openModel(lp2Model(), 'Exemplo LP2 carregado (70 postos, 12 s por posto).');
     if (k === 'elements') st().openModel(elementsModel(), 'Linha exemplo com operações e atividades: estudo por elemento. Veja Análises → Yamazumi.');
+    if (k === 'transport') st().openModel(transportModel(), 'Exemplo: dois buffers abastecem o Posto destino; o abastecedor leva 4 peças por viagem. Clique em ▶ Start.');
     if (k === 'combine') st().openModel(combineModel(), 'Exemplo: 3 postos fazem peças diferentes, o AMR e o abastecedor levam até o Posto X, que junta tudo em um produto. Clique em ▶ Start e no Posto X.');
     if (k === 'simple') st().openModel(simpleModel(), 'Linha exemplo simples carregada.');
     onClose();
@@ -77,6 +78,7 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
             <button className="btn" onClick={() => example('simple')}>Exemplo: linha simples</button>
             <button className="btn" onClick={() => example('elements')}>Exemplo: linha com atividades (Yamazumi)</button>
             <button className="btn" onClick={() => example('combine')}>Exemplo: combinar peças com AMR</button>
+            <button className="btn" onClick={() => example('transport')}>Exemplo: operador levando peças</button>
           </div>
         </section>
         <section className="section">

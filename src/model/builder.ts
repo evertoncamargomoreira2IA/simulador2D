@@ -204,6 +204,34 @@ export function combineModel(): Model {
   };
 }
 
+/** Exemplo didático: dois buffers abastecem o mesmo posto manual e um operador leva as peças, 4 por viagem. */
+export function transportModel(): Model {
+  const nd = (type: NodeType, id: string, name: string, x: number, y: number, extra: Partial<NodeDef> = {}) =>
+    makeNode(type, { id, name, x, y, ...extra });
+  const nodes: NodeDef[] = [
+    nd('source', 'S1', 'Material A', 80, 100),
+    nd('machine', 'A', 'Posto A', 240, 100, { ...MANUAL_PATCH, cycleTime: 20, operators: 1 }),
+    nd('buffer', 'B1', 'Buffer A', 420, 100, { capacity: 10 }),
+    nd('source', 'S2', 'Material B', 80, 340),
+    nd('machine', 'B', 'Posto B', 240, 340, { ...MANUAL_PATCH, cycleTime: 20, operators: 1 }),
+    nd('buffer', 'B2', 'Buffer B', 420, 340, { capacity: 10 }),
+    nd('machine', 'D', 'Posto destino', 660, 220, { ...MANUAL_PATCH, cycleTime: 9, operators: 1, queueCap: 4 }),
+    nd('sink', 'FG', 'Produto pronto', 860, 220),
+  ];
+  const L = (from: string, to: string, extra: Partial<LinkDef> = {}): LinkDef => ({ id: newId('L'), from, to, weight: 1, ...extra });
+  return {
+    name: 'Exemplo: operador levando peças de dois buffers',
+    nodes,
+    links: [
+      L('S1', 'A'), L('A', 'B1'), L('B1', 'D', { poolId: 'OP', tripQty: 4 }),
+      L('S2', 'B'), L('B', 'B2'), L('B2', 'D', { poolId: 'OP', tripQty: 4 }),
+      L('D', 'FG'),
+    ],
+    pools: [makePool('operator', { id: 'OP', name: 'Abastecedor', count: 1, x: 540, y: 220 })],
+    settings: { ...DEFAULT_SETTINGS, duration: 8 * 3600 },
+  };
+}
+
 type Act = [string, number, ActivityKind];
 const ELEMENT_LINE: { name: string; type?: NodeType; capacity?: number; efficiency?: number; ops: [string, Act[]][] }[] = [
   { name: 'Posto 1 – Base', ops: [['Preparar base', [['Pegar base do carrinho', 4, 'nva'], ['Inspecionar base', 3, 'nva'], ['Posicionar no pallet', 3, 'va']]], ['Etiquetas', [['Colar etiqueta de série', 6, 'va'], ['Escanear série', 3, 'nva'], ['Colar etiqueta de lote', 5, 'va']]], ['Fixação inicial', [['Fixar 4 parafusos', 12, 'va'], ['Andar até o kanban', 4, 'walk']]]] },

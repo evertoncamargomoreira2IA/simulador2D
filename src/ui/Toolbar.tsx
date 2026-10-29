@@ -4,11 +4,12 @@ import { useRef, useState } from 'react';
 import { lineKpi } from '../engine/metrics';
 import { exportModelCsv, exportModelJson, exportResultsXlsx } from '../io/exporter';
 import { ACCEPT, importAnyFile } from './fileImport';
-import { elementsModel, lp2Model, simpleModel, combineModel } from '../model/builder';
+import { elementsModel, lp2Model, simpleModel, combineModel, transportModel } from '../model/builder';
 import { privateExample, useStore } from '../store';
 import { applyTheme, fmtTime, loadTheme } from './theme';
 import { effectiveTakt } from '../engine/balance';
 import { Tutorial, downloadTemplate } from './Tutorial';
+import { Library } from './Library';
 import { RecentSelect, SavedModels, saveCurrent } from './SaveDialog';
 
 const SPEEDS = [1, 2, 5, 10, 30, 60, 120, 300, 600];
@@ -16,6 +17,7 @@ const SPEEDS = [1, 2, 5, 10, 30, 60, 120, 300, 600];
 export function Toolbar() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [help, setHelp] = useState(false);
+  const [lib, setLib] = useState(false);
   const showSaved = useStore((s) => s.showSaved);
   const saved = useStore((s) => s.saved);
   const undoLabel = useStore((s) => s.undoLabel);
@@ -74,6 +76,7 @@ export function Toolbar() {
             if (main) st().openModel(main, 'Main line com operações e atividades de cada posto. Veja Análises → Yamazumi.');
             if (e.target.value === 'lp2') st().openModel(lp2Model(), 'Exemplo LP2 carregado (70 postos, 12 s por posto).');
             if (e.target.value === 'elements') st().openModel(elementsModel(), 'Linha exemplo com operações e atividades: estudo por elemento. Veja Análises → Yamazumi.');
+            if (e.target.value === 'transport') st().openModel(transportModel(), 'Exemplo: dois buffers abastecem o Posto destino; o abastecedor leva 4 peças por viagem.');
             if (e.target.value === 'combine') st().openModel(combineModel(), 'Exemplo: 3 postos, AMR e abastecedor levam as peças ao Posto X, que junta tudo em um produto.');
             if (e.target.value === 'simple') st().openModel(simpleModel(), 'Linha exemplo simples carregada.');
           }}
@@ -85,6 +88,7 @@ export function Toolbar() {
           <option value="simple">Linha simples</option>
           <option value="elements">Linha com atividades (Yamazumi)</option>
           <option value="combine">Combinar peças com AMR</option>
+          <option value="transport">Operador levando peças</option>
         </select>
         <button className="btn icon" disabled={!undoLabel} onClick={() => st().undo()} title={undoLabel ? `Desfazer ${undoLabel} (Ctrl+Z)` : 'Nada para desfazer'} aria-label="Desfazer">↶</button>
         <button className="btn icon" disabled={!redoLabel} onClick={() => st().redo()} title={redoLabel ? `Refazer ${redoLabel} (Ctrl+Y)` : 'Nada para refazer'} aria-label="Refazer">↷</button>
@@ -167,8 +171,10 @@ export function Toolbar() {
         <button className="btn" onClick={() => st().setOpsFor(st().selected[0] ?? '')} title="Operações e atividades de cada posto (estudo por elemento e Yamazumi)">Operações</button>
         <button className="btn ai" onClick={() => st().setAnalysis('ia')} title="Sugestões de melhoria com IA">✦ IA</button>
         <button className="btn" onClick={() => setHelp(true)} title="Passo a passo, siglas e funções">? Como usar</button>
+        <button className="btn lib-btn" onClick={() => setLib(true)} title="Biblioteca de soluções: dúvidas comuns com passo a passo em imagens">💡 Biblioteca</button>
       </div>
       {help && <Tutorial onClose={() => setHelp(false)} />}
+      {lib && <Library onClose={() => setLib(false)} />}
       {showSaved && <SavedModels onClose={() => st().setShowSaved(false)} />}
       <span className={`live${run === 'running' ? ' on' : ''}`}><i />{run === 'running' ? 'Ao vivo' : run === 'done' ? 'Concluído' : run === 'paused' ? 'Pausado' : 'Pronto'}</span>
       <UphField />
