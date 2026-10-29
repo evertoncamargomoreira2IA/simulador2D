@@ -46,6 +46,7 @@ export const FUNCOES: [string, string, string][] = [
   ['Barra', 'Início', 'Trabalho novo, trabalhos salvos, abrir arquivo ou exemplos.'],
   ['Barra', 'Exemplos', 'Linhas prontas para testar (simples, 70 postos, com atividades).'],
   ['Barra', '↶ ↷', 'Desfazer e refazer (Ctrl+Z / Ctrl+Y).'],
+  ['Simulação', '⚠ Linha travada', 'Se um bloco para de andar por configuração (componente que não chega, agrupamento que não completa, recurso com 0 unidades, montagem sem Principal, linha sem produto acabado), a simulação pausa e mostra o que fazer, com botão para ajustar.'],
   ['Barra', 'Salvar / Salvos / Recentes', 'Guarda o trabalho e reabre os 10 últimos.'],
   ['Barra', 'Importar / Exportar', 'Planilha padrão, SOE, Excel, JSON, DXF ou imagem; exporta planilha e resultados.'],
   ['Barra', 'Start / Stop / Replay / Fim', 'Roda a simulação ao vivo, pausa, recomeça ou pula para o fim do turno.'],

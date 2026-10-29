@@ -707,3 +707,10 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .lib-zoom { position: fixed; inset: 0; z-index: 2000; background: rgb(0 0 0 / 0.8); display: grid; place-items: center; cursor: zoom-out; padding: 20px; }
 .lib-zoom img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 0 40px rgb(47 140 255 / 0.4); }
 @media (max-width: 760px) { .lib { grid-template-columns: 1fr; } .lib-list { max-height: 30vh; } }
+
+/* Linha travada */
+.stall-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 12px; }
+.stall-list li { background: rgb(255 59 107 / 0.08); border: 1px solid rgb(255 59 107 / 0.45); border-radius: 10px; padding: 10px 12px; }
+.stall-list li.done { background: rgb(46 204 113 / 0.08); border-color: rgb(46 204 113 / 0.5); }
+.stall-list p { margin: 4px 0; font-size: 13px; }
+.stall-ok { color: #2ecc71; font-weight: 700; align-self: center; }

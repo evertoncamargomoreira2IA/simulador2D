@@ -19,6 +19,7 @@ import { OpsEditor } from './OpsEditor';
 import { SoeImport } from './SoeImport';
 import { StationOrder } from './StationOrder';
 import { StartScreen } from './StartScreen';
+import { StallAlert } from './StallAlert';
 
 export function App() {
   const showOrder = useStore((s) => s.showOrder);
@@ -134,6 +135,7 @@ export function App() {
       {showOrder && <StationOrder onClose={() => useStore.getState().setShowOrder(false)} />}
       {showSoe && <SoeImport onClose={() => useStore.getState().setShowSoe(false)} />}
       {transportFor && <TransportBind start={transportFor} onClose={() => useStore.getState().setTransportFor(null)} />}
+      <StallAlert />
       {opsFor !== null && <OpsEditor start={opsFor} onClose={() => useStore.getState().setOpsFor(null)} />}
     </div>
   );

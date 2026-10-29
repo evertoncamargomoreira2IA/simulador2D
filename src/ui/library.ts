@@ -53,6 +53,17 @@ export const LIBRARY: LibItem[] = [
     example: 'transport',
   },
   {
+    id: 'travada',
+    q: 'A simulação parou com "Linha travada". O que faço?',
+    tag: 'Simulação',
+    why: 'O simulador percebeu peças paradas por causa da configuração: um componente que nunca chega, um agrupamento que não completa, um recurso sem unidades ou um destino cheio. Ele pausa e diz qual bloco ajustar.',
+    steps: [
+      { text: 'Leia o motivo de cada bloco e o "O que fazer".', img: 'travada-1' },
+      { text: 'Clique no botão verde para ajustar na hora (ou em Mostrar no layout para ir até o bloco). Depois, Fechar e rodar de novo → ▶ Start.', img: 'travada-2' },
+    ],
+    tip: 'Continuar mesmo assim ignora o aviso até você mudar o modelo.',
+  },
+  {
     id: 'combinar',
     q: 'Recebo peças de vários postos e junto tudo em um produto',
     tag: 'Montagem',

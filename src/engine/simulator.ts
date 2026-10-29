@@ -78,6 +78,15 @@ export interface LinkRt {
   pool: PoolRt | null;
 }
 
+/** Motivo de peça parada num posto (diagnóstico de trava). */
+export type StuckFact =
+  | { kind: 'parts'; node: string; link: string; from: string; have: number; need: number }
+  | { kind: 'batch'; node: string; have: number; need: number }
+  | { kind: 'noUnits'; node: string; link?: string; pool: string }
+  | { kind: 'noMain'; node: string }
+  | { kind: 'trip'; node: string; link: string; have: number; need: number }
+  | { kind: 'full'; node: string; link: string; to: string };
+
 export interface NodeRt {
   def: NodeDef;
   out: LinkRt[];
@@ -220,6 +229,8 @@ export class Simulator {
   t0 = 0;
   statsStart = 0;
   completed = 0;
+  /** Último instante em que a linha entregou peça (diagnóstico de trava). */
+  lastOutputAt = 0;
   completedGood = 0;
   consumed = 0;
   /** Unidades e cargas que chegaram ao destino final (sink). */
@@ -692,6 +703,56 @@ export class Simulator {
     return moved;
   }
 
+  /**
+   * Fatos para o diagnóstico de trava: postos com peça parada e o motivo de configuração.
+   * Só olha o estado atual; quem decide se a linha está travada é o diagnose.ts.
+   */
+  stuckFacts(): StuckFact[] {
+    const out: StuckFact[] = [];
+    const moving = this.transits.size > 0 || this.pools.some((p) => p.units.some((u) => u.busy));
+    for (const n of this.nodes) {
+      const id = n.def.id;
+      if (n.def.type === 'sink' || n.down || n.paused) continue;
+      if (n.queue.length > 0 && n.processing.length === 0) {
+        for (const l of n.partLinks) {
+          const have = n.parts.get(l)!.length;
+          if (have < this.partQty(l)) out.push({ kind: 'parts', node: id, link: l.def.id, from: l.from.def.id, have, need: this.partQty(l) });
+        }
+        const batch = this.batchOf(n);
+        const units = this.queuedUnits(n) + n.reservedUnits;
+        if (batch && units < batch) out.push({ kind: 'batch', node: id, have: this.queuedUnits(n), need: batch });
+        if (n.pool && n.pool.units.length === 0) out.push({ kind: 'noUnits', node: id, pool: n.pool.def.id });
+      }
+      if (n.partLinks.length && n.queue.length === 0 && !n.inLinks.some((l) => !l.isPart)) out.push({ kind: 'noMain', node: id });
+      const seen = new Set<LinkRt>();
+      for (const e of n.done) {
+        const l = e.next;
+        if (!l || seen.has(l)) continue;
+        if (e.awaitingPickup) {
+          if (l.pool && l.pool.units.length === 0) {
+            seen.add(l);
+            out.push({ kind: 'noUnits', node: id, link: l.def.id, pool: l.pool.def.id });
+          } else if (!e.called && this.tripOf(l) > 1 && !moving) {
+            seen.add(l);
+            const have = n.done.filter((x) => x.next === l && x.awaitingPickup && !x.called).length;
+            out.push({ kind: 'trip', node: id, link: l.def.id, have, need: this.tripOf(l) });
+          }
+        } else if (!this.canAcceptVia(l)) {
+          seen.add(l);
+          out.push({ kind: 'full', node: id, link: l.def.id, to: l.to.def.id });
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Nada se mexe: nenhum posto trabalhando, nenhuma peça ou recurso andando, e há peças na linha. */
+  get deadlocked(): boolean {
+    if (this.wip <= 0 || this.transits.size > 0) return false;
+    if (this.pools.some((p) => p.units.some((u) => u.busy))) return false;
+    return this.nodes.every((n) => n.processing.length === 0 && !n.down && !n.paused && this.now >= n.setupUntil);
+  }
+
   private isReturn(n: NodeRt, link: LinkRt): boolean {
     return n.def.type === 'rework' || link.to.out.some((l) => l.def.once && l.to === n);
   }
@@ -1033,6 +1094,7 @@ export class Simulator {
   /** Conta a produção da linha (no ponto de medição, ou no destino final se não houver). */
   private recordOutput(e: Entity): void {
     e.counted = true;
+    this.lastOutputAt = this.now;
     const q = e.qty;
     this.completed += q;
     this.completedGood += q === 1 ? (e.reworks === 0 ? 1 : 0) : Math.max(0, q - e.reworks);
