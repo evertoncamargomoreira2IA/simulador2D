@@ -5,7 +5,6 @@ import { nodeKpi } from '../engine/metrics';
 import type { LinkDef, NodeDef, NodeState, NodeType, PoolDef, PoolKind } from '../engine/types';
 import { isAssembly, makePool, MANUAL_PATCH, newId, POOL_LABEL, TYPE_LABEL } from '../engine/types';
 import { useStore } from '../store';
-import { Operations } from './Operations';
 import { fmt, pct, STATE_LABEL } from './theme';
 
 /** `machine`: só faz sentido com máquina (some no posto manual). `assembly`: só na montagem. */
@@ -108,6 +107,11 @@ export function PropertiesPanel() {
         <aside className="props">
           <h2>{n.name}</h2>
           <p className="sub">{isAssembly(n, model.links) ? 'Montagem' : n.manual ? 'Posto manual' : TYPE_LABEL[n.type]} · ID {n.id}</p>
+          {(n.type === 'machine' || n.type === 'inspection' || n.type === 'rework') && (
+            <button className="btn primary ops-btn" onClick={() => useStore.getState().setOpsFor(n.id)}>
+              Operações e atividades{n.operations?.length ? ` (${n.operations.reduce((s, o) => s + o.activities.length, 0)})` : ''}
+            </button>
+          )}
           <div className="fields">
             <label className="field full">
               <span>Nome</span>
@@ -218,7 +222,6 @@ export function PropertiesPanel() {
             })}
           </div>
 
-          {PROCESS.includes(n.type) && n.type !== 'buffer' && <Operations n={n} />}
           <Supply nodeId={n.id} />
 
           <div className="section">

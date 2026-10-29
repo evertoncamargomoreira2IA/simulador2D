@@ -14,11 +14,13 @@ import { setDownloadNotice } from '../io/exporter';
 setDownloadNotice((m) => useStore.getState().setMessage(m));
 import { Analysis } from './Analysis';
 import { StationDetail } from './StationDetail';
+import { OpsEditor } from './OpsEditor';
 import { StationOrder } from './StationOrder';
 import { StartScreen } from './StartScreen';
 
 export function App() {
   const showOrder = useStore((s) => s.showOrder);
+  const opsFor = useStore((s) => s.opsFor);
   const showStart = useStore((s) => s.showStart);
   const [dropping, setDropping] = useState(false);
   useEffect(() => {
@@ -125,6 +127,7 @@ export function App() {
       <Analysis />
       {showStart && <StartScreen onClose={() => useStore.getState().setShowStart(false)} />}
       {showOrder && <StationOrder onClose={() => useStore.getState().setShowOrder(false)} />}
+      {opsFor !== null && <OpsEditor start={opsFor} onClose={() => useStore.getState().setOpsFor(null)} />}
     </div>
   );
 }

@@ -91,6 +91,9 @@ interface State {
   /** Ordem e visibilidade dos postos nos gráficos: muda o modelo sem reiniciar a simulação. */
   setChartView: (order: string[] | undefined, hidden: string[] | undefined) => void;
   showOrder: boolean;
+  /** Janela de operações e atividades aberta (id do posto, '' = primeiro). */
+  opsFor: string | null;
+  setOpsFor: (id: string | null) => void;
   showStart: boolean;
   /** Equipe criada esperando o clique no posto que vai atender. */
   pendingPool: string | null;
@@ -333,6 +336,8 @@ export const useStore = create<State>((set, get) => {
       restore(history.redo(get().model), 'Refeito', label);
     },
     showOrder: false,
+    opsFor: null,
+    setOpsFor: (opsFor) => set({ opsFor }),
     setShowOrder: (showOrder) => set({ showOrder }),
     setRun: (run) => set({ run }),
     setSpeed: (speed) => set({ speed }),

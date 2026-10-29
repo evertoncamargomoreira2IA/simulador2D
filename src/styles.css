@@ -460,3 +460,16 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .tasks .task .link { background: none; border: 0; padding: 0; color: inherit; text-align: left; cursor: pointer; font: inherit; }
 .tasks .task .link:hover { text-decoration: underline; }
 .tasks > .btn.primary { margin-top: 6px; }
+.ops-btn { width: 100%; margin: 4px 0 10px; }
+.ops-editor { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 14px; min-height: 380px; }
+.ops-list { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow: auto; border-right: 1px solid var(--line); padding-right: 8px; }
+.ops-list button { display: grid; width: 100%; text-align: left; gap: 2px; padding: 6px 8px; border: 0; border-radius: 6px; background: none; color: inherit; cursor: pointer; font: inherit; }
+.ops-list button:hover { background: var(--panel); }
+.ops-list button.on { background: var(--accent); color: #fff; }
+.ops-list button.on small { color: #fff; }
+.ops-list small { font-size: 11px; }
+.ops-list small.bad { color: var(--st-down); }
+.ops-pane { max-height: 60vh; overflow: auto; }
+.ops-pane .ops { margin-top: 0; }
+.ops-pane .ops .act { grid-template-columns: minmax(0, 1fr) 70px 170px 26px; font-size: 13px; }
+@media (max-width: 720px) { .ops-editor { grid-template-columns: 1fr; } .ops-list { border-right: 0; max-height: 30vh; } }

@@ -98,7 +98,8 @@ export function CanvasView() {
   }
 
   // Ligação arrastando: da bolinha do bloco (ou do bloco, no modo Conectar) até o destino.
-  const [wire, setWire] = useState<{ from: string; x: number; y: number; moved: boolean } | null>(null);
+  // relink: arrastando a ponta (to) ou a origem (from) de uma ligação existente
+  const [wire, setWire] = useState<{ from: string; x: number; y: number; moved: boolean; relink?: { id: string; end: 'to' | 'from' } } | null>(null);
   const nodeAt = (x: number, y: number) =>
     useStore.getState().model.nodes.find((n) => Math.abs(n.x - x) <= W / 2 + 6 && Math.abs(n.y - y) <= H / 2 + 6);
   function startWire(from: string) {
@@ -111,6 +112,18 @@ export function CanvasView() {
     const st = useStore.getState();
     const target = p ? nodeAt(toWorld(p.x, p.y).x, toWorld(p.x, p.y).y) : undefined;
     setWire(null);
+    if (wire.relink) {
+      const l = st.model.links.find((x) => x.id === wire.relink!.id);
+      if (!l || !target) return;
+      const from = wire.relink.end === 'from' ? target.id : l.from;
+      const to = wire.relink.end === 'to' ? target.id : l.to;
+      if (from === to || (from === l.from && to === l.to)) return;
+      if (st.model.links.some((x) => x.id !== l.id && x.from === from && x.to === to)) return st.setMessage('Essa ligação já existe.');
+      if (target.type === (wire.relink.end === 'to' ? 'source' : 'sink')) return st.setMessage(wire.relink.end === 'to' ? 'Um Source só tem saída.' : 'Finished Goods não tem saída.');
+      st.updateLink(l.id, { from, to });
+      st.setMessage(`Ligação agora vai de ${st.model.nodes.find((n) => n.id === from)?.name} para ${st.model.nodes.find((n) => n.id === to)?.name}.`);
+      return;
+    }
     if (target && target.id !== wire.from) {
       st.addLink(wire.from, target.id);
       st.setConnectFrom(null);
@@ -349,6 +362,34 @@ export function CanvasView() {
                       useStore.getState().select([], l.id);
                     }}
                   />
+                  {sel && !wire && (
+                    <>
+                      {(['from', 'to'] as const).map((end) => (
+                        <Circle
+                          key={end}
+                          x={end === 'to' ? pts[2] : pts[0]}
+                          y={end === 'to' ? pts[3] : pts[1]}
+                          radius={7}
+                          fill={colors.canvas}
+                          stroke={colors.accent}
+                          strokeWidth={2.5}
+                          hitStrokeWidth={10}
+                          onMouseEnter={(e) => {
+                            const c = e.target.getStage()?.container();
+                            if (c) c.style.cursor = 'grab';
+                          }}
+                          onMouseLeave={(e) => {
+                            const c = e.target.getStage()?.container();
+                            if (c) c.style.cursor = '';
+                          }}
+                          onMouseDown={(e) => {
+                            e.cancelBubble = true;
+                            setWire({ from: l.from, x: end === 'to' ? b.x : a.x, y: end === 'to' ? b.y : a.y, moved: false, relink: { id: l.id, end } });
+                          }}
+                        />
+                      ))}
+                    </>
+                  )}
                   {!!l.length && layers.labels && (
                     <Text
                       x={(pts[0] + pts[2]) / 2 - 60}
@@ -425,6 +466,24 @@ export function CanvasView() {
         {wire?.moved && (
           <Layer listening={false}>
             {(() => {
+              const rl = wire.relink ? model.links.find((x) => x.id === wire.relink!.id) : undefined;
+              if (rl && wire.relink!.end === 'from') {
+                const b = byId.get(rl.to);
+                const t = nodeAt(wire.x, wire.y);
+                if (!b) return null;
+                const ok = t && t.id !== rl.to;
+                return (
+                  <Arrow
+                    points={[ok ? t.x + W / 2 : wire.x, ok ? t.y : wire.y, b.x - W / 2 - 4, b.y]}
+                    stroke={colors.accent}
+                    fill={colors.accent}
+                    strokeWidth={2.5}
+                    dash={ok ? undefined : [8, 5]}
+                    pointerLength={10}
+                    pointerWidth={10}
+                  />
+                );
+              }
               const a = model.nodes.find((x) => x.id === wire.from);
               const t = nodeAt(wire.x, wire.y);
               if (!a) return null;
@@ -637,7 +696,7 @@ function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable
       }}
       onDblClick={(e) => {
         e.cancelBubble = true;
-        useStore.getState().setDetail(def.id);
+        linkNearest(def.id);
       }}
       onDblTap={(e) => {
         e.cancelBubble = true;
@@ -983,6 +1042,30 @@ function glyph(t: NodeType): string {
 }
 
 /** Pontos de um link, saindo da borda do bloco de origem até a borda do destino. */
+/**
+ * Seta rápida (duplo clique no bloco): liga ao bloco mais próximo que ainda não recebe dele,
+ * preferindo os que ainda não têm entrada. Sem candidato, abre os indicadores do posto.
+ */
+export function linkNearest(id: string) {
+  const st = useStore.getState();
+  const m = st.model;
+  const a = m.nodes.find((n) => n.id === id);
+  if (!a) return;
+  if (a.type === 'sink') return st.setDetail(id);
+  const fed = new Set(m.links.map((l) => l.to));
+  let best: (typeof m.nodes)[number] | undefined;
+  let bestD = Infinity;
+  for (const n of m.nodes) {
+    if (n.id === id || n.type === 'source' || m.links.some((l) => (l.from === id && l.to === n.id) || (l.from === n.id && l.to === id))) continue;
+    const d = Math.hypot(n.x - a.x, n.y - a.y) * (fed.has(n.id) ? 3 : 1);
+    if (d < bestD) (best = n), (bestD = d);
+  }
+  if (!best) return st.setDetail(id);
+  st.addLink(id, best.id);
+  st.select([best.id]);
+  st.setMessage(`Seta de "${a.name}" para "${best.name}". Duplo clique de novo em "${best.name}" para seguir a linha (Ctrl+Z desfaz).`);
+}
+
 function edgePoints(a: { x: number; y: number }, b: { x: number; y: number }): number[] {
   const dx = b.x - a.x;
   const dy = b.y - a.y;

@@ -175,6 +175,7 @@ export function Yamazumi() {
           <button className={`btn${perPiece ? ' on' : ''}`} onClick={() => setPerPiece(true)} title="÷ postos paralelos, fração de peças e lote: a mesma escala do Cycle × Takt">Por peça da linha</button>
           <button className={`btn${!perPiece ? ' on' : ''}`} onClick={() => setPerPiece(false)} title="Tempo de cada atividade como cadastrado">Conteúdo de trabalho</button>
         </div>
+        <button className="btn primary" onClick={() => useStore.getState().setOpsFor('')}>Editar atividades</button>
         <button className={`btn${onlyOps ? ' on' : ''}`} onClick={() => setOnlyOps(!onlyOps)}>Só postos com atividades</button>
         <details className="pick">
           <summary className="btn">Postos ({pick ? pick.size : all.length}/{all.length}) ▾</summary>
