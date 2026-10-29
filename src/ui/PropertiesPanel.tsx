@@ -98,6 +98,15 @@ export function PropertiesPanel() {
             <button className="btn primary full" onClick={() => useStore.getState().setTransportFor({ linkId: l.id, poolId: l.poolId })}>
               🚚 Vincular transporte (operador, AGV, AMR)…
             </button>
+            {!!l.poolId && (l.tripQty ?? 1) > 1 && (
+              <label className="field full">
+                <span>Carrinhos/bins deste item atrás de {to?.name} ({l.tripQty} peças cada)</span>
+                <input id="link-bins" type="number" min={1} step={1} value={l.bins ?? 2} onChange={(e) => {
+                  const v = Math.max(1, Math.round(Number(e.target.value)));
+                  useStore.getState().updateLink(l.id, { bins: v === 2 ? undefined : v });
+                }} />
+              </label>
+            )}
             <label className="field full check">
               <input id="link-once" type="checkbox" checked={!!l.once} onChange={(e) => useStore.getState().updateLink(l.id, { once: e.target.checked || undefined })} />
               <span>Cada peça passa só uma vez (amostra que volta ao posto, ex.: OBA)</span>

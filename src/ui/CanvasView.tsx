@@ -401,6 +401,11 @@ export function CanvasView() {
                       if (e.evt.ctrlKey || e.evt.metaKey) useStore.getState().ctrlPick({ linkId: l.id });
                       else useStore.getState().select([], l.id);
                     }}
+                    onDblClick={(e) => {
+                      // duplo clique na seta: editar transporte, peças por viagem e carrinhos
+                      e.cancelBubble = true;
+                      useStore.getState().setTransportFor({ linkId: l.id, poolId: l.poolId });
+                    }}
                   />
                   {sel && !wire && (
                     <>
@@ -504,6 +509,33 @@ export function CanvasView() {
             );
           })}
         </Layer>
+
+        {layers.links && (
+          <Layer listening={false}>
+            {/* carrinhos/bins de cada item atrás do posto (transporte com viagem de várias peças) */}
+            {sim.nodes.flatMap((rt) => {
+              const binned = rt.inLinks.filter((l) => sim.binCap(l) > 0);
+              const n = byId.get(rt.def.id);
+              if (!binned.length || !n) return [];
+              return binned.map((l, i) => {
+                const cap = sim.binCap(l);
+                const have = sim.binHave(l);
+                const bw = 46;
+                const x = n.x - W / 2 - bw - 8;
+                const y = n.y - (binned.length * 18) / 2 + i * 18;
+                const f = Math.min(1, have / cap);
+                return (
+                  <Group key={`bin${l.def.id}`} x={x} y={y}>
+                    <Rect width={bw} height={14} cornerRadius={3} fill={colors.canvas} stroke={colors.human} strokeWidth={1.2} />
+                    <Rect width={bw * f} height={14} cornerRadius={3} fill={colors.human} opacity={0.35} />
+                    <Text width={bw} y={2} align="center" text={`${have}/${cap}`} fontSize={9} fontStyle="bold" fill={colors.ink} />
+                    {layers.labels && <Text x={-84} width={80} y={2} align="right" wrap="none" ellipsis text={l.from.def.name} fontSize={9} fill={colors.muted} />}
+                  </Group>
+                );
+              });
+            })}
+          </Layer>
+        )}
 
         {wire?.moved && (
           <Layer listening={false}>
@@ -1051,6 +1083,13 @@ function Units({ sim, colors, labels, draggable, onDrop, selectedPool }: { sim: 
             onMouseLeave: (e: Konva.KonvaEventObject<MouseEvent>) => {
               const c = e.target.getStage()?.container();
               if (c) c.style.cursor = '';
+            },
+            onDblClick: (e: Konva.KonvaEventObject<MouseEvent>) => {
+              // duplo clique no operador/veículo: abre o vínculo do trecho que ele atende
+              e.cancelBubble = true;
+              const st = useStore.getState();
+              const l = st.model.links.find((x) => x.poolId === p.def.id);
+              st.setTransportFor({ linkId: l?.id, poolId: p.def.id });
             },
             onClick: (e: Konva.KonvaEventObject<MouseEvent>) => {
               e.cancelBubble = true;

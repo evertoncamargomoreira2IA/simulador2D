@@ -95,4 +95,27 @@ describe('dois postos abastecendo o mesmo destino com peças por viagem', () => 
     sim.runToEnd();
     expect(lineKpi(sim).throughputPerHour).toBeGreaterThan(100);
   });
+  it('carrinhos/bins por item: AMR leva o carrinho inteiro de cada item para a montagem', () => {
+    // 50 do item B e 20 do item A, um AMR, montagem de 30 s
+    let k = 0;
+    const L = (from: string, to: string, x: Partial<LinkDef> = {}): LinkDef => ({ id: `B${k++}`, from, to, weight: 1, ...x });
+    const N = (t: NodeDef['type'], id: string, x: number, y: number, e: Partial<NodeDef> = {}) => makeNode(t, { id, name: id, x, y, cv: 0, ...e });
+    const m: Model = {
+      name: 'bins',
+      nodes: [N('source', 'S', 0, 200), N('machine', 'P1', 150, 200, { cycleTime: 30 }), N('machine', 'X', 400, 200, { cycleTime: 30, assembly: true, partBuffer: 2 }), N('sink', 'FG', 550, 200),
+        N('source', 'SB', 0, 400), N('buffer', 'BufB', 150, 400, { capacity: 200 }), N('source', 'SA', 0, 0), N('buffer', 'BufA', 150, 0, { capacity: 200 })],
+      links: [L('S', 'P1'), L('P1', 'X'), L('X', 'FG'), L('SB', 'BufB'), L('BufB', 'X', { role: 'part', poolId: 'AMR', tripQty: 50 }), L('SA', 'BufA'), L('BufA', 'X', { role: 'part', poolId: 'AMR', tripQty: 20 })],
+      pools: [makePool('amr', { id: 'AMR', name: 'AMR', count: 1, speed: 1, loadTime: 10, x: 300, y: 300 })],
+      settings: { ...DEFAULT_SETTINGS, duration: 4 * 3600 },
+    };
+    const s = new Simulator(m);
+    s.runToEnd();
+    // a montagem roda no ritmo dela (~120/h), sem cair para viagens de 1 peça
+    expect(s.completed).toBeGreaterThan(4 * 110);
+    const bins = s.links.filter((l) => l.isPart);
+    expect(bins.map((l) => s.binCap(l))).toEqual([100, 40]);
+    for (const l of bins) expect(s.binHave(l)).toBeLessThanOrEqual(s.binCap(l));
+    // viagens cheias: o AMR fez poucas viagens (peças / viagem)
+    expect(s.pools[0].requests).toBeLessThan((s.completed * 2) / 20 + 10);
+  });
 });

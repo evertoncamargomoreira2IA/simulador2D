@@ -67,6 +67,8 @@ export const FUNCOES: [string, string, string][] = [
   ['Layout', 'Ctrl + clique no operador e na seta', 'Abre a janela de vínculo: quem transporta, posto de entrada (output), posto de saída (input), produto ou componente de montagem, peças por viagem e ocupação estimada.'],
   ['Layout', 'Clique no operador / AGV / AMR', 'Seleciona o recurso: o painel da direita edita tudo (tipo, quantidade, velocidade, custo), mostra os vínculos e tem Apagar (ou tecla Delete).'],
   ['Painel do fluxo', '🚚 Vincular transporte', 'Abre a mesma janela de vínculo a partir da seta selecionada.'],
+  ['Layout', 'Duplo clique na seta ou no operador/AGV/AMR', 'Abre o vínculo de transporte para editar quem leva, peças por viagem e carrinhos.'],
+  ['Vínculo', 'Carrinhos/bins atrás do posto', 'Com viagem de várias peças, cada item tem os seus carrinhos no posto de destino (carrinhos × peças por viagem). Padrão 2: um em uso, um cheio esperando. Sem viagem é one piece flow.'],
   ['Painel do fluxo', 'Trilha do transporte', 'Pontos de curva na seta: arraste o ＋ no meio da seta para criar, o ponto azul para mover, duplo clique apaga. Trilha em L faz a curva de 90°. A peça e o operador seguem a trilha e a distância é medida por ela.'],
   ['Layout', 'Ajustar planta', 'Muda tamanho e posição do DXF ou imagem de fundo.'],
   ['Painel do posto', 'Tipo, tempos, operadores, gigas, eficiência', 'Dados do posto. Eficiência < 100% alonga o ciclo (ineficiência).'],

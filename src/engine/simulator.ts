@@ -53,6 +53,8 @@ export interface Entity {
   visited?: Set<string>;
   /** Postos de montagem onde a peça já recebeu os componentes (não consome de novo ao voltar). */
   assembled?: Set<string>;
+  /** Trecho pelo qual entrou na fila do posto atual (carrinho/bin do item). */
+  via?: LinkRt;
 }
 
 interface Job {
@@ -74,7 +76,7 @@ export interface LinkRt {
   travelTime: number;
   moved: number;
   isPart: boolean;
-  /** Componentes a caminho do estoque do posto (links de montagem). */
+  /** Peças a caminho do destino por este trecho (componentes ou carrinho/bin do item). */
   reserved: number;
   pool: PoolRt | null;
 }
@@ -628,11 +630,30 @@ export class Simulator {
     if (t === 'source') return false;
     const batch = this.batchOf(n);
     if (batch) return this.queuedUnits(n) + n.reservedUnits < batch + Math.max(0, n.def.queueCap);
-    const occ = n.queue.length + n.processing.length + n.done.length - this.staged(n) + n.reserved;
+    // peças nos carrinhos/bins dos transportes ficam fora da fila de entrada
+    let binned = 0;
+    for (const l of n.inLinks) if (!l.isPart && this.binCap(l)) binned += this.binHave(l) + l.reserved;
+    const occ = n.queue.length + n.processing.length + n.done.length - this.staged(n) + n.reserved - binned;
     return occ < Math.max(1, n.def.capacity) + Math.max(0, n.def.queueCap);
   }
 
+  /** Capacidade do carrinho/bin do item atrás do posto (0 = sem bin: fila do posto ou estoque de componentes). */
+  binCap(l: LinkRt): number {
+    const trip = this.tripOf(l);
+    return trip > 1 ? Math.max(1, Math.round(l.def.bins ?? 2)) * trip : 0;
+  }
+
+  /** Peças do item já no carrinho/bin atrás do posto. */
+  binHave(l: LinkRt): number {
+    if (l.isPart) return l.to.parts.get(l)!.length;
+    let q = 0;
+    for (const e of l.to.queue) if (e.via === l) q += e.qty;
+    return q;
+  }
+
   private canAcceptVia(l: LinkRt): boolean {
+    const bin = this.binCap(l);
+    if (bin) return this.binHave(l) + l.reserved < bin;
     if (!l.isPart) return this.canAccept(l.to);
     return l.to.parts.get(l)!.length + l.reserved < this.partQty(l) * Math.max(1, l.to.def.partBuffer ?? 2);
   }
@@ -657,6 +678,7 @@ export class Simulator {
   /** Tenta despachar peças terminadas. Retorna true se alguma saiu. */
   private tryPush(n: NodeRt, refill = true): boolean {
     let moved = false;
+    let staged = false;
     for (let i = 0; i < n.done.length; ) {
       const e = n.done[i];
       if (e.awaitingPickup) {
@@ -678,8 +700,8 @@ export class Simulator {
         i++;
         continue;
       }
-      if (link.isPart) link.reserved++;
-      else {
+      link.reserved++;
+      if (!link.isPart) {
         link.to.reserved++;
         link.to.reservedUnits += e.qty;
       }
@@ -689,6 +711,7 @@ export class Simulator {
         const trip = this.tripOf(link);
         if (trip > 1) this.freeSlot(n, e);
         if (trip > 1) {
+          staged = true;
           // junta peças na saída do posto até completar a viagem (ou até o destino não ter mais lugar)
           const wait = n.done.filter((x) => x.awaitingPickup && !x.called && x.next === link);
           if (wait.length >= Math.min(trip, this.roomOf(link))) {
@@ -708,12 +731,15 @@ export class Simulator {
     }
     // viagem incompleta, mas o destino já não tem lugar (ex.: dois postos abastecendo o mesmo destino): leva o que tem
     for (const e of n.done) {
-      if (!e.awaitingPickup || e.called || !e.next || this.tripOf(e.next) <= 1 || this.canAcceptVia(e.next)) continue;
+      // com carrinho/bin próprio do item a viagem sempre completa (o bin esvazia com o consumo): sem viagem parcial
+      if (!e.awaitingPickup || e.called || !e.next || this.tripOf(e.next) <= 1 || this.binCap(e.next) || this.canAcceptVia(e.next)) continue;
       const wait = n.done.filter((x) => x.awaitingPickup && !x.called && x.next === e.next);
       for (const x of wait) x.called = true;
       this.requestVehicle(n, wait[0], e.next, wait);
     }
     if (moved) this.afterDeparture(n, refill);
+    // peça foi para a espera da viagem: libera a giga para a próxima
+    else if (staged && n.def.type !== 'source') this.tryStart(n);
     this.updateState(n);
     return moved;
   }
@@ -1009,6 +1035,8 @@ export class Simulator {
 
   /** Quantas peças cabem no destino do trecho: a viagem nunca espera mais que isso. */
   private roomOf(l: LinkRt): number {
+    const bin = this.binCap(l);
+    if (bin) return bin;
     if (l.isPart) return this.partQty(l) * Math.max(1, l.to.def.partBuffer ?? 2);
     const t = l.to.def.type;
     if (t === 'sink') return Infinity;
@@ -1085,8 +1113,8 @@ export class Simulator {
       this.schedule(this.now + pool.def.loadTime, 'unitFree', { unit: tr.unit });
     }
     to.entered++;
+    l.reserved--;
     if (l.isPart) {
-      l.reserved--;
       to.parts.get(l)!.push(e);
       this.tryStart(to);
       return;
@@ -1101,6 +1129,7 @@ export class Simulator {
       return;
     }
     e.enteredQueueAt = this.now;
+    e.via = l;
     to.queue.push(e);
     this.tryStart(to);
   }

@@ -39,6 +39,19 @@ export const LIBRARY: LibItem[] = [
     example: 'transport',
   },
   {
+    id: 'bins',
+    q: 'O AMR leva um carrinho de 50 peças do item B e 20 do item A. Onde ficam no posto?',
+    tag: 'Transporte',
+    why: 'Sem viagem, a regra é one piece flow: uma peça por vez na fila do posto. Com Peças por viagem maior que 1, cada item ganha os seus carrinhos/bins atrás do posto de destino, do tamanho da viagem.',
+    steps: [
+      { text: 'Dê duplo clique na seta do item (ou no AMR). Abre o vínculo de transporte.', img: 'bins-1' },
+      { text: 'Em Peças por viagem coloque o tamanho do carrinho (ex.: 50) e em Carrinhos/bins quantos ficam atrás do posto (2 = um em uso e um cheio esperando).', img: 'bins-2' },
+      { text: 'No layout aparece cada carrinho ao lado do posto com o nível (ex.: 37/100). O AMR traz um carrinho cheio quando há lugar para ele.', img: 'bins-3' },
+    ],
+    tip: 'Com 1 carrinho a montagem para enquanto o AMR busca o próximo. Se o nível chega a 0 com frequência, aumente os carrinhos ou o número de AMRs.',
+    example: 'combine',
+  },
+  {
     id: 'trilha',
     q: 'Como faço o operador ou o AGV seguir um caminho (corredor) e não a linha reta?',
     tag: 'Transporte',

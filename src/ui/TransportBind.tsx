@@ -22,6 +22,7 @@ export function TransportBind({ start, onClose }: { start: { poolId?: string; li
   const [role, setRole] = useState<'flow' | 'part'>(link0?.role === 'part' ? 'part' : 'flow');
   const fromNode = model.nodes.find((n) => n.id === from);
   const [batch, setBatch] = useState(link0?.tripQty ?? 1);
+  const [bins, setBins] = useState(link0?.bins ?? 2);
   const [partQty, setPartQty] = useState(link0?.partQty ?? 1);
   const pool0 = pools.find((p) => p.id === poolId);
   const [count, setCount] = useState(pool0?.count ?? 1);
@@ -71,25 +72,14 @@ export function TransportBind({ start, onClose }: { start: { poolId?: string; li
       role: role === 'part' ? 'part' : undefined,
       length: length === '' ? undefined : Number(length),
       tripQty: batch > 1 ? batch : undefined,
+      bins: batch > 1 && bins !== 2 ? bins : undefined,
       partQty: role === 'part' && partQty > 1 ? partQty : undefined,
     };
     const target = existing ?? (link0 && !model.links.some((l) => l.id !== link0.id && l.from === from && l.to === to) ? link0 : undefined);
     if (target) m.links = m.links.map((l) => (l.id === target.id ? { ...l, from, to, ...patch } : l));
     else m.links = [...m.links, { id: newId('L'), from, to, weight: 1, ...patch }];
-    // o destino precisa ter lugar para a viagem inteira (fila de entrada ou estoque de componentes)
-    let grew = '';
-    m.nodes = m.nodes.map((n) => {
-      if (n.id !== to || batch <= 1) return n;
-      if (role === 'part') {
-        const kits = Math.ceil(batch / Math.max(1, partQty));
-        if ((n.partBuffer ?? 2) >= kits) return n;
-        grew = ` Estoque de componentes de ${n.name} subiu para ${kits} kits.`;
-        return { ...n, partBuffer: kits };
-      }
-      if (n.queueCap + Math.max(1, n.capacity) >= batch) return n;
-      grew = ` Fila de entrada de ${n.name} subiu para ${batch - Math.max(1, n.capacity)} para caber a viagem.`;
-      return { ...n, queueCap: batch - Math.max(1, n.capacity) };
-    });
+    // viagem com várias peças: o item fica em carrinhos/bins próprios atrás do posto de destino
+    const grew = batch > 1 ? ` ${bins} carrinho${bins > 1 ? 's' : ''} de ${batch} atrás de ${b?.name} (${bins * batch} peças deste item).` : '';
     const pname = m.pools.find((p) => p.id === pid)?.name;
     st.setModel(m, `"${pname}" leva ${role === 'part' ? 'o componente' : 'a peça'} de ${a?.name} para ${b?.name}${batch > 1 ? `, ${batch} por viagem` : ''}.${grew} Rode ▶ Start para ver.`);
     onClose();
@@ -110,7 +100,8 @@ export function TransportBind({ start, onClose }: { start: { poolId?: string; li
           'No layout, segure Ctrl e clique no operador (ou AGV/AMR). Depois segure Ctrl e clique na seta do trecho. Esta janela abre.',
           'Confira o posto de entrada (onde ele pega) e o posto de saída (onde entrega). Pode trocar aqui.',
           'Diga se vai o produto da linha ou um componente que será montado no posto de saída.',
-          'Peças por viagem: as peças prontas esperam na saída do posto de entrada até completar a viagem (o posto continua produzindo). O destino ganha lugar para a viagem inteira.',
+          'Peças por viagem: as peças prontas esperam na saída do posto de entrada até completar a viagem (o posto continua produzindo). Sem viagem (1 peça) é one piece flow.',
+          'Carrinhos/bins: com viagem de várias peças, cada item ganha os seus carrinhos atrás do posto de destino (ex.: 2 carrinhos de 50 do item B e 2 de 20 do item A). O AMR traz um carrinho cheio quando um esvazia.',
           'Veja a conta de bolso: ocupação acima de 85% indica que vai faltar recurso. Salve e rode ▶ Start.',
         ]}
         tip="Também dá para arrastar o bonequinho e soltar na seta. Para apagar um recurso, clique nele e use Apagar no painel da direita (ou Delete)."
@@ -171,6 +162,13 @@ export function TransportBind({ start, onClose }: { start: { poolId?: string; li
           <span>Peças por viagem</span>
           <input type="number" min={1} step={1} value={batch} onChange={(e) => setBatch(Math.max(1, Math.round(Number(e.target.value))))} />
         </label>
+        {batch > 1 && (
+          <label className="field">
+            <span>Carrinhos/bins deste item atrás do posto</span>
+            <input type="number" min={1} step={1} value={bins} onChange={(e) => setBins(Math.max(1, Math.round(Number(e.target.value))))} />
+            <small className="muted">Buffer do item no posto: {bins} × {batch} = {bins * batch} peças. Com 2, um carrinho está em uso enquanto o outro chega.</small>
+          </label>
+        )}
         <label className="field">
           <span>Quantidade de {poolId === '__new' ? KIND_PT[newKind].toLowerCase() : 'recursos'} no grupo</span>
           <input type="number" min={1} step={1} value={count} onChange={(e) => setCount(Math.max(1, Math.round(Number(e.target.value))))} />

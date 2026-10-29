@@ -131,6 +131,8 @@ export interface LinkDef {
   tripQty?: number;
   /** Componente (role 'part'): quantas peças deste trecho entram em cada produto montado. */
   partQty?: number;
+  /** Transporte com viagem (tripQty > 1): carrinhos/bins deste item atrás do posto de destino, cada um com uma viagem. Padrão 2 (um em uso, um cheio esperando). */
+  bins?: number;
   /** Trilha: pontos de curva (coordenadas do layout) por onde a peça e o transporte passam. */
   path?: { x: number; y: number }[];
 }
