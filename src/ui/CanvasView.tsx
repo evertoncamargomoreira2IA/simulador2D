@@ -5,7 +5,7 @@ import { isAssembly, variantPatch, type BlockVariant } from '../engine/types';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Arrow, Circle, Group, Layer, Line, Rect, RegularPolygon, Shape, Stage, Text, Transformer } from 'react-konva';
 import type { NodeRt, Simulator } from '../engine/simulator';
-import type { Background, NodeDef, NodeType } from '../engine/types';
+import type { Background, LinkDef, NodeDef, NodeType } from '../engine/types';
 import { footprint } from '../engine/analytics';
 import { useStore } from '../store';
 import { createOperator } from './operators';
@@ -102,6 +102,44 @@ export function CanvasView() {
   const [wire, setWire] = useState<{ from: string; x: number; y: number; moved: boolean; relink?: { id: string; end: 'to' | 'from' } } | null>(null);
   const nodeAt = (x: number, y: number) =>
     useStore.getState().model.nodes.find((n) => Math.abs(n.x - x) <= W / 2 + 6 && Math.abs(n.y - y) <= H / 2 + 6);
+  /** Seta mais próxima do ponto (até 14 px da linha). */
+  const linkAt = (x: number, y: number) => {
+    const m = useStore.getState().model;
+    let best: LinkDef | undefined;
+    let bestD = 14;
+    for (const l of m.links) {
+      const a = m.nodes.find((n) => n.id === l.from);
+      const b = m.nodes.find((n) => n.id === l.to);
+      if (!a || !b) continue;
+      const [x1, y1, x2, y2] = edgePoints(a, b);
+      const len2 = (x2 - x1) ** 2 + (y2 - y1) ** 2 || 1;
+      const f = Math.max(0, Math.min(1, ((x - x1) * (x2 - x1) + (y - y1) * (y2 - y1)) / len2));
+      const d = Math.hypot(x - (x1 + f * (x2 - x1)), y - (y1 + f * (y2 - y1)));
+      if (d < bestD) [best, bestD] = [l, d];
+    }
+    return best;
+  };
+  /** Operador/veículo solto: no posto vira a equipe do posto, na seta faz o transporte, no vazio só muda o ponto de espera. */
+  function dropPool(poolId: string, x: number, y: number) {
+    const st = useStore.getState();
+    const m = st.model;
+    const pool = m.pools?.find((p) => p.id === poolId);
+    if (!pool) return;
+    const n = nodeAt(x, y);
+    if (n && pool.kind === 'operator' && n.type !== 'source' && n.type !== 'sink') {
+      st.assignPool(n.id, poolId);
+      return;
+    }
+    const l = n ? undefined : linkAt(x, y);
+    if (l) {
+      st.updateLink(l.id, { poolId });
+      const name = (id: string) => m.nodes.find((k) => k.id === id)?.name ?? id;
+      st.setMessage(`"${pool.name}" faz o transporte de ${name(l.from)} para ${name(l.to)}.`);
+      return;
+    }
+    if (n) st.setMessage(`${pool.kind === 'operator' ? 'Entrada e saída não têm operador' : 'Veículo não opera posto'}: solte numa seta para ele fazer o transporte.`);
+    st.patchModel({ pools: (m.pools ?? []).map((p) => (p.id === poolId ? { ...p, x: Math.round(x), y: Math.round(y) } : p)) });
+  }
   function startWire(from: string) {
     const n = useStore.getState().model.nodes.find((x) => x.id === from);
     if (n) setWire({ from, x: n.x, y: n.y, moved: false });
@@ -504,8 +542,8 @@ export function CanvasView() {
         )}
 
         {layers.people && sim.pools.length > 0 && (
-          <Layer listening={false}>
-            <Units sim={sim} colors={colors} labels={layers.labels} />
+          <Layer listening={draggable}>
+            <Units sim={sim} colors={colors} labels={layers.labels} draggable={draggable} onDrop={dropPool} />
           </Layer>
         )}
 
@@ -958,7 +996,7 @@ const Plant = memo(function Plant({ bg, line, text }: { bg: Background; line: st
 });
 
 /** Operadores (círculos) e veículos (retângulos) nas posições atuais. */
-function Units({ sim, colors, labels }: { sim: Simulator; colors: CanvasColors; labels: boolean }) {
+function Units({ sim, colors, labels, draggable, onDrop }: { sim: Simulator; colors: CanvasColors; labels: boolean; draggable: boolean; onDrop: (poolId: string, x: number, y: number) => void }) {
   const carrying = new Map<string, number>();
   for (const t of sim.transits) if (t.unit) carrying.set(t.unit.id, t.entity.qty);
   return (
@@ -967,16 +1005,38 @@ function Units({ sim, colors, labels }: { sim: Simulator; colors: CanvasColors; 
         p.units.map((u, i) => {
           const pos = sim.positionOf(u, sim.now);
           const c = u.busy ? colors.human : mixHex(colors.human, colors.muted, 0.5);
+          const drag = {
+            draggable,
+            onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => {
+              const g = e.target;
+              const [x, y] = [g.x(), g.y()];
+              g.position(pos);
+              onDrop(p.def.id, x, y);
+            },
+            onMouseEnter: (e: Konva.KonvaEventObject<MouseEvent>) => {
+              const c = e.target.getStage()?.container();
+              if (c && draggable) c.style.cursor = 'grab';
+            },
+            onMouseLeave: (e: Konva.KonvaEventObject<MouseEvent>) => {
+              const c = e.target.getStage()?.container();
+              if (c) c.style.cursor = '';
+            },
+            onClick: (e: Konva.KonvaEventObject<MouseEvent>) => {
+              e.cancelBubble = true;
+              useStore.getState().setMessage(`"${p.def.name}": arraste até um posto para ele atender o posto, ou até uma seta para fazer o transporte.`);
+            },
+          };
           if (p.def.kind === 'operator')
             return (
-              <Group key={u.id} x={pos.x} y={pos.y}>
+              <Group key={u.id} x={pos.x} y={pos.y} {...drag}>
+                <Rect x={-10} y={-11} width={20} height={22} fill="transparent" />
                 <Person color={c} outline={colors.canvas} phase={u.busy ? sim.now + i : 0} scale={1.3} />
                 {labels && <Text x={-12} y={12} width={24} align="center" text={`${i + 1}`} fontSize={9} fill={colors.human} />}
               </Group>
             );
           const qty = carrying.get(u.id) ?? 0;
           return (
-            <Group key={u.id} x={pos.x} y={pos.y}>
+            <Group key={u.id} x={pos.x} y={pos.y} {...drag}>
               <Rect x={-13} y={-8} width={26} height={16} cornerRadius={3} fill={c} stroke={colors.canvas} strokeWidth={2} />
               {p.def.kind === 'forklift' && <Rect x={13} y={-6} width={7} height={2.5} fill={c} />}
               {p.def.kind === 'forklift' && <Rect x={13} y={3.5} width={7} height={2.5} fill={c} />}

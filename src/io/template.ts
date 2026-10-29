@@ -1,14 +1,15 @@
 // Planilha padrão: baixar, preencher no Excel e subir para gerar a linha inteira.
 //
-// Abas: "Leia-me", "Postos", "Ligações", "Pessoas e veículos" e "Parâmetros".
+// Abas: "Leia-me", "Postos", "Atividades", "Ligações", "Pessoas e veículos" e "Parâmetros".
 // A mesma planilha sai preenchida com o modelo aberto, então serve também para
 // editar uma linha existente no Excel e subir de volta.
 
 import * as XLSX from 'xlsx';
 import { serpentine } from '../model/builder';
+import { ACT_COLS, activitySheetRows, parseActivitySheet } from './activities';
 import { DEFAULT_SETTINGS, isAssembly, makeNode, makePool, MANUAL_PATCH, newId, type LinkDef, type Model, type NodeDef, type NodeType, type PoolDef, type PoolKind, type SimSettings } from '../engine/types';
 
-export const SHEETS = { readme: 'Leia-me', nodes: 'Postos', links: 'Ligações', pools: 'Pessoas e veículos', params: 'Parâmetros' };
+export const SHEETS = { readme: 'Leia-me', nodes: 'Postos', acts: 'Atividades', links: 'Ligações', pools: 'Pessoas e veículos', params: 'Parâmetros' };
 
 const NODE_COLS = [
   'id', 'nome', 'tipo', 'tempo_ciclo_s', 'cv', 'capacidade', 'fila', 'operadores', 'disponibilidade', 'mttr_s', 'setup_s',
@@ -36,6 +37,7 @@ const PARAMS: Param[] = [
   { k: 'duration', nome: 'duracao_h', unidade: 'h', desc: 'Tempo simulado', toSheet: (v) => v / 3600, fromSheet: (v) => v * 3600 },
   { k: 'warmup', nome: 'aquecimento_min', unidade: 'min', desc: 'Período descartado no início (0 se a linha começa cheia)', toSheet: (v) => v / 60, fromSheet: (v) => v * 60 },
   { k: 'startFull', nome: 'linha_cheia', unidade: 'S/N', desc: 'S = começa em regime, como na produção' },
+  { k: 'studyMode', nome: 'estudo', unidade: 'ciclo/elemento', desc: 'ciclo = usa tempo_ciclo_s; elemento = soma das atividades da aba Atividades (Yamazumi)' },
   { k: 'seed', nome: 'semente', unidade: '', desc: 'Mesma semente = mesma sequência de eventos' },
   { k: 'transportSpeed', nome: 'velocidade_transporte_m_s', unidade: 'm/s', desc: 'Velocidade da peça entre postos sem veículo' },
   { k: 'laborRate', nome: 'salario_hora', unidade: 'R$/h', desc: 'Custo do operador por hora' },
@@ -52,6 +54,7 @@ export const README: [string, string][] = [
   ['1', 'Preencha a aba Postos: uma linha por posto, buffer, entrada ou saída. Só id, nome e tipo são obrigatórios.'],
   ['2', 'Na aba Ligações, diga para onde cada posto manda a peça (de → para). Se deixar vazia, os postos são ligados na ordem da aba Postos.'],
   ['3', 'Se tiver empilhadeira, AGV ou operadores compartilhados, cadastre na aba Pessoas e veículos e use o id na coluna transporte (Ligações) ou pool_operadores (Postos).'],
+  ['3b', 'Para o Yamazumi, liste na aba Atividades as atividades de cada posto (posto, operação, atividade, tempo, tipo). A soma vira o tempo do posto.'],
   ['4', 'Ajuste takt, duração e custos na aba Parâmetros.'],
   ['5', 'No simulador: Importar → escolha esta planilha. A linha é montada e os erros aparecem na barra de mensagens.'],
   ['', ''],
@@ -70,6 +73,12 @@ export const README: [string, string][] = [
   ['area_largura_m, area_altura_m', 'Área ocupada pelas gigas, para o operador andar entre elas.'],
   ['eficiencia', 'Eficiência do posto (0,9 ou 90%). Vazio = 100%. O ciclo real fica tempo_ciclo / eficiência.'],
   ['x_m, y_m', 'Posição em metros. Vazio = o simulador desenha em U. Se preencher todos, a planta DXF aberta é mantida.'],
+  ['', ''],
+  ['Colunas da aba Atividades', ''],
+  ['posto', 'id ou nome do posto da aba Postos. Uma linha por atividade, na ordem em que acontecem.'],
+  ['operacao', 'Agrupa atividades (ex.: Montar placa). Vazio = mesma operação da linha de cima.'],
+  ['tempo_s', 'Segundos por peça.'],
+  ['tipo', 'VA (agrega valor), NVA (não agrega, necessária), deslocamento, espera ou máquina. Vazio = o simulador deduz pelo texto.'],
   ['', ''],
   ['Colunas da aba Ligações', ''],
   ['peso', 'Divide a saída entre destinos. Ex.: 99 para o próximo posto e 1 para o reparo = 1% de reprova.'],
@@ -97,7 +106,15 @@ const EXAMPLE: Model = (() => {
   const st = (id: string, name: string, type: NodeType, p: Partial<NodeDef> = {}) => makeNode(type, { id, name, ...p });
   const nodes = [
     st('ENT', 'Entrada', 'source'),
-    st('P1', 'Posto 1', 'machine', { cycleTime: 48, operators: 1 }),
+    st('P1', 'Posto 1', 'machine', {
+      cycleTime: 48,
+      operators: 1,
+      cycleFromOps: true,
+      operations: [
+        { name: 'Preparar', activities: [{ name: 'Pegar placa no carrinho', time: 6, kind: 'nva' }, { name: 'Andar até a bancada', time: 2, kind: 'walk' }] },
+        { name: 'Montar', activities: [{ name: 'Encaixar componente', time: 28, kind: 'va' }, { name: 'Parafusar 4 parafusos', time: 12, kind: 'va' }] },
+      ],
+    }),
     st('P2', 'Posto 2', 'machine', { cycleTime: 46, operators: 1 }),
     st('P3', 'Posto 3', 'machine', { cycleTime: 47, operators: 1 }),
     st('KIT', 'Kit off-line', 'machine', { cycleTime: 40, operators: 1 }),
@@ -153,6 +170,11 @@ export function templateWorkbook(model?: Model): XLSX.WorkBook {
   );
   XLSX.utils.book_append_sheet(
     wb,
+    sheet([[...ACT_COLS], ...m.nodes.flatMap((n) => activitySheetRows(n.id, n.operations))], [12, 22, 40, 9, 24]),
+    SHEETS.acts,
+  );
+  XLSX.utils.book_append_sheet(
+    wb,
     sheet(
       [[...LINK_COLS], ...m.links.map((l) => [l.from, l.to, l.weight, l.role === 'part' ? 'peca' : 'fluxo', l.poolId ?? '', l.length ?? '', sn(l.once)])],
       [12, 12, 8, 8, 12, 12, 9],
@@ -174,7 +196,7 @@ export function templateWorkbook(model?: Model): XLSX.WorkBook {
         ['parametro', 'valor', 'unidade', 'descricao'],
         ...PARAMS.map((p) => {
           const v = m.settings[p.k];
-          const out = typeof v === 'boolean' ? sn(v) : typeof v === 'number' ? Math.round((p.toSheet ? p.toSheet(v) : v) * 1e5) / 1e5 : '';
+          const out = p.k === 'studyMode' ? (v === 'elements' ? 'elemento' : 'ciclo') : typeof v === 'boolean' ? sn(v) : typeof v === 'number' ? Math.round((p.toSheet ? p.toSheet(v) : v) * 1e5) / 1e5 : '';
           return [p.nome, out, p.unidade, p.desc];
         }),
       ],
@@ -212,6 +234,7 @@ export function parseTemplate(wb: XLSX.WorkBook, name: string): TemplateResult {
     const p = PARAMS.find((x) => x.nome === norm(r.parametro));
     if (!p) continue;
     if (p.k === 'startFull') settings.startFull = yes(r.valor);
+    else if (p.k === 'studyMode') settings.studyMode = /^elem/.test(norm(r.valor)) ? 'elements' : 'cycle';
     else {
       const v = num(r.valor);
       if (v !== undefined) (settings as unknown as Record<string, number>)[p.k] = p.fromSheet ? p.fromSheet(v) : v;
@@ -300,6 +323,17 @@ export function parseTemplate(wb: XLSX.WorkBook, name: string): TemplateResult {
     nodes.push(makeNode(type ?? 'machine', p));
   });
   if (nodes.length === 0) throw new Error('A aba Postos está vazia.');
+
+  for (const [posto, ops] of parseActivitySheet(rows(SHEETS.acts))) {
+    const n = nodes.find((x) => x.id === posto) ?? nodes.find((x) => x.name === posto);
+    if (!n) {
+      warnings.push(`Aba Atividades: posto "${posto}" não existe na aba Postos.`);
+      continue;
+    }
+    n.operations = ops;
+    n.cycleFromOps = true;
+    n.cycleTime = Math.round(ops.reduce((s, o) => s + o.activities.reduce((a, x) => a + x.time, 0), 0) * 100) / 100;
+  }
 
   const byKey = (k: string) => nodes.find((n) => n.id === k) ?? nodes.find((n) => n.name === k);
   const links: LinkDef[] = [];

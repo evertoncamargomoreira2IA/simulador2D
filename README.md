@@ -157,4 +157,6 @@ tests        testes (vitest)
 - **Importar SOE**: Importar (ou arrastar) uma planilha com colunas Posto / Atividade / Tempo (ou Station / Task Description / Basic cycle time). Escolha a aba, aplique as atividades nos postos de mesmo nome do modelo aberto ou crie uma linha nova.
 - **Rebalancear** (Análises): arraste atividades entre postos e veja UPH estimado, UPH simulado (2 h), balanceamento e pessoas na hora; aplique no modelo ou mande Atual × Proposto para Cenários (UPH, meta, gargalo, pessoas, custo).
 - **Yamazumi arrastável**: botão ✋ Arrastar para balancear no Yamazumi liga o arrasto de atividades entre postos.
+- **Atividades em tabela**: no posto, 📋 Colar tabela do Excel (operação | atividade | tempo | tipo) e Copiar como tabela; na planilha padrão, aba Atividades para todos os postos e parâmetro estudo = ciclo/elemento.
+- **Operador e veículo arrastáveis**: solte num posto para virar a equipe dele, numa seta para fazer o transporte do trecho, ou no vazio para mudar o ponto de espera.
 - **Como usar → Siglas / Funções**: tabelas com todas as siglas (significado e uso) e as funções da aplicação.
