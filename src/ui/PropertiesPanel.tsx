@@ -311,6 +311,9 @@ export function PropertiesPanel() {
           <input id="set-full" type="checkbox" checked={!!s.startFull} onChange={(e) => updS({ startFull: e.target.checked })} />
           <span>Linha cheia desde o início (ignora a rampa e mostra o UPH real)</span>
         </label>
+        <button className="btn full shift-btn" onClick={() => useStore.getState().setAnalysis('turnos')}>
+          ⏱ Turno e paradas{s.stops?.length ? ` (${s.stops.length}: ${s.stops.reduce((a, x) => a + x.duration, 0)} min)` : ' (almoço, ginástica, troca)'}
+        </button>
         <label className="field">
           <span>Escala (px/m)</span>
           <input id="set-ppm" type="number" min={1} step={5} value={s.pxPerMeter} onChange={(e) => updS({ pxPerMeter: Math.max(1, Number(e.target.value)) })} />

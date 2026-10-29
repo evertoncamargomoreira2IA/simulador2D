@@ -20,7 +20,7 @@
 import { effectiveTakt } from './balance';
 import { MinHeap } from './heap';
 import { Rng } from './rng';
-import { baseCycle, slotPositions, type LinkDef, type Model, type NodeDef, type NodeState, type PoolDef } from './types';
+import { baseCycle, slotPositions, type LinkDef, type Model, type NodeDef, type NodeState, type PoolDef, type ShiftStop } from './types';
 
 export interface Entity {
   id: number;
@@ -89,6 +89,8 @@ export interface NodeRt {
   /** Unidades reservadas a caminho (para nós de agrupamento). */
   reservedUnits: number;
   down: boolean;
+  /** Em parada planejada (almoço, troca de modelo). */
+  paused: boolean;
   setupUntil: number;
   state: NodeState;
   stateSince: number;
@@ -167,7 +169,9 @@ type EvKind =
   | 'sample'
   | 'warmup'
   | 'unitFree'
-  | 'pickup';
+  | 'pickup'
+  | 'stopOn'
+  | 'stopOff';
 interface SimEvent {
   t: number;
   seq: number;
@@ -179,6 +183,7 @@ interface SimEvent {
   unit?: UnitRt;
   entity?: Entity;
   link?: LinkRt;
+  stop?: ShiftStop;
 }
 
 export interface TimelinePoint {
@@ -195,7 +200,7 @@ const SOURCE_MIN_GAP = 1;
 /** Proteção contra loops de tempo zero (modelo com ciclo sem tempo). */
 const MAX_SAME_TIME_EVENTS = 200_000;
 
-const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup', 'off'];
+const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup', 'break', 'off'];
 const zeroStates = (): Record<NodeState, number> =>
   Object.fromEntries(STATES.map((s) => [s, 0])) as Record<NodeState, number>;
 
@@ -287,6 +292,7 @@ export class Simulator {
         reserved: 0,
         reservedUnits: 0,
         down: false,
+        paused: false,
         setupUntil: def.setupTime > 0 ? def.setupTime : 0,
         state: 'off',
         stateSince: 0,
@@ -389,10 +395,59 @@ export class Simulator {
         this.resetStats();
         this.timeline.length = 0;
       }
+      this.scheduleStops();
       return;
     }
     if (this.model.settings.warmup > 0) this.schedule(this.model.settings.warmup, 'warmup');
+    this.scheduleStops();
     this.drainRetry();
+  }
+
+  /** Paradas do turno contam a partir do início visível (t0). */
+  private scheduleStops(): void {
+    for (const stop of this.model.settings.stops ?? []) {
+      if (!(stop.duration > 0)) continue;
+      const a = this.t0 + Math.max(0, stop.start) * 60;
+      this.schedule(a, 'stopOn', { stop });
+      this.schedule(a + stop.duration * 60, 'stopOff', { stop });
+    }
+  }
+
+  /** Quem para: na pausa, postos com gente; na troca de modelo, todos os postos. */
+  private stopsNode(n: NodeRt, stop: ShiftStop): boolean {
+    const t = n.def.type;
+    if (t === 'source' || t === 'sink' || t === 'buffer') return false;
+    return stop.kind === 'changeover' || n.def.operators > 0 || !!n.def.poolId;
+  }
+
+  private freeze(n: NodeRt): void {
+    for (const job of n.processing) {
+      job.remaining = job.end - this.now;
+      job.token++;
+    }
+  }
+
+  private unfreeze(n: NodeRt): void {
+    for (const job of n.processing) {
+      job.end = this.now + job.remaining;
+      this.schedule(job.end, 'end', { node: n, job, token: job.token });
+    }
+  }
+
+  private onStop(stop: ShiftStop, on: boolean): void {
+    for (const n of this.nodes) {
+      if (!this.stopsNode(n, stop)) continue;
+      if (on) {
+        if (!n.paused && !n.down) this.freeze(n);
+        n.paused = true;
+        this.updateState(n);
+      } else if (n.paused) {
+        n.paused = false;
+        if (!n.down) this.unfreeze(n);
+        this.tryStart(n);
+        this.updateState(n);
+      }
+    }
   }
 
   private mtbf(d: NodeDef): number {
@@ -468,6 +523,10 @@ export class Simulator {
         break;
       case 'warmup':
         this.resetStats();
+        break;
+      case 'stopOn':
+      case 'stopOff':
+        this.onStop(ev.stop!, ev.kind === 'stopOn');
         break;
     }
   }
@@ -655,7 +714,7 @@ export class Simulator {
   }
 
   private tryStart(n: NodeRt): void {
-    if (n.down || this.now < n.setupUntil) {
+    if (n.down || n.paused || this.now < n.setupUntil) {
       this.updateState(n);
       return;
     }
@@ -938,20 +997,14 @@ export class Simulator {
   private onFail(n: NodeRt): void {
     n.down = true;
     n.failures++;
-    for (const job of n.processing) {
-      job.remaining = job.end - this.now;
-      job.token++;
-    }
+    if (!n.paused) this.freeze(n);
     this.updateState(n);
     this.schedule(this.now + this.rng.exponential(n.def.mttr), 'repair', { node: n });
   }
 
   private onRepair(n: NodeRt): void {
     n.down = false;
-    for (const job of n.processing) {
-      job.end = this.now + job.remaining;
-      this.schedule(job.end, 'end', { node: n, job, token: job.token });
-    }
+    if (!n.paused) this.unfreeze(n);
     this.tryStart(n);
     this.updateState(n);
     this.schedule(this.now + this.rng.exponential(this.mtbf(n.def)), 'fail', { node: n });
@@ -964,6 +1017,7 @@ export class Simulator {
       if (n.done.some((e) => e.awaitingPickup)) return 'resource';
       return n.done.length > 0 && n.released > 0 ? 'blocked' : n.released > 0 ? 'working' : 'off';
     }
+    if (n.paused) return 'break';
     if (n.down) return 'down';
     if (this.now < n.setupUntil) return 'setup';
     if (n.processing.length > 0) return 'working';

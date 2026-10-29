@@ -9,7 +9,7 @@ import { fmt, fmtTime, pct, STATE_LABEL, useCanvasColors } from './theme';
 import { POOL_LABEL } from '../engine/types';
 import { cycleRows, effectiveTakt, lineSequence } from './CycleTakt';
 
-const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup'];
+const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup', 'break'];
 
 export function Dashboard() {
   const kpi = useStore((s) => s.kpi);

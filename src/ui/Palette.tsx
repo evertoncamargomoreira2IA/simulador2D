@@ -84,7 +84,7 @@ const LAYERS: { k: keyof Layers; label: string }[] = [
   { k: 'co2', label: 'Mapa de calor de CO2e' },
 ];
 
-const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup', 'off'];
+const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup', 'break', 'off'];
 
 export function Palette() {
   const layers = useStore((s) => s.layers);

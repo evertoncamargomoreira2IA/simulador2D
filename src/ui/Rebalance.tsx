@@ -1,10 +1,12 @@
 // Rebalanceamento: arrastar atividades entre postos (Yamazumi editável) e ver o UPH na hora.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { autoBalance, type AutoBalanceResult } from '../engine/autobalance';
 import { cycleRows, effectiveTakt } from '../engine/balance';
 import { ACTIVITY_LABEL, operationsTime, type Model, type Operation } from '../engine/types';
 import { useStore } from '../store';
 import { lineSequence } from './CycleTakt';
+import { HowTo } from './HowTo';
 import { Kpi } from './Modal';
 import { KIND_COLOR } from './Yamazumi';
 import { lineLoad, loadScenarios, peopleOf, runScenario, saveScenarios } from './scenarios';
@@ -40,9 +42,11 @@ export function Rebalance() {
   const [moves, setMoves] = useState(0);
   const drag = useRef<Drag | null>(null);
   const [over, setOver] = useState<string | null>(null);
+  const [auto, setAuto] = useState<(AutoBalanceResult & { stations: number }) | null>(null);
   useEffect(() => {
     setDraft(initial);
     setMoves(0);
+    setAuto(null);
   }, [initial]);
 
   const proposed = useMemo(() => applyDraft(model, draft), [model, draft]);
@@ -89,6 +93,19 @@ export function Rebalance() {
     setMoves(moves + 1);
   };
 
+  /** Redistribui as atividades na ordem, enchendo cada posto até o takt; os que sobram ficam vazios (sem pessoa). */
+  const runAuto = () => {
+    const baseRowsNow = new Map(cycleRows(model).map((r) => [r.id, r]));
+    const st = posts.filter((n) => initial[n.id] && n.capacity <= 1 && !baseRowsNow.get(n.id)?.offline);
+    const r = autoBalance(st.map((n) => ({ id: n.id, ops: initial[n.id], efficiency: n.efficiency })), takt);
+    const where = (d: Draft) => st.flatMap((n) => (d[n.id] ?? []).flatMap((o) => o.activities.map(() => n.id)));
+    const a = where(initial);
+    const b = where(r.draft);
+    setDraft({ ...structuredClone(initial), ...r.draft });
+    setMoves(Math.max(1, a.filter((x, i) => x !== b[i]).length));
+    setAuto({ ...r, stations: st.length });
+  };
+
   const cols = posts.filter((n) => draft[n.id] || n.cycleTime > 0);
   const tot = (id: string) => rows.get(id)?.plan ?? 0;
   const maxY = Math.max(takt * 1.15, ...cols.map((n) => tot(n.id))) || 1;
@@ -128,6 +145,17 @@ export function Rebalance() {
 
   return (
     <>
+      <HowTo
+        title="Rebalancear: menos gente, linha no takt"
+        why="Mova atividades de um posto para outro e veja na hora o UPH, o maior posto e quantas pessoas a linha precisa."
+        steps={[
+          'Clique em ⚡ Balancear automático: o simulador reparte as atividades, na ordem em que acontecem, enchendo cada posto até o takt. Posto que sobra fica vazio e libera a pessoa.',
+          'Ou arraste uma atividade (bloco colorido) para outro posto, à mão.',
+          'Confira os cartões: UPH estimado e simulado, maior posto × takt, balanceamento e pessoas.',
+          'Aplicar no modelo grava a proposta (Ctrl+Z desfaz). Comparar em Cenários coloca Atual × Proposto lado a lado.',
+        ]}
+        tip="O automático respeita a sequência das atividades. Se uma atividade precisa de ferramenta de um posto específico, ajuste à mão depois."
+      />
       <div className="tiles">
         <Kpi k="UPH estimado" v={fmt(estUph(after.max), 1)} u={`antes ${fmt(estUph(before.max), 1)}`} />
         <Kpi k="UPH simulado (2 h)" v={sim.busy || sim.prop === undefined ? '…' : fmt(sim.prop, 1)} u={sim.base !== undefined ? `antes ${fmt(sim.base, 1)}` : ''} />
@@ -136,11 +164,21 @@ export function Rebalance() {
         <Kpi k="Pessoas" v={String(pplAfter)} u={pplAfter !== pplBefore ? `antes ${pplBefore}` : 'sem mudança'} />
       </div>
       <div className="row-btns section">
-        <button className="btn" disabled={!moves} onClick={() => (setDraft(initial), setMoves(0))}>Voltar ao original</button>
+        <button className="btn primary auto-btn" onClick={runAuto} disabled={!(takt > 0)} title="Redistribui as atividades na ordem para caber no takt com o menor número de postos">⚡ Balancear automático</button>
+        <button className="btn" disabled={!moves} onClick={() => (setDraft(initial), setMoves(0), setAuto(null))}>Voltar ao original</button>
         <button className="btn primary" disabled={!moves} onClick={apply}>Aplicar no modelo</button>
         <button className="btn" disabled={!moves} onClick={toScenarios}>Comparar Atual × Proposto em Cenários</button>
         <span className="muted">{moves ? `${moves} movimento${moves === 1 ? '' : 's'}` : 'Arraste uma atividade para outro posto.'}</span>
       </div>
+      {auto && (
+        <p className={`hint auto-note${auto.used > auto.stations || auto.maxLoad > takt + 1e-6 ? ' bad' : ''}`}>
+          {auto.maxLoad <= takt + 1e-6
+            ? `⚡ ${auto.used} postos cabem no takt de ${fmt(takt, 1)} s (eram ${auto.stations}). Maior carga ${fmt(auto.maxLoad, 1)} s.`
+            : `⚡ Mesmo redistribuindo, o maior posto fica com ${fmt(auto.maxLoad, 1)} s (takt ${fmt(takt, 1)} s): seriam precisos ${auto.needed} postos para caber no takt.`}
+          {auto.tooLong.length > 0 && ` Atividade maior que o takt sozinha: ${auto.tooLong.slice(0, 3).join(', ')} (divida ou ponha em máquina/giga dupla).`}
+          {' '}Confira e clique em Aplicar no modelo, ou ajuste arrastando.
+        </p>
+      )}
       {emptied.length > 0 && <p className="hint">Posto vazio: {emptied.map((n) => n.name).join(', ')} (sai do cálculo e libera {emptied.reduce((s, n) => s + n.operators, 0)} pessoa(s)).</p>}
       <div className="rb-scroll section">
         <div className="rb" style={{ height: H + 70 }}>

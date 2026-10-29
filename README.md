@@ -159,4 +159,8 @@ tests        testes (vitest)
 - **Yamazumi arrastável**: botão ✋ Arrastar para balancear no Yamazumi liga o arrasto de atividades entre postos.
 - **Atividades em tabela**: no posto, 📋 Colar tabela do Excel (operação | atividade | tempo | tipo) e Copiar como tabela; na planilha padrão, aba Atividades para todos os postos e parâmetro estudo = ciclo/elemento.
 - **Operador e veículo arrastáveis**: solte num posto para virar a equipe dele, numa seta para fazer o transporte do trecho, ou no vazio para mudar o ponto de espera.
+- **Balanceamento automático** (Rebalancear → ⚡): reparte as atividades na ordem, enchendo cada posto até o takt; postos que sobram ficam sem pessoa.
+- **Réplicas**: 10 a 30 turnos com sementes diferentes; UPH médio com intervalo de 95%, P5–P95 e turnos na meta.
+- **Turnos e paradas**: almoço, ginástica laboral (param os postos com gente) e troca de modelo (para a linha) entram na simulação e no UPH real.
+- **Como usar** didático em cada tela nova e moldura azul cintilante.
 - **Como usar → Siglas / Funções**: tabelas com todas as siglas (significado e uso) e as funções da aplicação.

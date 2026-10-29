@@ -8,7 +8,7 @@ import { useStore } from '../store';
 import { Bars, Kpi, Modal } from './Modal';
 import { fmt, fmtTime, pct, STATE_LABEL } from './theme';
 
-const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup', 'off'];
+const STATES: NodeState[] = ['working', 'starved', 'blocked', 'resource', 'down', 'setup', 'break', 'off'];
 
 export function StationDetail() {
   const id = useStore((s) => s.detailId);

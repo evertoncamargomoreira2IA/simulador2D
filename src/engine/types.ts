@@ -184,6 +184,8 @@ export interface SimSettings {
   startFull?: boolean;
   /** Estudo por tempo de ciclo do posto (padrão) ou por elementos: o ciclo vira a soma das atividades. */
   studyMode?: 'cycle' | 'elements';
+  /** Paradas planejadas do turno (almoço, ginástica laboral, troca de modelo). */
+  stops?: ShiftStop[];
   /** Custos (R$): mão de obra por operador-hora, energia por kWh, matéria-prima por peça,
    *  manutenção por hora de parada, estoque em processo por peça-hora. */
   laborRate?: number;
@@ -222,7 +224,30 @@ export interface Model {
   chartHidden?: string[];
 }
 
-export type NodeState = 'working' | 'starved' | 'blocked' | 'resource' | 'down' | 'setup' | 'off';
+export type NodeState = 'working' | 'starved' | 'blocked' | 'resource' | 'down' | 'setup' | 'break' | 'off';
+
+/** Parada planejada do turno. Pausa = postos com pessoa param (almoço, ginástica); troca = a linha toda para (troca de modelo). */
+export interface ShiftStop {
+  name: string;
+  /** Minutos depois do início do turno. */
+  start: number;
+  /** Duração em minutos. */
+  duration: number;
+  kind: 'break' | 'changeover';
+}
+
+/** Paradas sugeridas para começar (turno de 8 h). */
+export const STOP_PRESETS: ShiftStop[] = [
+  { name: 'Ginástica laboral', start: 60, duration: 10, kind: 'break' },
+  { name: 'Almoço', start: 240, duration: 60, kind: 'break' },
+  { name: 'Troca de modelo', start: 360, duration: 20, kind: 'changeover' },
+];
+
+/** Minutos parados no turno (só o que cai dentro da duração). */
+export function stopMinutes(s: Pick<SimSettings, 'stops' | 'duration'>): number {
+  const end = s.duration / 60;
+  return (s.stops ?? []).reduce((a, x) => a + Math.max(0, Math.min(end, x.start + x.duration) - Math.max(0, x.start)), 0);
+}
 
 export const NODE_DEFAULTS: Record<NodeType, Partial<NodeDef>> = {
   source: { cycleTime: 0, capacity: 1, queueCap: 0, interarrival: 0 },

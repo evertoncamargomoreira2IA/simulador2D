@@ -63,6 +63,8 @@ const STEPS: { t: string; body: string[] }[] = [
       "Análises → Gargalos → Calibrar tempos para o takt escala os tempos na mesma proporção até atingir o UPH alvo (postos com tempo fixo ficam como estão).",
       "✦ IA lista sugestões testadas na própria simulação, com o ganho em UPH. Aplicar muda o modelo; o chat responde dúvidas sobre a linha.",
       "Análises → Cenários guarda a linha atual para comparar Current × Future A × Future B.",
+      "Análises → Rebalancear → ⚡ Balancear automático reparte as atividades para caber no takt com menos postos e pessoas.",
+      "Análises → Réplicas roda o turno 10 a 30 vezes e mostra o UPH com faixa de confiança. Análises → Turnos e paradas coloca almoço, ginástica e troca de modelo no UPH real.",
     ],
   },
   {

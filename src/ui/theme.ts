@@ -41,6 +41,7 @@ function read(): CanvasColors {
       resource: v('--st-resource'),
       down: v('--st-down'),
       setup: v('--st-setup'),
+      break: v('--st-break'),
       off: v('--st-off'),
     },
   };
@@ -69,6 +70,7 @@ export const STATE_LABEL: Record<NodeState, string> = {
   resource: 'Espera (operador/transporte)',
   down: 'Parado (falha)',
   setup: 'Setup',
+  break: 'Parada planejada',
   off: 'Sem produção',
 };
 

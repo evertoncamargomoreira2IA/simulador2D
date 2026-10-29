@@ -13,6 +13,8 @@ import { CycleTakt } from './CycleTakt';
 import { ThroughputTab } from './Throughput';
 import { Yamazumi } from './Yamazumi';
 import { Rebalance } from './Rebalance';
+import { Replicas } from './Replicas';
+import { Shifts } from './Shifts';
 import { loadScenarios, runScenario, saveScenarios, type Scenario } from './scenarios';
 import { Bars, Kpi, Modal } from './Modal';
 import { norm } from './StationDetail';
@@ -22,6 +24,8 @@ const TABS: { k: AnalysisTab; label: string }[] = [
   { k: 'ciclo', label: 'Cycle × Takt' },
   { k: 'yamazumi', label: 'Yamazumi' },
   { k: 'rebalancear', label: 'Rebalancear' },
+  { k: 'replicas', label: 'Réplicas' },
+  { k: 'turnos', label: 'Turnos e paradas' },
   { k: 'throughput', label: 'Throughput por intervalo' },
   { k: 'gargalos', label: 'Gargalos' },
   { k: 'spaghetti', label: 'Spaghetti' },
@@ -50,6 +54,8 @@ export function Analysis() {
         {tab === 'ciclo' && <CycleTakt />}
         {tab === 'yamazumi' && <Yamazumi />}
         {tab === 'rebalancear' && <Rebalance />}
+        {tab === 'replicas' && <Replicas />}
+        {tab === 'turnos' && <Shifts />}
         {tab === 'throughput' && <ThroughputTab />}
         {tab === 'gargalos' && <Bottlenecks />}
         {tab === 'spaghetti' && <SpaghettiTab />}

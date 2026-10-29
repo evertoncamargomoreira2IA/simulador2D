@@ -24,7 +24,7 @@ export interface Layers {
   co2: boolean;
 }
 
-export type AnalysisTab = 'ciclo' | 'yamazumi' | 'rebalancear' | 'throughput' | 'gargalos' | 'spaghetti' | 'custos' | 'energia' | 'carbono' | 'cenarios' | 'real' | 'ia';
+export type AnalysisTab = 'ciclo' | 'yamazumi' | 'rebalancear' | 'replicas' | 'turnos' | 'throughput' | 'gargalos' | 'spaghetti' | 'custos' | 'energia' | 'carbono' | 'cenarios' | 'real' | 'ia';
 
 export interface RealRow {
   name: string;
