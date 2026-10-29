@@ -714,3 +714,5 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .stall-list li.done { background: rgb(46 204 113 / 0.08); border-color: rgb(46 204 113 / 0.5); }
 .stall-list p { margin: 4px 0; font-size: 13px; }
 .stall-ok { color: #2ecc71; font-weight: 700; align-self: center; }
+.props .trail { display: grid; gap: 6px; }
+.props .trail .small { font-size: 12px; margin: 0; line-height: 1.4; }

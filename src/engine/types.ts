@@ -131,6 +131,8 @@ export interface LinkDef {
   tripQty?: number;
   /** Componente (role 'part'): quantas peças deste trecho entram em cada produto montado. */
   partQty?: number;
+  /** Trilha: pontos de curva (coordenadas do layout) por onde a peça e o transporte passam. */
+  path?: { x: number; y: number }[];
 }
 
 export type PoolKind = 'operator' | 'forklift' | 'agv' | 'amr';

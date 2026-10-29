@@ -7,6 +7,7 @@ import { Arrow, Circle, Group, Layer, Line, Rect, RegularPolygon, Shape, Stage, 
 import type { NodeRt, Simulator } from '../engine/simulator';
 import type { Background, LinkDef, NodeDef, NodeType } from '../engine/types';
 import { footprint } from '../engine/analytics';
+import { distToPoly, pointAt } from '../engine/path';
 import { useStore } from '../store';
 import { createOperator } from './operators';
 import { mixHex, useCanvasColors, type CanvasColors } from './theme';
@@ -112,10 +113,7 @@ export function CanvasView() {
       const a = m.nodes.find((n) => n.id === l.from);
       const b = m.nodes.find((n) => n.id === l.to);
       if (!a || !b) continue;
-      const [x1, y1, x2, y2] = edgePoints(a, b);
-      const len2 = (x2 - x1) ** 2 + (y2 - y1) ** 2 || 1;
-      const f = Math.max(0, Math.min(1, ((x - x1) * (x2 - x1) + (y - y1) * (y2 - y1)) / len2));
-      const d = Math.hypot(x - (x1 + f * (x2 - x1)), y - (y1 + f * (y2 - y1)));
+      const d = distToPoly(arrowPts(a, b, l.path), x, y);
       if (d < bestD) [best, bestD] = [l, d];
     }
     return best;
@@ -368,7 +366,8 @@ export function CanvasView() {
               const a = byId.get(l.from);
               const b = byId.get(l.to);
               if (!a || !b) return null;
-              const pts = edgePoints(a, b);
+              const pts = arrowPts(a, b, l.path);
+              const mid = pointAt(pts, 0.5);
               const isReturn = a.type === 'rework';
               const isPart = l.role === 'part';
               const byVehicle = !!l.poolId;
@@ -396,6 +395,7 @@ export function CanvasView() {
                     dash={isReturn ? [6, 4] : isPart ? [3, 3] : byVehicle ? [10, 4] : undefined}
                     opacity={layers.heat ? 0.85 : isPart ? 0.75 : 1}
                     hitStrokeWidth={12}
+                    lineJoin="round"
                     onClick={(e) => {
                       e.cancelBubble = true;
                       if (e.evt.ctrlKey || e.evt.metaKey) useStore.getState().ctrlPick({ linkId: l.id });
@@ -407,8 +407,8 @@ export function CanvasView() {
                       {(['from', 'to'] as const).map((end) => (
                         <Circle
                           key={end}
-                          x={end === 'to' ? pts[2] : pts[0]}
-                          y={end === 'to' ? pts[3] : pts[1]}
+                          x={end === 'to' ? pts[pts.length - 2] : pts[0]}
+                          y={end === 'to' ? pts[pts.length - 1] : pts[1]}
                           radius={7}
                           fill={colors.canvas}
                           stroke={colors.accent}
@@ -428,12 +428,13 @@ export function CanvasView() {
                           }}
                         />
                       ))}
+                      <PathHandles link={l} pts={pts} colors={colors} />
                     </>
                   )}
                   {!!l.length && layers.labels && (
                     <Text
-                      x={(pts[0] + pts[2]) / 2 - 60}
-                      y={(pts[1] + pts[3]) / 2 + 6}
+                      x={mid.x - 60}
+                      y={mid.y + 6}
                       width={120}
                       align="center"
                       text={`${l.length} m`}
@@ -445,8 +446,8 @@ export function CanvasView() {
                   )}
                   {multi && layers.labels && (
                     <Text
-                      x={(pts[0] + pts[2]) / 2 + 4}
-                      y={(pts[1] + pts[3]) / 2 - 14}
+                      x={mid.x + 4}
+                      y={mid.y - 14}
                       text={`${Math.round(share * 100)}%`}
                       fontSize={11}
                       fill={colors.muted}
@@ -557,9 +558,7 @@ export function CanvasView() {
               const b = t.link.to.def;
               const span = t.end - t.start;
               const f = span > 0 ? Math.min(1, Math.max(0, (sim.now - t.start) / span)) : 1;
-              const pts = edgePoints(a, b);
-              const x = pts[0] + (pts[2] - pts[0]) * f;
-              const y = pts[1] + (pts[3] - pts[1]) * f;
+              const { x, y } = pointAt(arrowPts(a, b, t.link.def.path), f);
               if (t.entity.qty > 1) return <Load key={t.entity.id} x={x} y={y} qty={t.entity.qty} colors={colors} />;
               return (
                 <Circle
@@ -1147,6 +1146,76 @@ export function linkNearest(id: string) {
   st.addLink(id, best.id);
   st.select([best.id]);
   st.setMessage(`Seta de "${a.name}" para "${best.name}". Duplo clique de novo em "${best.name}" para seguir a linha (Ctrl+Z desfaz).`);
+}
+
+/** Pontos de curva da seta selecionada: arrastar move, duplo clique apaga; o ＋ no meio de cada trecho cria um ponto novo. */
+function PathHandles({ link, pts, colors }: { link: LinkDef; pts: number[]; colors: CanvasColors }) {
+  const path = link.path ?? [];
+  const snapPt = (x: number, y: number) => {
+    const st = useStore.getState();
+    const g = st.gridSize / 2;
+    return st.snap ? { x: Math.round(x / g) * g, y: Math.round(y / g) * g } : { x: Math.round(x), y: Math.round(y) };
+  };
+  const save = (p: { x: number; y: number }[]) => useStore.getState().updateLink(link.id, { path: p.length ? p : undefined });
+  const cursor = (e: Konva.KonvaEventObject<MouseEvent>, c: string) => {
+    const el = e.target.getStage()?.container();
+    if (el) el.style.cursor = c;
+  };
+  const mids: { x: number; y: number; at: number }[] = [];
+  for (let k = 0; k + 3 < pts.length; k += 2) mids.push({ x: (pts[k] + pts[k + 2]) / 2, y: (pts[k + 1] + pts[k + 3]) / 2, at: k / 2 });
+  return (
+    <>
+      {mids.map((m) => (
+        <Group
+          key={`mid${m.at}-${path.length}-${m.x},${m.y}`}
+          x={m.x}
+          y={m.y}
+          draggable
+          onMouseDown={(e) => (e.cancelBubble = true)}
+          onMouseEnter={(e) => cursor(e, 'grab')}
+          onMouseLeave={(e) => cursor(e, '')}
+          onDragEnd={(e) => {
+            const p = [...path];
+            p.splice(m.at, 0, snapPt(e.target.x(), e.target.y()));
+            e.target.position(m);
+            save(p);
+          }}
+        >
+          <Circle radius={7} fill={colors.canvas} stroke={colors.accent} strokeWidth={1.5} dash={[2, 2]} hitStrokeWidth={8} />
+          <Text x={-4} y={-6} text="+" fontSize={12} fontStyle="bold" fill={colors.accent} listening={false} />
+        </Group>
+      ))}
+      {path.map((p, i) => (
+        <Circle
+          key={`wp${i}-${p.x},${p.y}`}
+          x={p.x}
+          y={p.y}
+          radius={6}
+          fill={colors.accent}
+          stroke={colors.canvas}
+          strokeWidth={2}
+          hitStrokeWidth={10}
+          draggable
+          onMouseDown={(e) => (e.cancelBubble = true)}
+          onMouseEnter={(e) => cursor(e, 'grab')}
+          onMouseLeave={(e) => cursor(e, '')}
+          onDragEnd={(e) => save(path.map((q, j) => (j === i ? snapPt(e.target.x(), e.target.y()) : q)))}
+          onDblClick={(e) => {
+            e.cancelBubble = true;
+            save(path.filter((_, j) => j !== i));
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+/** Pontos da seta: sai da borda de a, passa pelos pontos de curva e chega na borda de b. */
+function arrowPts(a: { x: number; y: number }, b: { x: number; y: number }, path?: { x: number; y: number }[]): number[] {
+  if (!path?.length) return edgePoints(a, b);
+  const s = edgePoints(a, path[0]);
+  const e = edgePoints(path[path.length - 1], b);
+  return [s[0], s[1], ...path.flatMap((p) => [p.x, p.y]), e[2], e[3]];
 }
 
 function edgePoints(a: { x: number; y: number }, b: { x: number; y: number }): number[] {

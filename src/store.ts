@@ -230,7 +230,9 @@ export const useStore = create<State>((set, get) => {
       const set_ = new Set(ids);
       const g = get().gridSize;
       const snap = (v: number) => (get().snap ? Math.round(v / g) * g : v);
-      edit({ ...m, nodes: m.nodes.map((n) => (set_.has(n.id) ? { ...n, x: snap(n.x + dx), y: snap(n.y + dy) } : n)) }, {}, ids.length > 1 ? `mover ${ids.length} blocos` : 'mover bloco');
+      // trilha de seta entre blocos que andam juntos anda junto
+      const links = ids.length > 1 ? m.links.map((l) => (l.path && set_.has(l.from) && set_.has(l.to) ? { ...l, path: l.path.map((p) => ({ x: p.x + dx, y: p.y + dy })) } : l)) : m.links;
+      edit({ ...m, links, nodes: m.nodes.map((n) => (set_.has(n.id) ? { ...n, x: snap(n.x + dx), y: snap(n.y + dy) } : n)) }, {}, ids.length > 1 ? `mover ${ids.length} blocos` : 'mover bloco');
     },
 
     addNode: (type, x, y, patch = {}) => {

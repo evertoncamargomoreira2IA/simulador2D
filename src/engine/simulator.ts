@@ -19,6 +19,7 @@
 
 import { effectiveTakt } from './balance';
 import { MinHeap } from './heap';
+import { pointAt, polyLength, polyline, reversePts } from './path';
 import { Rng } from './rng';
 import { baseCycle, slotPositions, type LinkDef, type Model, type NodeDef, type NodeState, type PoolDef, type ShiftStop } from './types';
 
@@ -134,6 +135,8 @@ export interface Move {
   y1: number;
   t0: number;
   t1: number;
+  /** Trilha da seta (polilinha), quando o trecho tem pontos de curva. */
+  pts?: number[];
 }
 
 export interface UnitRt {
@@ -264,6 +267,8 @@ export class Simulator {
   private sameTimeEvents = 0;
   /** Distâncias reais (m) entre pares de posições, vindas de links com comprimento informado. */
   private lengths = new Map<string, number>();
+  /** Trilhas das setas com pontos de curva, nos dois sentidos (chave como em lengths). */
+  private routes = new Map<string, number[]>();
   /** Há um nó marcado como ponto de medição da produção. */
   readonly hasOutputPoint: boolean;
 
@@ -336,8 +341,17 @@ export class Simulator {
       const from = this.byId.get(def.from);
       const to = this.byId.get(def.to);
       if (!from || !to || from === to) continue;
-      const geo = Math.hypot(to.def.x - from.def.x, to.def.y - from.def.y) / ppm;
+      const route = def.path?.length ? polyline(from.def, to.def, def.path) : null;
+      const geo = (route ? polyLength(route) : Math.hypot(to.def.x - from.def.x, to.def.y - from.def.y)) / ppm;
       const distance = def.length && def.length > 0 ? def.length : geo;
+      if (route) {
+        this.routes.set(`${from.def.x},${from.def.y}|${to.def.x},${to.def.y}`, route);
+        this.routes.set(`${to.def.x},${to.def.y}|${from.def.x},${from.def.y}`, reversePts(route));
+        if (!(def.length && def.length > 0)) {
+          this.lengths.set(`${from.def.x},${from.def.y}|${to.def.x},${to.def.y}`, geo);
+          this.lengths.set(`${to.def.x},${to.def.y}|${from.def.x},${from.def.y}`, geo);
+        }
+      }
       if (def.length && def.length > 0) {
         this.lengths.set(`${from.def.x},${from.def.y}|${to.def.x},${to.def.y}`, def.length);
         this.lengths.set(`${to.def.x},${to.def.y}|${from.def.x},${from.def.y}`, def.length);
@@ -931,6 +945,7 @@ export class Simulator {
     if (!m || t >= m.t1) return { x: u.x, y: u.y };
     if (t <= m.t0) return { x: m.x0, y: m.y0 };
     const f = (t - m.t0) / (m.t1 - m.t0);
+    if (m.pts) return pointAt(m.pts, f);
     return { x: m.x0 + (m.x1 - m.x0) * f, y: m.y0 + (m.y1 - m.y0) * f };
   }
 
@@ -956,11 +971,12 @@ export class Simulator {
   /** Desloca a unidade até (x, y) a partir de agora; retorna o tempo de deslocamento (s). */
   private sendUnit(u: UnitRt, x: number, y: number, where: string, t0 = this.now): number {
     const p = this.positionOf(u, t0);
-    const meters = this.lengths.get(`${p.x},${p.y}|${x},${y}`) ?? Math.hypot(x - p.x, y - p.y) / this.ppm;
+    const key = `${p.x},${p.y}|${x},${y}`;
+    const meters = this.lengths.get(key) ?? Math.hypot(x - p.x, y - p.y) / this.ppm;
     const speed = u.pool.def.speed > 0 ? u.pool.def.speed : Infinity;
     const dt = meters / speed;
     u.distance += meters;
-    u.move = { x0: p.x, y0: p.y, x1: x, y1: y, t0, t1: t0 + dt };
+    u.move = { x0: p.x, y0: p.y, x1: x, y1: y, t0, t1: t0 + dt, pts: this.routes.get(key) };
     u.x = x;
     u.y = y;
     u.where = where;

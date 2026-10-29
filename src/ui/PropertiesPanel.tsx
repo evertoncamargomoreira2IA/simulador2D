@@ -74,6 +74,27 @@ export function PropertiesPanel() {
                 useStore.getState().updateLink(l.id, { length: e.target.value === '' || !(v > 0) ? undefined : v });
               }} />
             </label>
+            <div className="field full trail">
+              <span>Trilha do transporte {l.path?.length ? `(${l.path.length} ponto${l.path.length > 1 ? 's' : ''} de curva)` : '(reta)'}</span>
+              <p className="muted small">Arraste o <b>＋</b> no meio da seta para criar uma curva. Arraste o ponto azul para mover; duplo clique apaga. A peça e o operador seguem a trilha e a distância passa a ser medida por ela.</p>
+              <div className="row-btns">
+                {from && to && (
+                  <button className="btn" onClick={() => useStore.getState().updateLink(l.id, { path: [{ x: to.x, y: from.y }] })} title="Uma curva de 90°: anda na horizontal e depois na vertical">
+                    ↱ Trilha em L
+                  </button>
+                )}
+                {from && to && (
+                  <button className="btn" onClick={() => useStore.getState().updateLink(l.id, { path: [{ x: from.x, y: to.y }] })} title="Anda na vertical e depois na horizontal">
+                    ↳ L invertido
+                  </button>
+                )}
+                {!!l.path?.length && (
+                  <button className="btn ghost" onClick={() => useStore.getState().updateLink(l.id, { path: undefined })}>
+                    Deixar reta
+                  </button>
+                )}
+              </div>
+            </div>
             <button className="btn primary full" onClick={() => useStore.getState().setTransportFor({ linkId: l.id, poolId: l.poolId })}>
               🚚 Vincular transporte (operador, AGV, AMR)…
             </button>

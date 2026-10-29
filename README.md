@@ -48,6 +48,7 @@ npm run build:single # gera dist-single/index.html (arquivo único, abre direto 
 - **Agrupamento** (`batchSize`): o posto junta N peças numa carga (carrinho de 15, pallet de 48) e quebra cargas maiores quando preciso. Tempos e distâncias são somados por unidade.
 - **Ponto de medição** (`outputPoint`): throughput, lead time e takt medidos no fim da linha, mesmo com expedição depois.
 - **Distância real no link** (`length`): trechos fora de escala no desenho (ex.: AGV de 200 m até a expedição).
+- **Trilha customizada** (`path` no link): pontos de curva na seta (arrastar o ＋, ou Trilha em L). Desenho, distância e o caminho do operador/AGV seguem a trilha, nos dois sentidos.
 - **Áreas** (`zones`): regiões desenhadas no canvas, como a expedição fora do layout.
 - **Bonequinhos** nos postos com operador fixo (animados quando o posto trabalha) e nos grupos de operadores; empilhadeira e AGV mostram a carga.
 - **Total cycle time** (conteúdo de trabalho por unidade, com submontagens) separado do lead time (com esperas). Tile de cargas expedidas.

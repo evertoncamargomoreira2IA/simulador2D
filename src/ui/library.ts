@@ -39,6 +39,19 @@ export const LIBRARY: LibItem[] = [
     example: 'transport',
   },
   {
+    id: 'trilha',
+    q: 'Como faço o operador ou o AGV seguir um caminho (corredor) e não a linha reta?',
+    tag: 'Transporte',
+    why: 'Toda seta pode ter pontos de curva. A peça e o recurso vinculado andam pela trilha, e a distância e o tempo de transporte passam a ser medidos por ela.',
+    steps: [
+      { text: 'Clique na seta. Aparece um ＋ no meio de cada trecho.', img: 'trilha-1' },
+      { text: 'Arraste o ＋ até o corredor: vira um ponto de curva (azul). Repita para cada esquina. Duplo clique no ponto apaga.', img: 'trilha-2' },
+      { text: 'Ou use ↱ Trilha em L no painel para uma curva de 90° na hora. Dê ▶ Start: o operador vai e volta pela trilha.', img: 'trilha-3' },
+    ],
+    tip: 'Se o trecho real é maior que o desenho (outro prédio), preencha a Distância real: ela vale mais que a trilha.',
+    example: 'transport',
+  },
+  {
     id: 'nao-leva',
     q: 'O operador não está levando a peça para o outro posto',
     tag: 'Transporte',

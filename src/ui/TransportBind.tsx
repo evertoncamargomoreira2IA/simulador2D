@@ -4,6 +4,7 @@
 import { useMemo, useState } from 'react';
 import { effectiveTakt } from '../engine/balance';
 import { makePool, newId, type LinkDef, type PoolKind } from '../engine/types';
+import { polyLength, polyline } from '../engine/path';
 import { useStore } from '../store';
 import { HowTo } from './HowTo';
 import { Kpi, Modal } from './Modal';
@@ -39,7 +40,7 @@ export function TransportBind({ start, onClose }: { start: { poolId?: string; li
   const ppm = model.settings.pxPerMeter || 40;
   const a = model.nodes.find((n) => n.id === from);
   const b = model.nodes.find((n) => n.id === to);
-  const drawn = a && b ? Math.hypot(a.x - b.x, a.y - b.y) / ppm : 0;
+  const drawn = a && b ? polyLength(polyline(a, b, link0 && link0.from === from && link0.to === to ? link0.path : undefined)) / ppm : 0;
   const dist = length === '' ? drawn : Number(length);
 
   // conta de bolso: viagens por hora que a linha pede × que o recurso aguenta
