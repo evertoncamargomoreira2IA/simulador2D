@@ -1,6 +1,6 @@
 // Monta modelos a partir de listas de postos e faz o layout automático em serpentina.
 
-import { DEFAULT_SETTINGS, makeNode, MANUAL_PATCH, newId, operationsTime, type ActivityKind, type LinkDef, type Model, type NodeDef, type NodeType, type Operation } from '../engine/types';
+import { DEFAULT_SETTINGS, makeNode, makePool, MANUAL_PATCH, newId, operationsTime, type ActivityKind, type LinkDef, type Model, type NodeDef, type NodeType, type Operation } from '../engine/types';
 import { LP2_STATIONS } from './lp2';
 
 export interface StationRow {
@@ -166,6 +166,42 @@ export function simpleModel(): Model {
   rw.x = insp.x;
   rw.y = 330;
   return m;
+}
+
+/** Exemplo didático: 3 postos fazem peças diferentes, um AMR e um operador levam até a montagem, que junta tudo em um produto. */
+export function combineModel(): Model {
+  const nd = (type: NodeType, id: string, name: string, x: number, y: number, extra: Partial<NodeDef> = {}) =>
+    makeNode(type, { id, name, x, y, ...extra });
+  const nodes: NodeDef[] = [
+    nd('source', 'S1', 'Material peça 1', 80, 120),
+    nd('source', 'S2', 'Material peça 2', 80, 260),
+    nd('source', 'S3', 'Material peça 3', 80, 400),
+    nd('machine', 'P1', 'Posto 1 – Base', 260, 120, { cycleTime: 30 }),
+    nd('machine', 'P2', 'Posto 2 – Placa', 260, 260, { cycleTime: 25 }),
+    nd('machine', 'P3', 'Posto 3 – Parafusos', 260, 400, { cycleTime: 8 }),
+    nd('machine', 'X', 'Posto X – Montagem', 620, 260, { cycleTime: 32, queueCap: 4, partBuffer: 6 }),
+    nd('sink', 'FG', 'Produto pronto', 820, 260),
+  ];
+  const L = (from: string, to: string, extra: Partial<LinkDef> = {}): LinkDef => ({ id: newId('L'), from, to, weight: 1, ...extra });
+  const links: LinkDef[] = [
+    L('S1', 'P1'),
+    L('S2', 'P2'),
+    L('S3', 'P3'),
+    L('P1', 'X', { poolId: 'AMR', tripQty: 2 }),
+    L('P2', 'X', { role: 'part', poolId: 'OP' }),
+    L('P3', 'X', { role: 'part', partQty: 4, poolId: 'AMR', tripQty: 8 }),
+    L('X', 'FG'),
+  ];
+  return {
+    name: 'Exemplo: combinar peças com AMR e operador',
+    nodes,
+    links,
+    pools: [
+      makePool('amr', { id: 'AMR', name: 'AMR', count: 1, x: 440, y: 400 }),
+      makePool('operator', { id: 'OP', name: 'Abastecedor', count: 1, x: 440, y: 200 }),
+    ],
+    settings: { ...DEFAULT_SETTINGS, duration: 8 * 3600 },
+  };
 }
 
 type Act = [string, number, ActivityKind];

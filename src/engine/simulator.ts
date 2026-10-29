@@ -36,6 +36,8 @@ export interface Entity {
   next: LinkRt | null;
   /** Aguardando o veículo que vai buscá-la. */
   awaitingPickup: boolean;
+  /** Já chamou o transporte (está numa viagem marcada). */
+  called?: boolean;
   /** Giga ocupada no nó atual (-1 = nenhuma). */
   slot: number;
   /** Unidades nesta carga (1 = peça avulsa). */
@@ -140,7 +142,7 @@ export interface UnitRt {
   where: string;
 }
 
-type PoolRequest = { kind: 'station'; node: NodeRt } | { kind: 'move'; node: NodeRt; entity: Entity; link: LinkRt };
+type PoolRequest = { kind: 'station'; node: NodeRt } | { kind: 'move'; node: NodeRt; entity: Entity; link: LinkRt; group?: Entity[] };
 
 export interface PoolRt {
   def: PoolDef;
@@ -184,6 +186,7 @@ interface SimEvent {
   entity?: Entity;
   link?: LinkRt;
   stop?: ShiftStop;
+  group?: Entity[];
 }
 
 export interface TimelinePoint {
@@ -516,7 +519,7 @@ export class Simulator {
         this.releaseUnit(ev.unit!);
         break;
       case 'pickup':
-        this.onPickup(ev.node!, ev.entity!, ev.link!, ev.unit!);
+        this.onPickup(ev.node!, ev.entity!, ev.link!, ev.unit!, ev.group);
         break;
       case 'sample':
         this.sample();
@@ -599,13 +602,13 @@ export class Simulator {
     if (t === 'source') return false;
     const batch = this.batchOf(n);
     if (batch) return this.queuedUnits(n) + n.reservedUnits < batch + Math.max(0, n.def.queueCap);
-    const occ = n.queue.length + n.processing.length + n.done.length + n.reserved;
+    const occ = n.queue.length + n.processing.length + n.done.length - this.staged(n) + n.reserved;
     return occ < Math.max(1, n.def.capacity) + Math.max(0, n.def.queueCap);
   }
 
   private canAcceptVia(l: LinkRt): boolean {
     if (!l.isPart) return this.canAccept(l.to);
-    return l.to.parts.get(l)!.length + l.reserved < Math.max(1, l.to.def.partBuffer ?? 2);
+    return l.to.parts.get(l)!.length + l.reserved < this.partQty(l) * Math.max(1, l.to.def.partBuffer ?? 2);
   }
 
   /**
@@ -657,7 +660,19 @@ export class Simulator {
       if (link.pool) {
         // Transporte por veículo: a peça espera no posto até ser buscada.
         e.awaitingPickup = true;
-        this.requestVehicle(n, e, link);
+        const trip = this.tripOf(link);
+        if (trip > 1) this.freeSlot(n, e);
+        if (trip > 1) {
+          // junta peças na saída do posto até completar a viagem (ou até o destino não ter mais lugar)
+          const wait = n.done.filter((x) => x.awaitingPickup && !x.called && x.next === link);
+          if (wait.length >= Math.min(trip, this.roomOf(link))) {
+            for (const x of wait) x.called = true;
+            this.requestVehicle(n, wait[0], link, wait);
+          }
+        } else {
+          e.called = true;
+          this.requestVehicle(n, e, link);
+        }
         i++;
         continue;
       }
@@ -709,8 +724,12 @@ export class Simulator {
     }
   }
 
+  private partQty(l: LinkRt): number {
+    return Math.max(1, Math.round(l.def.partQty ?? 1));
+  }
+
   private partsReady(n: NodeRt): boolean {
-    for (const l of n.partLinks) if (n.parts.get(l)!.length === 0) return false;
+    for (const l of n.partLinks) if (n.parts.get(l)!.length < this.partQty(l)) return false;
     return true;
   }
 
@@ -724,7 +743,7 @@ export class Simulator {
     const batch = this.batchOf(n);
     while (
       n.queue.length > 0 &&
-      n.processing.length + n.done.length < servers &&
+      n.processing.length + n.done.length - this.staged(n) < servers &&
       (this.partsReady(n) || !!n.queue[0].assembled?.has(n.def.id)) &&
       (!batch || this.queuedUnits(n) >= batch)
     ) {
@@ -756,10 +775,13 @@ export class Simulator {
       const reassembly = !!e.assembled?.has(n.def.id);
       if (n.partLinks.length && !reassembly) (e.assembled ??= new Set()).add(n.def.id);
       for (const l of reassembly ? [] : n.partLinks) {
-        const part = n.parts.get(l)!.shift();
-        if (part) e.work += part.work;
-        this.consumed++;
-        this.setWip(this.wip - 1);
+        for (let k = this.partQty(l); k > 0; k--) {
+          const part = n.parts.get(l)!.shift();
+          if (!part) break;
+          e.work += part.work;
+          this.consumed++;
+          this.setWip(this.wip - 1);
+        }
         this.retry.add(l.from);
       }
       const handling = n.def.handlingTime ?? 0;
@@ -886,33 +908,60 @@ export class Simulator {
         req.node.waitingPool = false;
         this.tryStart(req.node);
       } else {
-        this.assignVehicle(req.node, req.entity, req.link);
+        this.assignVehicle(req.node, req.entity, req.link, req.group);
       }
     }
   }
 
-  private requestVehicle(n: NodeRt, e: Entity, link: LinkRt): void {
-    const pool = link.pool!;
-    pool.requests++;
-    if (pool.units.some((u) => !u.busy)) this.assignVehicle(n, e, link);
-    else pool.queue.push({ kind: 'move', node: n, entity: e, link });
+  private tripOf(link: LinkRt): number {
+    const q = Math.round(link.def.tripQty ?? 1);
+    return link.pool && q > 1 ? q : 1;
   }
 
-  private assignVehicle(n: NodeRt, e: Entity, link: LinkRt): void {
+  /** Quantas peças cabem no destino do trecho: a viagem nunca espera mais que isso. */
+  private roomOf(l: LinkRt): number {
+    if (l.isPart) return this.partQty(l) * Math.max(1, l.to.def.partBuffer ?? 2);
+    const t = l.to.def.type;
+    if (t === 'sink') return Infinity;
+    const batch = this.batchOf(l.to);
+    return Math.max(1, (batch || Math.max(1, l.to.def.capacity)) + Math.max(0, l.to.def.queueCap));
+  }
+
+  /** Peças prontas esperando completar a viagem: não seguram a giga do posto. */
+  private staged(n: NodeRt): number {
+    let k = 0;
+    for (const e of n.done) if (e.awaitingPickup && e.next && this.tripOf(e.next) > 1) k++;
+    return k;
+  }
+
+  private requestVehicle(n: NodeRt, e: Entity, link: LinkRt, group?: Entity[]): void {
+    const pool = link.pool!;
+    pool.requests++;
+    if (pool.units.some((u) => !u.busy)) this.assignVehicle(n, e, link, group);
+    else pool.queue.push({ kind: 'move', node: n, entity: e, link, group });
+  }
+
+  private assignVehicle(n: NodeRt, e: Entity, link: LinkRt, group?: Entity[]): void {
     const pool = link.pool!;
     const u = this.freeUnit(pool, n.def.x, n.def.y)!;
     const dt = this.sendUnit(u, n.def.x, n.def.y, n.def.name);
-    this.schedule(this.now + dt + pool.def.loadTime, 'pickup', { node: n, entity: e, link, unit: u });
+    this.schedule(this.now + dt + pool.def.loadTime, 'pickup', { node: n, entity: e, link, unit: u, group });
   }
 
-  private onPickup(n: NodeRt, e: Entity, link: LinkRt, u: UnitRt): void {
-    const idx = n.done.indexOf(e);
-    if (idx >= 0) n.done.splice(idx, 1);
-    e.awaitingPickup = false;
+  private onPickup(n: NodeRt, e: Entity, link: LinkRt, u: UnitRt, group?: Entity[]): void {
+    const load = group?.length ? group : [e];
     u.loaded = true;
     const travel = this.sendUnit(u, link.to.def.x, link.to.def.y, link.to.def.name);
-    this.depart(n, e, link, travel, u);
+    // o recurso leva todas as peças da viagem juntas; só a primeira libera o recurso na chegada
+    load.forEach((x, i) => {
+      const idx = n.done.indexOf(x);
+      if (idx >= 0) n.done.splice(idx, 1);
+      x.awaitingPickup = false;
+      x.called = false;
+      this.depart(n, x, link, travel, i === 0 ? u : undefined);
+    });
     this.afterDeparture(n);
+    this.tryStart(n);
     this.updateState(n);
   }
 

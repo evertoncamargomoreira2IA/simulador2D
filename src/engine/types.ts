@@ -127,6 +127,10 @@ export interface LinkDef {
   length?: number;
   /** Cada peça passa no máximo uma vez por este link (ex.: amostra do OBA que volta ao posto). */
   once?: boolean;
+  /** Transporte: peças por viagem. As peças prontas esperam na saída do posto até completar a viagem. */
+  tripQty?: number;
+  /** Componente (role 'part'): quantas peças deste trecho entram em cada produto montado. */
+  partQty?: number;
 }
 
 export type PoolKind = 'operator' | 'forklift' | 'agv' | 'amr';

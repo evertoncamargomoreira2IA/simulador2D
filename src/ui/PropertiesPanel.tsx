@@ -7,6 +7,7 @@ import { nodeKpi } from '../engine/metrics';
 import type { LinkDef, NodeDef, NodeState, NodeType, PoolDef, PoolKind } from '../engine/types';
 import { isAssembly, makePool, MANUAL_PATCH, newId, POOL_LABEL, TYPE_LABEL } from '../engine/types';
 import { useStore } from '../store';
+import { HowTo } from './HowTo';
 import { fmt, pct, STATE_LABEL } from './theme';
 
 /** `machine`: só faz sentido com máquina (some no posto manual). `assembly`: só na montagem. */
@@ -231,6 +232,7 @@ export function PropertiesPanel() {
             })}
           </div>
 
+          <Combine nodeId={n.id} />
           <Supply nodeId={n.id} />
 
           <div className="section">
@@ -681,6 +683,80 @@ function Supply({ nodeId }: { nodeId: string }) {
         ))}
       </div>
       <p className="hint">Com AGV, empilhadeira ou operador, a peça espera pronta no posto de origem até alguém buscar; a distância sai do desenho (ou do campo Distância na ligação).</p>
+    </div>
+  );
+}
+
+/** Combinar peças: o posto recebe peças de vários postos e junta tudo em um produto. */
+function Combine({ nodeId }: { nodeId: string }) {
+  const model = useStore((s) => s.model);
+  const n = model.nodes.find((x) => x.id === nodeId);
+  const ins = model.links.filter((l) => l.to === nodeId);
+  if (!n || n.type !== 'machine' || ins.length < 2) return null;
+  const st = useStore.getState;
+  const name = (id: string) => model.nodes.find((x) => x.id === id)?.name ?? id;
+  const parts = ins.filter((l) => l.role === 'part');
+  const mains = ins.filter((l) => l.role !== 'part');
+  const setRole = (l: LinkDef, part: boolean) => {
+    st().updateLink(l.id, { role: part ? 'part' : undefined, partQty: part ? l.partQty : undefined });
+    if (part && n.partBuffer === undefined) st().updateNode(n.id, { partBuffer: 2 });
+  };
+  return (
+    <div className="section combine">
+      <p className="label">Combinar peças neste posto</p>
+      <HowTo
+        title="Juntar peças de vários postos em um produto"
+        why="Quando o posto recebe peças de postos diferentes (ex.: peça 1, 2 e 3) e integra tudo em um produto, ele só pode começar quando tiver uma de cada. Aqui você diz qual entrada vira o produto e quais são consumidas."
+        steps={[
+          'Ligue no layout cada posto fornecedor a este posto (uma seta por peça).',
+          'Escolha uma entrada como Principal: é a peça que segue como produto (a base, a carcaça).',
+          'Marque as outras como Componente e diga quantas de cada vão em um produto.',
+          'Se as três viram uma peça nova, escolha qualquer uma como Principal e as outras como Componente: o resultado é 1 produto.',
+          'Ajuste "Estoque de componentes" (kits que cabem no posto) e rode ▶ Start. O posto fica Esperando peça quando falta algum componente.',
+        ]}
+        tip="Quem chega primeiro espera na entrada; o posto só começa com o kit completo. O gargalo costuma ser o fornecedor mais lento: veja o estado Esperando peça."
+        open={parts.length === 0}
+      />
+      <p className="hint">Principal = a peça que segue como produto. Componente = consumida na montagem.</p>
+      <table className="grid-table combine-table">
+        <thead>
+          <tr>
+            <th>Entrada</th>
+            <th>Papel</th>
+            <th title="Quantas peças desta entrada vão em 1 produto">Qtd/produto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ins.map((l) => (
+            <tr key={l.id}>
+              <td>{name(l.from)}</td>
+              <td>
+                <select aria-label={`Papel da peça de ${name(l.from)}`} value={l.role === 'part' ? 'part' : 'main'} onChange={(e) => setRole(l, e.target.value === 'part')}>
+                  <option value="main">Principal</option>
+                  <option value="part">Componente</option>
+                </select>
+              </td>
+              <td>
+                {l.role === 'part' ? (
+                  <input aria-label={`Quantidade de ${name(l.from)} por produto`} type="number" min={1} step={1} value={l.partQty ?? 1} onChange={(e) => {
+                    const q = Math.max(1, Math.round(Number(e.target.value)));
+                    st().updateLink(l.id, { partQty: q > 1 ? q : undefined });
+                  }} />
+                ) : (
+                  <span className="muted">1</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {parts.length > 0 && mains.length === 0 && <p className="hint auto-note bad">Falta uma entrada Principal: sem ela o posto nunca começa. Troque uma das peças para Principal.</p>}
+      {parts.length > 0 && mains.length > 0 && (
+        <p className="hint">
+          Receita: 1 × {mains.map((l) => name(l.from)).join(' ou ')} + {parts.map((l) => `${l.partQty ?? 1} × ${name(l.from)}`).join(' + ')} → 1 produto. Cabem {n.partBuffer ?? 2} kits no posto.
+        </p>
+      )}
+      {parts.length === 0 && <p className="hint">Hoje as entradas só se somam (cada peça que chega é processada sozinha). Marque Componente para juntar.</p>}
     </div>
   );
 }

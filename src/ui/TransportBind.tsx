@@ -20,7 +20,8 @@ export function TransportBind({ start, onClose }: { start: { poolId?: string; li
   const [to, setTo] = useState(link0?.to ?? '');
   const [role, setRole] = useState<'flow' | 'part'>(link0?.role === 'part' ? 'part' : 'flow');
   const fromNode = model.nodes.find((n) => n.id === from);
-  const [batch, setBatch] = useState(fromNode?.batchSize ?? 1);
+  const [batch, setBatch] = useState(link0?.tripQty ?? 1);
+  const [partQty, setPartQty] = useState(link0?.partQty ?? 1);
   const pool0 = pools.find((p) => p.id === poolId);
   const [count, setCount] = useState(pool0?.count ?? 1);
   const [speed, setSpeed] = useState(pool0?.speed ?? 1);
@@ -64,13 +65,32 @@ export function TransportBind({ start, onClose }: { start: { poolId?: string; li
     } else {
       m.pools = (m.pools ?? []).map((p) => (p.id === pid ? { ...p, count, speed, loadTime: load } : p));
     }
-    const patch: Partial<LinkDef> = { poolId: pid, role: role === 'part' ? 'part' : undefined, length: length === '' ? undefined : Number(length) };
+    const patch: Partial<LinkDef> = {
+      poolId: pid,
+      role: role === 'part' ? 'part' : undefined,
+      length: length === '' ? undefined : Number(length),
+      tripQty: batch > 1 ? batch : undefined,
+      partQty: role === 'part' && partQty > 1 ? partQty : undefined,
+    };
     const target = existing ?? (link0 && !model.links.some((l) => l.id !== link0.id && l.from === from && l.to === to) ? link0 : undefined);
     if (target) m.links = m.links.map((l) => (l.id === target.id ? { ...l, from, to, ...patch } : l));
     else m.links = [...m.links, { id: newId('L'), from, to, weight: 1, ...patch }];
-    m.nodes = m.nodes.map((n) => (n.id === from ? { ...n, batchSize: batch > 1 ? batch : undefined } : n));
+    // o destino precisa ter lugar para a viagem inteira (fila de entrada ou estoque de componentes)
+    let grew = '';
+    m.nodes = m.nodes.map((n) => {
+      if (n.id !== to || batch <= 1) return n;
+      if (role === 'part') {
+        const kits = Math.ceil(batch / Math.max(1, partQty));
+        if ((n.partBuffer ?? 2) >= kits) return n;
+        grew = ` Estoque de componentes de ${n.name} subiu para ${kits} kits.`;
+        return { ...n, partBuffer: kits };
+      }
+      if (n.queueCap + Math.max(1, n.capacity) >= batch) return n;
+      grew = ` Fila de entrada de ${n.name} subiu para ${batch - Math.max(1, n.capacity)} para caber a viagem.`;
+      return { ...n, queueCap: batch - Math.max(1, n.capacity) };
+    });
     const pname = m.pools.find((p) => p.id === pid)?.name;
-    st.setModel(m, `"${pname}" leva ${role === 'part' ? 'o componente' : 'a peça'} de ${a?.name} para ${b?.name}${batch > 1 ? ` em lotes de ${batch}` : ''}. Rode ▶ Start para ver.`);
+    st.setModel(m, `"${pname}" leva ${role === 'part' ? 'o componente' : 'a peça'} de ${a?.name} para ${b?.name}${batch > 1 ? `, ${batch} por viagem` : ''}.${grew} Rode ▶ Start para ver.`);
     onClose();
   };
   const unbind = () => {
@@ -89,7 +109,7 @@ export function TransportBind({ start, onClose }: { start: { poolId?: string; li
           'No layout, segure Ctrl e clique no operador (ou AGV/AMR). Depois segure Ctrl e clique na seta do trecho. Esta janela abre.',
           'Confira o posto de entrada (onde ele pega) e o posto de saída (onde entrega). Pode trocar aqui.',
           'Diga se vai o produto da linha ou um componente que será montado no posto de saída.',
-          'Peças por viagem: o posto de entrada junta esse lote antes de chamar o transporte.',
+          'Peças por viagem: as peças prontas esperam na saída do posto de entrada até completar a viagem (o posto continua produzindo). O destino ganha lugar para a viagem inteira.',
           'Veja a conta de bolso: ocupação acima de 85% indica que vai faltar recurso. Salve e rode ▶ Start.',
         ]}
         tip="Também dá para arrastar o bonequinho e soltar na seta. Para apagar um recurso, clique nele e use Apagar no painel da direita (ou Delete)."
@@ -140,8 +160,14 @@ export function TransportBind({ start, onClose }: { start: { poolId?: string; li
             <option value="part">Componente para montagem no posto de saída (kit)</option>
           </select>
         </label>
+        {role === 'part' && (
+          <label className="field">
+            <span>Peças deste componente por produto</span>
+            <input type="number" min={1} step={1} value={partQty} onChange={(e) => setPartQty(Math.max(1, Math.round(Number(e.target.value))))} />
+          </label>
+        )}
         <label className="field">
-          <span>Peças por viagem (lote)</span>
+          <span>Peças por viagem</span>
           <input type="number" min={1} step={1} value={batch} onChange={(e) => setBatch(Math.max(1, Math.round(Number(e.target.value))))} />
         </label>
         <label className="field">
@@ -161,6 +187,12 @@ export function TransportBind({ start, onClose }: { start: { poolId?: string; li
           <input type="number" min={0} step={1} value={length} placeholder={`desenho: ${fmt(drawn, 1)}`} onChange={(e) => setLength(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))} />
         </label>
       </div>
+      {fromNode && (fromNode.batchSize ?? 0) > 1 && (
+        <p className="hint auto-note bad section">
+          {fromNode.name} está com "Agrupar {fromNode.batchSize} peças" no posto: ele espera juntar {fromNode.batchSize} peças na entrada e processa tudo de uma vez. Para transporte, use Peças por viagem aqui.{' '}
+          <button className="btn small" onClick={() => useStore.getState().updateNode(fromNode.id, { batchSize: undefined })}>Tirar o agrupamento do posto</button>
+        </p>
+      )}
       {from && to && (
         <>
           <div className="bind-flow section" aria-label="Resumo do transporte">

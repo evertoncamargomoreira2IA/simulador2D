@@ -674,3 +674,9 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .bind-arrow::after { content: '▶'; position: absolute; right: -8px; bottom: -9px; color: var(--accent); font-size: 12px; }
 .bind-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
 .props .btn.full { grid-column: 1 / -1; width: 100%; }
+
+.combine-table { width: 100%; font-size: 12px; }
+.combine-table select, .combine-table input { width: 100%; min-width: 0; }
+.combine-table td:first-child { word-break: break-word; }
+.combine-table td:nth-child(2) { width: 42%; }
+.combine-table td:nth-child(3) { width: 22%; }

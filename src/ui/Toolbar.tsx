@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { lineKpi } from '../engine/metrics';
 import { exportModelCsv, exportModelJson, exportResultsXlsx } from '../io/exporter';
 import { ACCEPT, importAnyFile } from './fileImport';
-import { elementsModel, lp2Model, simpleModel } from '../model/builder';
+import { elementsModel, lp2Model, simpleModel, combineModel } from '../model/builder';
 import { privateExample, useStore } from '../store';
 import { fmtTime } from './theme';
 import { effectiveTakt } from '../engine/balance';
@@ -74,6 +74,7 @@ export function Toolbar() {
             if (main) st().openModel(main, 'Main line com operações e atividades de cada posto. Veja Análises → Yamazumi.');
             if (e.target.value === 'lp2') st().openModel(lp2Model(), 'Exemplo LP2 carregado (70 postos, 12 s por posto).');
             if (e.target.value === 'elements') st().openModel(elementsModel(), 'Linha exemplo com operações e atividades: estudo por elemento. Veja Análises → Yamazumi.');
+            if (e.target.value === 'combine') st().openModel(combineModel(), 'Exemplo: 3 postos, AMR e abastecedor levam as peças ao Posto X, que junta tudo em um produto.');
             if (e.target.value === 'simple') st().openModel(simpleModel(), 'Linha exemplo simples carregada.');
           }}
         >
@@ -83,6 +84,7 @@ export function Toolbar() {
           <option value="lp2">Linha LP2 (70 postos)</option>
           <option value="simple">Linha simples</option>
           <option value="elements">Linha com atividades (Yamazumi)</option>
+          <option value="combine">Combinar peças com AMR</option>
         </select>
         <button className="btn icon" disabled={!undoLabel} onClick={() => st().undo()} title={undoLabel ? `Desfazer ${undoLabel} (Ctrl+Z)` : 'Nada para desfazer'} aria-label="Desfazer">↶</button>
         <button className="btn icon" disabled={!redoLabel} onClick={() => st().redo()} title={redoLabel ? `Refazer ${redoLabel} (Ctrl+Y)` : 'Nada para refazer'} aria-label="Refazer">↷</button>
