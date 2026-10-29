@@ -1,0 +1,143 @@
+// Layout principal e laço de animação (requestAnimationFrame).
+
+import { useEffect, useState } from 'react';
+import { importAnyFile } from './fileImport';
+import { useStore } from '../store';
+import { CanvasView } from './CanvasView';
+import { Dashboard } from './Dashboard';
+import { Palette } from './Palette';
+import { PropertiesPanel } from './PropertiesPanel';
+import { Toolbar } from './Toolbar';
+import { saveAsLocal, saveCurrent } from './SaveDialog';
+import { setDownloadNotice } from '../io/exporter';
+
+setDownloadNotice((m) => useStore.getState().setMessage(m));
+import { Analysis } from './Analysis';
+import { StationDetail } from './StationDetail';
+import { TransportBind } from './TransportBind';
+import { OpsEditor } from './OpsEditor';
+import { SoeImport } from './SoeImport';
+import { StationOrder } from './StationOrder';
+import { StartScreen } from './StartScreen';
+import { StallAlert } from './StallAlert';
+
+export function App() {
+  const showOrder = useStore((s) => s.showOrder);
+  const opsFor = useStore((s) => s.opsFor);
+  const transportFor = useStore((s) => s.transportFor);
+  const showSoe = useStore((s) => s.showSoe);
+  const showStart = useStore((s) => s.showStart);
+  const [dropping, setDropping] = useState(false);
+  useEffect(() => {
+    let raf = 0;
+    let last = performance.now();
+    let lastKpi = 0;
+    const loop = (t: number) => {
+      const st = useStore.getState();
+      if (st.run === 'running') {
+        const dt = Math.min(0.1, (t - last) / 1000);
+        st.sim.advanceTo(st.sim.now + dt * st.speed);
+        const done = st.sim.finished;
+        if (done) st.setRun('done');
+        if (st.sim.error) st.setMessage(st.sim.error);
+        const kpiDue = done || t - lastKpi > 300;
+        if (kpiDue) lastKpi = t;
+        st.refresh(kpiDue);
+      }
+      last = t;
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        const st = useStore.getState();
+        if (e.shiftKey) saveAsLocal();
+        else if (st.saved) saveCurrent();
+        else st.setShowSaved(true);
+        return;
+      }
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
+        e.preventDefault();
+        const h = useStore.getState();
+        if (e.key.toLowerCase() === 'y' || e.shiftKey) h.redo();
+        else h.undo();
+        return;
+      }
+      const st = useStore.getState();
+      const k = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && (k === 'c' || k === 'x' || k === 'v' || k === 'd' || k === 'a')) {
+        e.preventDefault();
+        if (k === 'c') st.copySelection();
+        if (k === 'x' && st.copySelection()) st.deleteSelection();
+        if (k === 'v') st.paste();
+        if (k === 'd' && st.copySelection()) st.paste();
+        if (k === 'a') st.select(st.model.nodes.map((n) => n.id));
+        return;
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (st.selected.length || st.selectedLink || st.selectedPool) st.deleteSelection();
+      } else if (e.key === 'Escape') {
+        st.setPendingPool(null);
+        useStore.setState({ bindPick: null });
+        st.setTool('select');
+        st.select([]);
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        st.setRun(st.run === 'running' ? 'paused' : 'running');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  return (
+    <div
+      className="app"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('Files')) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        if (!dropping) setDropping(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.relatedTarget === null || !(e.currentTarget as Node).contains(e.relatedTarget as Node)) setDropping(false);
+      }}
+      onDrop={(e) => {
+        const f = e.dataTransfer.files?.[0];
+        setDropping(false);
+        if (!f) return;
+        e.preventDefault();
+        importAnyFile(f);
+      }}
+    >
+      {dropping && (
+        <div className="drop-hint" aria-hidden="true">
+          <div>
+            <b>Solte para carregar</b>
+            <span>DXF ou imagem do layout vira a planta de fundo · planilha ou JSON abre o modelo</span>
+          </div>
+        </div>
+      )}
+      <Toolbar />
+      <Palette />
+      <CanvasView />
+      <PropertiesPanel />
+      <Dashboard />
+      <StationDetail />
+      <Analysis />
+      {showStart && <StartScreen onClose={() => useStore.getState().setShowStart(false)} />}
+      {showOrder && <StationOrder onClose={() => useStore.getState().setShowOrder(false)} />}
+      {showSoe && <SoeImport onClose={() => useStore.getState().setShowSoe(false)} />}
+      {transportFor && <TransportBind start={transportFor} onClose={() => useStore.getState().setTransportFor(null)} />}
+      <StallAlert />
+      {opsFor !== null && <OpsEditor start={opsFor} onClose={() => useStore.getState().setOpsFor(null)} />}
+    </div>
+  );
+}
