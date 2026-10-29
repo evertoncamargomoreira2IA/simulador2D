@@ -474,6 +474,7 @@ export function CanvasView() {
                 draggable={draggable}
                 labels={layers.labels}
                 people={layers.people}
+                counts={layers.counts}
                 now={sim.now}
                 topRank={layers.top5 ? topIds.indexOf(n.id) + 1 : 0}
                 co2Heat={layers.co2 ? (co2ById.get(n.id) ?? 0) : 0}
@@ -663,6 +664,7 @@ interface NodeShapeProps {
   def: NodeDef;
   rt: NodeRt;
   colors: CanvasColors;
+  counts?: boolean;
   selected: boolean;
   bottleneck: boolean;
   /** Posto de referência do UPH. */
@@ -700,7 +702,7 @@ function crewPlace(def: NodeDef, labels: boolean): { x: number; y: number; row: 
   }
 }
 
-function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable, labels, stage, onSelect, people, now, topRank, co2Heat, dim, assembly, onWire, wireTarget }: NodeShapeProps) {
+function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable, labels, counts, stage, onSelect, people, now, topRank, co2Heat, dim, assembly, onWire, wireTarget }: NodeShapeProps) {
   const [hover, setHover] = useState(false);
   const stateColor = colors.state[rt.state];
   const stroke = selected ? colors.accent : stateColor;
@@ -881,6 +883,19 @@ function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable
             <Text x={-50} y={-H / 2 - 16} width={100} align="center" text={String(def.type === 'sink' ? rt.processed : rt.released)} fontSize={12} fontStyle="bold" fill={colors.muted} listening={false} />
           )}
         </>
+      )}
+      {counts && def.type !== 'source' && def.type !== 'sink' && (
+        <Text
+          x={-60}
+          y={H / 2 + (labels ? 18 : 5)}
+          width={120}
+          align="center"
+          text={isBuffer ? `${q + inProc}/${cap} peças` : `fila ${q} · fazendo ${rt.processing.length}/${cap}${rt.done.length ? ` · pronta ${rt.done.length}` : ''}`}
+          fontSize={10}
+          fontStyle="bold"
+          fill={colors.accent}
+          listening={false}
+        />
       )}
       {wireTarget && <Rect x={-W / 2 - 5} y={-H / 2 - 5} width={W + 10} height={H + 10} cornerRadius={8} stroke={colors.accent} strokeWidth={2} dash={[5, 4]} listening={false} />}
       {onWire && (hover || selected) && (

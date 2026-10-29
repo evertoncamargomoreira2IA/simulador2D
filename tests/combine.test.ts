@@ -74,3 +74,25 @@ describe('peças por viagem e combinar peças', () => {
     expect(kpi.consumed).toBeGreaterThanOrEqual(kpi.completed * 5);
   });
 });
+
+describe('dois postos abastecendo o mesmo destino com peças por viagem', () => {
+  it('não trava quando o destino não comporta duas viagens cheias', () => {
+    const op = makePool('operator', { id: 'OP', count: 1, x: 300, y: 200, speed: 1 });
+    const m = model(
+      [
+        node('source', 'S1', 0),
+        node('source', 'S2', 0),
+        node('machine', 'A', 100, { cycleTime: 10 }),
+        node('machine', 'B', 100, { cycleTime: 10 }),
+        node('machine', 'X', 400, { cycleTime: 8, queueCap: 4, batchSize: 2 }),
+        node('sink', 'FG', 500),
+      ],
+      [link('S1', 'A'), link('S2', 'B'), link('A', 'X', { poolId: 'OP', tripQty: 4 }), link('B', 'X', { poolId: 'OP', tripQty: 4 }), link('X', 'FG')],
+      { pools: [op] },
+    );
+    m.settings.pxPerMeter = 40;
+    const sim = new Simulator(m);
+    sim.runToEnd();
+    expect(lineKpi(sim).throughputPerHour).toBeGreaterThan(100);
+  });
+});

@@ -680,6 +680,13 @@ export class Simulator {
       moved = true;
       this.depart(n, e, link, link.travelTime);
     }
+    // viagem incompleta, mas o destino já não tem lugar (ex.: dois postos abastecendo o mesmo destino): leva o que tem
+    for (const e of n.done) {
+      if (!e.awaitingPickup || e.called || !e.next || this.tripOf(e.next) <= 1 || this.canAcceptVia(e.next)) continue;
+      const wait = n.done.filter((x) => x.awaitingPickup && !x.called && x.next === e.next);
+      for (const x of wait) x.called = true;
+      this.requestVehicle(n, wait[0], e.next, wait);
+    }
     if (moved) this.afterDeparture(n, refill);
     this.updateState(n);
     return moved;

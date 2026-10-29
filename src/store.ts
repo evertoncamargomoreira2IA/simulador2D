@@ -22,6 +22,8 @@ export interface Layers {
   top5: boolean;
   /** Mapa de calor de emissão (CO2e por posto). */
   co2: boolean;
+  /** Números de peças em cada posto e buffer (fila, em processo, ocupação). */
+  counts: boolean;
 }
 
 export type AnalysisTab = 'ciclo' | 'yamazumi' | 'rebalancear' | 'replicas' | 'turnos' | 'throughput' | 'gargalos' | 'spaghetti' | 'custos' | 'energia' | 'carbono' | 'cenarios' | 'real' | 'ia';
@@ -184,7 +186,7 @@ export const useStore = create<State>((set, get) => {
     connectFrom: null,
     snap: true,
     gridSize: 20,
-    layers: { grid: true, links: true, entities: true, labels: true, heat: false, plant: true, people: true, top5: false, co2: false },
+    layers: { grid: true, links: true, entities: true, labels: true, heat: false, plant: true, people: true, top5: false, co2: false, counts: true },
     run: 'idle',
     speed: 10,
     ...fresh(initial),

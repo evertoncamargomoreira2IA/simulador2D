@@ -79,6 +79,7 @@ const LAYERS: { k: keyof Layers; label: string }[] = [
   { k: 'links', label: 'Fluxos' },
   { k: 'entities', label: 'Peças em transporte' },
   { k: 'labels', label: 'Nomes' },
+  { k: 'counts', label: 'Números (peças no posto)' },
   { k: 'heat', label: 'Intensidade de fluxo' },
   { k: 'top5', label: 'Top 5 gargalos' },
   { k: 'co2', label: 'Mapa de calor de CO2e' },
