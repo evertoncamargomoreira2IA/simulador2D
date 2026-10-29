@@ -152,3 +152,7 @@ tests        testes (vitest)
 - **Operações e atividades** por posto (agrega valor, não agrega, deslocamento, espera, máquina); a soma pode virar o tempo de ciclo.
 - **Yamazumi** em Análises: atividades empilhadas por posto contra o takt, com escolha dos postos e a ineficiência no topo.
 - **Estudo por cycle time ou por elemento** (painel Modelo ou Yamazumi): por elemento, a simulação usa a soma das atividades de cada posto; por cycle time, usa o tempo do posto e o Yamazumi reparte as atividades na proporção. Exemplo pronto: Exemplos → Linha com atividades (Yamazumi).
+- **Operações** (barra de cima, painel do posto ou Yamazumi): janela com os postos à esquerda e operações/atividades à direita.
+- **Setas**: clique numa seta e arraste a bolinha da ponta ou da origem para outro posto; duplo clique num bloco liga a seta ao bloco mais próximo ainda sem ligação.
+- **Importar SOE**: Importar (ou arrastar) uma planilha com colunas Posto / Atividade / Tempo (ou Station / Task Description / Basic cycle time). Escolha a aba, aplique as atividades nos postos de mesmo nome do modelo aberto ou crie uma linha nova.
+- **Rebalancear** (Análises): arraste atividades entre postos e veja UPH estimado, UPH simulado (2 h), balanceamento e pessoas na hora; aplique no modelo ou mande Atual × Proposto para Cenários (UPH, meta, gargalo, pessoas, custo).

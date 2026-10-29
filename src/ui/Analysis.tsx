@@ -5,8 +5,6 @@ import { useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { footprint, spaghetti } from '../engine/analytics';
 import { calibrateToTakt } from '../engine/calibrate';
-import { lineKpi } from '../engine/metrics';
-import { Simulator } from '../engine/simulator';
 import type { Model } from '../engine/types';
 import { effectiveTakt } from '../engine/balance';
 import { useStore, type AnalysisTab, type RealRow } from '../store';
@@ -14,6 +12,8 @@ import { Advisor } from './Advisor';
 import { CycleTakt } from './CycleTakt';
 import { ThroughputTab } from './Throughput';
 import { Yamazumi } from './Yamazumi';
+import { Rebalance } from './Rebalance';
+import { loadScenarios, runScenario, saveScenarios, type Scenario } from './scenarios';
 import { Bars, Kpi, Modal } from './Modal';
 import { norm } from './StationDetail';
 import { fmt, fmtTime, pct } from './theme';
@@ -21,6 +21,7 @@ import { fmt, fmtTime, pct } from './theme';
 const TABS: { k: AnalysisTab; label: string }[] = [
   { k: 'ciclo', label: 'Cycle × Takt' },
   { k: 'yamazumi', label: 'Yamazumi' },
+  { k: 'rebalancear', label: 'Rebalancear' },
   { k: 'throughput', label: 'Throughput por intervalo' },
   { k: 'gargalos', label: 'Gargalos' },
   { k: 'spaghetti', label: 'Spaghetti' },
@@ -48,6 +49,7 @@ export function Analysis() {
       <div className="tab-body">
         {tab === 'ciclo' && <CycleTakt />}
         {tab === 'yamazumi' && <Yamazumi />}
+        {tab === 'rebalancear' && <Rebalance />}
         {tab === 'throughput' && <ThroughputTab />}
         {tab === 'gargalos' && <Bottlenecks />}
         {tab === 'spaghetti' && <SpaghettiTab />}
@@ -279,41 +281,12 @@ function SettingsForm({ fields }: { fields: [keyof Model['settings'], string][] 
 
 // ---- Cenários (Current State, Future State A/B) ----
 
-interface Scenario {
-  id: string;
-  name: string;
-  model: Model;
-  r: { uph: number; lead: number; wip: number; cost: number; kwh: number; co2: number; people: number; fpy: number; completed: number };
-}
-const SC_KEY = 'sim2d.scenarios';
-
-function loadScenarios(): Scenario[] {
-  try {
-    return JSON.parse(localStorage.getItem(SC_KEY) ?? '[]');
-  } catch {
-    return [];
-  }
-}
-
-function runScenario(model: Model): Scenario['r'] {
-  const sim = new Simulator(structuredClone(model));
-  sim.runToEnd();
-  const k = lineKpi(sim);
-  const fp = footprint(sim, k);
-  const people = model.nodes.reduce((a, n) => a + (n.poolId || n.type === 'source' || n.type === 'sink' ? 0 : n.operators), 0) + (model.pools ?? []).filter((p) => p.kind === 'operator').reduce((a, p) => a + p.count, 0);
-  return { uph: k.throughputPerHour, lead: k.leadTime, wip: k.avgWip, cost: fp.cost.perUnit, kwh: fp.energy.perUnit, co2: fp.co2.perUnit, people, fpy: k.firstPassYield, completed: k.completed };
-}
-
 function Scenarios() {
   const [list, setList] = useState<Scenario[]>(loadScenarios);
   const [busy, setBusy] = useState(false);
   const save = (next: Scenario[]) => {
     setList(next);
-    try {
-      localStorage.setItem(SC_KEY, JSON.stringify(next));
-    } catch {
-      /* armazenamento indisponível: fica só nesta sessão */
-    }
+    saveScenarios(next);
   };
   const names = ['Current State', 'Future State A', 'Future State B'];
   const add = () => {
@@ -334,6 +307,9 @@ function Scenarios() {
   };
   const rows: [string, (r: Scenario['r']) => number, (v: number) => string, boolean][] = [
     ['Produção (pç/h)', (r) => r.uph, (v) => fmt(v, 1), false],
+    ['Meta atingida', (r) => r.target ?? 0, (v) => pct(v, 1), false],
+    ['Maior carga de posto (s)', (r) => r.maxLoad ?? 0, (v) => fmt(v, 1), true],
+    ['Balanceamento', (r) => r.balance ?? 0, (v) => pct(v, 1), false],
     ['Lead time', (r) => r.lead, (v) => fmtTime(v), true],
     ['WIP médio', (r) => r.wip, (v) => fmt(v, 0), true],
     ['Pessoas', (r) => r.people, (v) => fmt(v, 0), true],
@@ -370,6 +346,12 @@ function Scenarios() {
                 ))}
               </tr>
             ))}
+            <tr>
+              <td>Gargalo</td>
+              {list.map((sc) => (
+                <td key={sc.id}>{sc.r.bottleneck ?? '–'}</td>
+              ))}
+            </tr>
             <tr>
               <td></td>
               {list.map((sc) => (

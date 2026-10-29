@@ -3,13 +3,17 @@
 import type { Background } from '../engine/types';
 import { parseDxf, snapNodesToLabels } from '../io/dxf';
 import { importFile } from '../io/importer';
+import * as XLSX from 'xlsx';
+import { soeSheets } from '../io/soe';
+import { isTemplate } from '../io/template';
 import { useStore } from '../store';
+import { openSoe } from './SoeImport';
 
 const IMAGE = /\.(png|jpe?g|webp|gif|bmp)$/i;
 /** Lado maior da imagem guardada no modelo: mantém o modelo leve para salvar. */
 const MAX_SIDE = 3000;
 
-export const ACCEPT = '.xlsx,.xls,.csv,.txt,.json,.dxf,.png,.jpg,.jpeg,.webp,.gif,.bmp';
+export const ACCEPT = '.xlsx,.xlsm,.xls,.csv,.txt,.json,.dxf,.png,.jpg,.jpeg,.webp,.gif,.bmp';
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((ok, fail) => {
@@ -81,6 +85,10 @@ export async function importAnyFile(f: File): Promise<void> {
     if (/\.pdf$/i.test(f.name)) {
       st.setMessage('PDF ainda não abre direto: exporte o layout como PNG/JPG ou DXF e arraste de novo.');
       return;
+    }
+    if (/\.(xlsx|xlsm|xls)$/i.test(f.name)) {
+      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+      if (!isTemplate(wb) && soeSheets(wb).length) return openSoe(wb, f.name.replace(/\.[^.]+$/, ''));
     }
     const r = await importFile(f, st.model.settings.takt || 12);
     const cur = useStore.getState().model;

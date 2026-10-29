@@ -24,7 +24,7 @@ export interface Layers {
   co2: boolean;
 }
 
-export type AnalysisTab = 'ciclo' | 'yamazumi' | 'throughput' | 'gargalos' | 'spaghetti' | 'custos' | 'energia' | 'carbono' | 'cenarios' | 'real' | 'ia';
+export type AnalysisTab = 'ciclo' | 'yamazumi' | 'rebalancear' | 'throughput' | 'gargalos' | 'spaghetti' | 'custos' | 'energia' | 'carbono' | 'cenarios' | 'real' | 'ia';
 
 export interface RealRow {
   name: string;
@@ -93,6 +93,8 @@ interface State {
   showOrder: boolean;
   /** Janela de operações e atividades aberta (id do posto, '' = primeiro). */
   opsFor: string | null;
+  showSoe: boolean;
+  setShowSoe: (v: boolean) => void;
   setOpsFor: (id: string | null) => void;
   showStart: boolean;
   /** Equipe criada esperando o clique no posto que vai atender. */
@@ -337,6 +339,8 @@ export const useStore = create<State>((set, get) => {
     },
     showOrder: false,
     opsFor: null,
+    showSoe: false,
+    setShowSoe: (showSoe) => set({ showSoe }),
     setOpsFor: (opsFor) => set({ opsFor }),
     setShowOrder: (showOrder) => set({ showOrder }),
     setRun: (run) => set({ run }),
