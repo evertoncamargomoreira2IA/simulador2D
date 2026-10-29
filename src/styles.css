@@ -2,18 +2,18 @@
    gêmeo digital (planta + fluxo) ao centro, propriedades à direita, pessoas e indicadores embaixo.
    Tema escuro primeiro (sala de controle), com variante clara. */
 :root {
-  --bg: #0c1117;
-  --panel: #111821;
-  --raised: #17202b;
-  --line: #243142;
+  --bg: #040b1c;
+  --panel: #07132c;
+  --raised: #0b1c3d;
+  --line: #17305a;
   --ink: #e3eaf2;
   --muted: #8797ab;
-  --accent: #36c5d6;
+  --accent: #22d3ee;
   --accent-ink: #061317;
   --human: #f2a93b;
-  --canvas: #0a0f15;
-  --grid: #111a24;
-  --grid-major: #172331;
+  --canvas: #030a19;
+  --grid: #0a1834;
+  --grid-major: #0f2246;
   --cad: #36506b;
   --cad-text: #6f88a3;
   --st-working: #2fbf71;
@@ -501,9 +501,12 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .paste-box { border: 1px dashed var(--line); border-radius: 8px; padding: 8px; margin: 6px 0; display: grid; gap: 6px; }
 .paste-box textarea { width: 100%; font: 12px/1.4 ui-monospace, monospace; resize: vertical; }
 
-/* ---- Moldura azul cintilante (visual corporativo) ---- */
-:root { --frame-a: #0a2f6b; --frame-b: #1565ff; --frame-c: #5fd0ff; }
+/* ---- Borda viva (Indústria 5.0): azul-marinho, neon ciano, luz que percorre a borda ---- */
+:root { --frame-a: #0a2f6b; --frame-b: #2f8cff; --frame-c: #22d3ee; --navy: #061331; --navy-2: #0a1f4d; }
+@property --spin { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@property --spin2 { syntax: '<angle>'; inherits: false; initial-value: 180deg; }
 .app { position: relative; }
+/* trilho fixo azul + dois cometas de luz girando em volta da tela */
 .app::after,
 .modal::before {
   content: '';
@@ -511,19 +514,42 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
   inset: 0;
   padding: 3px;
   border-radius: inherit;
-  background: linear-gradient(115deg, var(--frame-a), var(--frame-b), var(--frame-c), #ffffff, var(--frame-c), var(--frame-b), var(--frame-a));
-  background-size: 300% 300%;
-  animation: frame-shimmer 7s linear infinite;
+  background:
+    conic-gradient(from var(--spin), transparent 0 72%, rgb(34 211 238 / 0.15) 78%, #22d3ee 88%, #ffffff 90%, #2f8cff 92%, transparent 96%),
+    conic-gradient(from var(--spin2), transparent 0 80%, #2f8cff 90%, #9be7ff 92%, transparent 95%),
+    linear-gradient(135deg, #0b3a8c, #1d6fff 35%, #22d3ee 50%, #1d6fff 65%, #0b3a8c);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
   z-index: 45;
-  filter: drop-shadow(0 0 6px rgb(30 136 255 / 0.55));
+  animation: live-border 6s linear infinite;
+  filter: drop-shadow(0 0 4px rgb(34 211 238 / 0.85)) drop-shadow(0 0 14px rgb(47 140 255 / 0.55));
 }
-.modal { position: relative; }
-.modal::before { padding: 2px; z-index: 1; }
-.topbar { background: linear-gradient(180deg, color-mix(in srgb, var(--frame-b) 10%, var(--panel)), var(--panel)); position: relative; }
+.modal { position: relative; border-color: transparent; box-shadow: 0 0 0 1px rgb(47 140 255 / 0.25), 0 0 40px rgb(47 140 255 / 0.25), 0 24px 60px rgb(0 0 0 / 0.5); }
+.modal::before { padding: 2px; z-index: 1; animation-duration: 5s; }
+@keyframes live-border {
+  to { --spin: 360deg; --spin2: 540deg; }
+}
+
+/* Barra de comando em azul-marinho com grade sutil, nos dois temas */
+.topbar {
+  --panel: #0a1f4d;
+  --raised: #0d2860;
+  --line: #1d3f80;
+  --ink: #e6f3ff;
+  --muted: #8fb3dc;
+  --accent: #22d3ee;
+  --accent-ink: #04121f;
+  color: var(--ink);
+  color-scheme: dark;
+  position: relative;
+  border-bottom: 0;
+  background:
+    linear-gradient(rgb(47 140 255 / 0.07) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(90deg, rgb(47 140 255 / 0.07) 1px, transparent 1px) 0 0 / 24px 24px,
+    radial-gradient(120% 180% at 50% -40%, #12408f 0%, #071a42 55%, #050f2a 100%);
+}
 .topbar::after {
   content: '';
   position: absolute;
@@ -531,16 +557,69 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
   right: 0;
   bottom: -1px;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--frame-b), var(--frame-c), var(--frame-b), transparent);
+  background: linear-gradient(90deg, transparent, #2f8cff 20%, #22d3ee 50%, #2f8cff 80%, transparent);
   background-size: 200% 100%;
-  animation: frame-shimmer 5s linear infinite;
+  animation: live-line 4s linear infinite;
+  box-shadow: 0 0 10px #22d3ee, 0 0 22px rgb(47 140 255 / 0.6);
 }
-@keyframes frame-shimmer {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 300% 50%; }
+@keyframes live-line {
+  to { background-position: 200% 0; }
 }
+.topbar .brand b {
+  background: linear-gradient(90deg, #e6f3ff, #7dd3fc 45%, #22d3ee 60%, #60a5fa);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 18px rgb(34 211 238 / 0.35);
+}
+.topbar .brand .tag {
+  color: #67e8f9;
+  border-color: rgb(34 211 238 / 0.6);
+  background: rgb(8 30 70 / 0.8);
+  box-shadow: 0 0 10px rgb(34 211 238 / 0.45), inset 0 0 8px rgb(34 211 238 / 0.15);
+  padding: 3px 10px 3px 18px;
+  position: relative;
+}
+.topbar .brand .tag::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: #22d3ee;
+  box-shadow: 0 0 8px #22d3ee;
+  animation: live-dot 1.8s ease-in-out infinite;
+}
+@keyframes live-dot {
+  50% { opacity: 0.35; box-shadow: 0 0 2px #22d3ee; }
+}
+
+/* Botões principais com brilho, no estilo do hero */
+.btn.primary {
+  background: linear-gradient(135deg, #2f8cff, #1fb6ff 60%, #22d3ee);
+  border-color: #5fb2ff;
+  color: #fff;
+  box-shadow: 0 0 0 1px rgb(95 178 255 / 0.4), 0 4px 18px rgb(47 140 255 / 0.45);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.2);
+}
+.btn.primary:hover:not(:disabled) { box-shadow: 0 0 0 1px #7cc4ff, 0 6px 26px rgb(34 211 238 / 0.6); filter: brightness(1.06); }
+.topbar .btn:not(.primary) { background: rgb(13 40 96 / 0.6); border-color: #1d3f80; }
+.topbar .btn:not(.primary):hover { border-color: #22d3ee; box-shadow: 0 0 10px rgb(34 211 238 / 0.35); }
+.tile { transition: box-shadow 0.2s, border-color 0.2s; }
+.tile:hover { border-color: color-mix(in srgb, var(--frame-b) 60%, var(--line)); box-shadow: 0 0 12px rgb(47 140 255 / 0.25); }
+.modal-head h2 {
+  background: linear-gradient(90deg, var(--ink), #2f8cff 70%, #22d3ee);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.tab.on { border-bottom-color: #22d3ee; box-shadow: 0 6px 10px -8px #22d3ee; }
+
 @media (prefers-reduced-motion: reduce) {
-  .app::after, .modal::before, .topbar::after { animation: none; }
+  .app::after, .modal::before, .topbar::after, .topbar .brand .tag::before { animation: none; }
 }
 
 /* ---- Como usar (cartão didático) ---- */
