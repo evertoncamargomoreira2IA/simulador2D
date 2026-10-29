@@ -43,13 +43,15 @@ function findCols(rows: unknown[][]): Cols | null {
     if (posto < 0 || ativ < 0 || !tempos.length) continue;
     // tempo com allowance (folga) tem prioridade: é o que fecha com o ciclo do posto
     const tempo = tempos.find((i) => /allow|folga|c\/|com |basic/.test(h[i])) ?? tempos.find((i) => /observed|media/.test(h[i])) ?? tempos[0];
+    const op = h.findIndex((c) => /^opera/.test(c));
     return {
       header: r,
-      stationLabels: /^station|^estac/.test(h[posto]),
+      // com coluna de operação, a coluna do posto só tem o nome do posto (formulário Yamazumi)
+      stationLabels: /^station|^estac/.test(h[posto]) || op >= 0,
       posto,
       ativ,
       tempo,
-      op: h.findIndex((c) => /^opera/.test(c)),
+      op,
       tipo: h.findIndex((c) => /^tipo|^classif|^categ/.test(c)),
       takt: h.findIndex((c) => /^takt$/.test(c)),
     };
@@ -73,6 +75,7 @@ export function activityKind(text: string, tag = ''): ActivityKind {
   if (/^va$|agrega/.test(g) && !/nao/.test(g)) return 'va';
   if (/nva|nao agrega/.test(g)) return 'nva';
   if (/desloc|andar|walk/.test(g)) return 'walk';
+  if (/inspe|tqc|qualid/.test(g)) return 'nva';
   if (/espera|wait/.test(g)) return 'wait';
   if (/andar|caminh|desloc|ir ate|retornar/.test(t)) return 'walk';
   if (/aguard|esperar/.test(t)) return 'wait';

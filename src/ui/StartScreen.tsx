@@ -8,6 +8,7 @@ import { privateExample, useStore } from '../store';
 import { ACCEPT, importAnyFile } from './fileImport';
 import { Modal } from './Modal';
 import { openSaved } from './SaveDialog';
+import { downloadSoeForm } from './Tutorial';
 
 export function blankModel(name = 'Novo trabalho') {
   return { name, nodes: [], links: [], settings: { ...DEFAULT_SETTINGS } };
@@ -57,6 +58,9 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
           <div className="row-btns section">
             <button className="btn" onClick={() => fileRef.current?.click()} title="Planilha padrão, Excel, CSV, JSON do simulador, DXF ou imagem do layout">
               Abrir arquivo…
+            </button>
+            <button className="btn" onClick={() => downloadSoeForm()} title="Planilha no padrão SOE: uma linha por atividade. Preencha e suba em Abrir arquivo: os postos viram blocos sozinhos.">
+              📥 Formulário Yamazumi (SOE)
             </button>
             <input
               ref={fileRef}

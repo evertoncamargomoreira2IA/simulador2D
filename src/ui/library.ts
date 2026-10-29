@@ -86,6 +86,20 @@ export const LIBRARY: LibItem[] = [
     ],
   },
   {
+    id: 'formulario',
+    q: 'Como baixo o formulário do Yamazumi e crio os blocos sozinho?',
+    tag: 'Balanceamento',
+    why: 'O formulário segue o padrão do SOE: uma linha por atividade. Ao importar, cada posto da planilha vira um bloco da linha, já com as atividades, na ordem em que aparecem.',
+    steps: [
+      { text: 'Em Começar (ou Exportar → Formulário Yamazumi), clique em 📥 Formulário Yamazumi (SOE). Se a linha aberta já tem atividades, ele vem preenchido com elas.', img: 'soe-1' },
+      { text: 'No Excel, preencha a aba SOE: POSTO, OPERAÇÃO, ATIVIDADE, TEMPO e TIPO (VA, NVA, Deslocamento, Espera, Máquina). Feche cada posto com a linha de Total. O allowance (E1) calcula o tempo com folga.', img: 'soe-2' },
+      { text: 'Volte ao simulador: Abrir arquivo (ou Importar), escolha a planilha e marque "Criar uma linha nova com estes postos".', img: 'soe-3' },
+      { text: 'Pronto: os blocos são criados sozinhos, ligados do material ao produto pronto, com as atividades de cada posto.', img: 'soe-4' },
+      { text: 'Veja o Yamazumi em Análises → Yamazumi e, se quiser, ⚡ Balancear automático.', img: 'soe-5' },
+    ],
+    tip: 'O simulador usa a coluna TEMPO C/ ALLOWANCE. Para ajustar, edite a planilha e importe de novo, ou mexa direto em Operações e atividades.',
+  },
+  {
     id: 'yamazumi',
     q: 'Como monto o Yamazumi ou subo as atividades por tabela?',
     tag: 'Balanceamento',

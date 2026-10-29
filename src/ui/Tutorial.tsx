@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { download } from "../io/exporter";
 import { templateBytes } from "../io/template";
+import { soeFormBytes } from "../io/soeForm";
 import { useStore } from "../store";
 import { FUNCOES, SIGLAS } from "./glossary";
 import { Modal } from "./Modal";
@@ -16,6 +17,14 @@ export function downloadTemplate(fromModel: boolean) {
     ? `${m.name.replace(/[^\w-]+/g, "_") || "linha"}_planilha.xlsx`
     : "planilha_padrao_simulador.xlsx";
   return download(name, templateBytes(fromModel ? m : undefined), XLSX_MIME);
+}
+
+/** Formulário Yamazumi no padrão SOE: do modelo aberto (se tiver atividades) ou com exemplo. */
+export function downloadSoeForm() {
+  const m = useStore.getState().model;
+  const { bytes, fromModel } = soeFormBytes(m);
+  const name = fromModel ? `${m.name.replace(/[^\w-]+/g, "_") || "linha"}_yamazumi_soe.xlsx` : "formulario_yamazumi_soe.xlsx";
+  return download(name, bytes, XLSX_MIME);
 }
 
 const STEPS: { t: string; body: string[] }[] = [
@@ -39,6 +48,7 @@ const STEPS: { t: string; body: string[] }[] = [
       "Clique num posto para editar tempo de ciclo, gigas, fila, operadores, falhas, lote e energia no painel da direita.",
       'Clique numa ligação para dar peso (yield, amostra), distância real, transporte por empilhadeira ou AGV e marcar "uma vez" para amostras que voltam.',
       "Em Pessoas e veículos (painel da direita, sem nada selecionado) você cadastra operadores compartilhados, empilhadeiras e AGVs.",
+      "Linha inteira pelo SOE: Exportar → Formulário Yamazumi (SOE), preencha uma linha por atividade (posto, operação, atividade, tempo, tipo) e suba em Importar → Criar uma linha nova. Os blocos são criados sozinhos.",
       "Yamazumi: Operações → escolha o posto → 📋 Colar tabela do Excel (operação | atividade | tempo | tipo). Para todos os postos de uma vez, preencha a aba Atividades da planilha padrão e ponha estudo = elemento na aba Parâmetros.",
     ],
   },

@@ -8,7 +8,7 @@ import { elementsModel, lp2Model, simpleModel, combineModel, transportModel } fr
 import { privateExample, useStore } from '../store';
 import { applyTheme, fmtTime, loadTheme } from './theme';
 import { effectiveTakt } from '../engine/balance';
-import { Tutorial, downloadTemplate } from './Tutorial';
+import { Tutorial, downloadSoeForm, downloadTemplate } from './Tutorial';
 import { Library } from './Library';
 import { RecentSelect, SavedModels, saveCurrent } from './SaveDialog';
 
@@ -118,9 +118,11 @@ export function Toolbar() {
             if (e.target.value === 'xlsx') exportResultsXlsx(m, lineKpi(st().sim));
             if (e.target.value === 'tpl') downloadTemplate(false);
             if (e.target.value === 'tplm') downloadTemplate(true);
+            if (e.target.value === 'soe') downloadSoeForm();
           }}
         >
           <option value="" disabled>Exportar…</option>
+          <option value="soe">Formulário Yamazumi (SOE)</option>
           <option value="tpl">Planilha padrão (para preencher)</option>
           <option value="tplm">Planilha do modelo atual</option>
           <option value="xlsx">Resultados (Excel)</option>
