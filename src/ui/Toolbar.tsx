@@ -163,7 +163,7 @@ export function Toolbar() {
         <button className="btn" onClick={() => st().setAnalysis('ciclo')} title="Cycle × takt, gargalos, spaghetti, custos, energia, carbono, cenários e real × simulado">Análises</button>
         <button className="btn" onClick={() => st().setOpsFor(st().selected[0] ?? '')} title="Operações e atividades de cada posto (estudo por elemento e Yamazumi)">Operações</button>
         <button className="btn ai" onClick={() => st().setAnalysis('ia')} title="Sugestões de melhoria com IA">✦ IA</button>
-        <button className="btn" onClick={() => setHelp(true)} title="Procedimento de uso e planilha padrão">? Como usar</button>
+        <button className="btn" onClick={() => setHelp(true)} title="Passo a passo, siglas e funções">? Como usar</button>
       </div>
       {help && <Tutorial onClose={() => setHelp(false)} />}
       {showSaved && <SavedModels onClose={() => st().setShowSaved(false)} />}

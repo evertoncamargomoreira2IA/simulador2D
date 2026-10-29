@@ -156,3 +156,5 @@ tests        testes (vitest)
 - **Setas**: clique numa seta e arraste a bolinha da ponta ou da origem para outro posto; duplo clique num bloco liga a seta ao bloco mais próximo ainda sem ligação.
 - **Importar SOE**: Importar (ou arrastar) uma planilha com colunas Posto / Atividade / Tempo (ou Station / Task Description / Basic cycle time). Escolha a aba, aplique as atividades nos postos de mesmo nome do modelo aberto ou crie uma linha nova.
 - **Rebalancear** (Análises): arraste atividades entre postos e veja UPH estimado, UPH simulado (2 h), balanceamento e pessoas na hora; aplique no modelo ou mande Atual × Proposto para Cenários (UPH, meta, gargalo, pessoas, custo).
+- **Yamazumi arrastável**: botão ✋ Arrastar para balancear no Yamazumi liga o arrasto de atividades entre postos.
+- **Como usar → Siglas / Funções**: tabelas com todas as siglas (significado e uso) e as funções da aplicação.

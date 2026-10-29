@@ -7,6 +7,7 @@ import { ACTIVITY_LABEL, baseCycle, operationsTime, type ActivityKind } from '..
 import { useStore } from '../store';
 import { lineSequence } from './CycleTakt';
 import { Kpi } from './Modal';
+import { Rebalance } from './Rebalance';
 import { fmt, pct, useCanvasColors } from './theme';
 
 export const KIND_COLOR: Record<ActivityKind | 'none' | 'loss', string> = {
@@ -53,6 +54,8 @@ export function Yamazumi() {
   const takt = effectiveTakt(model);
   const [perPiece, setPerPiece] = useState(true);
   const [onlyOps, setOnlyOps] = useState(false);
+  // modo arrastar: o Yamazumi vira o quadro de rebalanceamento (atividades arrastáveis entre postos)
+  const [dragMode, setDragMode] = useState(false);
   const byId = useMemo(() => new Map(model.nodes.map((n) => [n.id, n])), [model]);
   const all = useMemo(() => lineSequence(model, cycleRows(model)), [model]);
   const [pick, setPick] = useState<Set<string> | null>(null);
@@ -175,6 +178,9 @@ export function Yamazumi() {
           <button className={`btn${perPiece ? ' on' : ''}`} onClick={() => setPerPiece(true)} title="÷ postos paralelos, fração de peças e lote: a mesma escala do Cycle × Takt">Por peça da linha</button>
           <button className={`btn${!perPiece ? ' on' : ''}`} onClick={() => setPerPiece(false)} title="Tempo de cada atividade como cadastrado">Conteúdo de trabalho</button>
         </div>
+        <button className={`btn${dragMode ? ' on' : ''}`} aria-pressed={dragMode} onClick={() => setDragMode(!dragMode)} title="Liga o arrasto: puxe uma atividade de um posto para outro e veja o UPH mudar">
+          ✋ {dragMode ? 'Arrastando (clique para sair)' : 'Arrastar para balancear'}
+        </button>
         <button className="btn primary" onClick={() => useStore.getState().setOpsFor('')}>Editar atividades</button>
         <button className={`btn${onlyOps ? ' on' : ''}`} onClick={() => setOnlyOps(!onlyOps)}>Só postos com atividades</button>
         <details className="pick">
@@ -203,7 +209,12 @@ export function Yamazumi() {
         <span><i style={{ background: KIND_COLOR.loss }} />Ineficiência</span>
         <span><i className="line" style={{ background: colors.ink }} />Takt</span>
       </div>
-      <div className="chart-scroll section">
+      {dragMode && (
+        <div className="section">
+          <Rebalance />
+        </div>
+      )}
+      <div className="chart-scroll section" style={dragMode ? { display: 'none' } : undefined}>
         <div style={{ width, minWidth: '100%', height: 360 }}>
           <canvas ref={ref} role="img" aria-label="Yamazumi: atividades empilhadas por posto com a linha do takt" />
         </div>
