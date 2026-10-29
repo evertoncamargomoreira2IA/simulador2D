@@ -26,7 +26,7 @@ npm run build:single # gera dist-single/index.html (arquivo único, abre direto 
 - **Indicadores**: throughput, cycle time real, lead time, tempo em fila, bloqueado e transporte,
   WIP atual e médio, utilização, OEE por posto e da linha, aderência ao takt, first pass yield e
   gargalo (método do período ativo).
-- **Controles**: Start, Pause, Stop, Replay, Fim (calcula o turno inteiro) e velocidade de 1× a 600×.
+- **Controles**: Start, Pause, Stop (mantém os resultados), Reset (zera), Replay, Fim (calcula o turno inteiro) e velocidade de 1× a 600×.
 - **Animação**: cor do posto pelo estado (verde operando, amarelo espera, laranja bloqueado,
   vermelho parado, roxo setup, cinza sem produção) e peças em azul durante o transporte.
 - **Importação**: Excel (.xlsx), CSV e JSON. Reconhece tabelas simples e o formato PCP

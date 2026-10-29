@@ -84,6 +84,7 @@ export type StuckFact =
   | { kind: 'batch'; node: string; have: number; need: number }
   | { kind: 'noUnits'; node: string; link?: string; pool: string }
   | { kind: 'noMain'; node: string }
+  | { kind: 'waitMain'; node: string; from: string[]; part: string; partFrom: string }
   | { kind: 'trip'; node: string; link: string; have: number; need: number }
   | { kind: 'full'; node: string; link: string; to: string };
 
@@ -724,6 +725,10 @@ export class Simulator {
         if (n.pool && n.pool.units.length === 0) out.push({ kind: 'noUnits', node: id, pool: n.pool.def.id });
       }
       if (n.partLinks.length && n.queue.length === 0 && !n.inLinks.some((l) => !l.isPart)) out.push({ kind: 'noMain', node: id });
+      // componentes chegando, mas o produto (Principal) não vem
+      const withParts = n.partLinks.find((l) => n.parts.get(l)!.length > 0);
+      if (withParts && n.queue.length === 0 && n.processing.length === 0 && n.inLinks.some((l) => !l.isPart))
+        out.push({ kind: 'waitMain', node: id, from: n.inLinks.filter((l) => !l.isPart).map((l) => l.from.def.id), part: withParts.def.id, partFrom: withParts.from.def.id });
       const seen = new Set<LinkRt>();
       for (const e of n.done) {
         const l = e.next;
@@ -737,7 +742,7 @@ export class Simulator {
             const have = n.done.filter((x) => x.next === l && x.awaitingPickup && !x.called).length;
             out.push({ kind: 'trip', node: id, link: l.def.id, have, need: this.tripOf(l) });
           }
-        } else if (!this.canAcceptVia(l)) {
+        } else if (!this.canAcceptVia(l) && l.to.processing.length === 0) {
           seen.add(l);
           out.push({ kind: 'full', node: id, link: l.def.id, to: l.to.def.id });
         }

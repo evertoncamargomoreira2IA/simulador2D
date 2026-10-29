@@ -56,4 +56,19 @@ describe('diagnóstico de linha travada', () => {
     const m = model([node('source', 'S', 0), node('machine', 'A', 100)], [link('S', 'A')]);
     expect(staticIssues(m).map((x) => x.key)).toContain('nosink');
   });
+  it('produto Principal que nunca chega: não manda aumentar fila, aponta a entrada', () => {
+    // material entra como Componente; a Principal vem de um posto sem entrada
+    const m = model(
+      [node('source', 'S', 0), node('machine', 'M', 100, { cycleTime: 20 }), node('machine', 'P1', 200, { cycleTime: 30, queueCap: 3 }), node('sink', 'FG', 300)],
+      [link('S', 'P1', { role: 'part' }), link('M', 'P1'), link('P1', 'FG')],
+    );
+    const st = staticIssues(m);
+    expect(st[0].key).toBe('noin:M');
+    expect(st[0].action).toBeUndefined();
+    const iss = stallIssues(m, run(m));
+    expect(iss.map((x) => x.key)).toEqual(['waitmain:P1']);
+    // aplicar a correção faz a linha produzir
+    const fixed = { ...m, links: m.links.map((l) => (l.id === iss[0].action!.link!.id ? { ...l, ...iss[0].action!.link!.patch } : l)) };
+    expect(run(fixed).completed).toBeGreaterThan(100);
+  });
 });

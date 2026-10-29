@@ -48,6 +48,12 @@ export function Toolbar() {
     if (st().sim.error) st().setMessage(st().sim.error!);
     st().refresh(true);
   };
+  // Stop encerra a rodada e deixa os resultados na tela; Reset zera tudo
+  const stop = () => {
+    st().setRun('done');
+    st().setMessage(`Simulação parada em ${fmtTime(st().sim.now)}. Os resultados ficam na tela; ⟲ Reset zera o relógio.`);
+    st().refresh(true);
+  };
   const replay = () => {
     st().resetSim();
     st().setRun('running');
@@ -154,7 +160,8 @@ export function Toolbar() {
         ) : (
           <button className="btn primary" onClick={start} disabled={model.nodes.length === 0}>▶ Start</button>
         )}
-        <button className="btn" onClick={() => st().resetSim()} disabled={sim.clock === 0}>■ Stop</button>
+        <button className="btn" onClick={stop} disabled={sim.clock === 0 || run === 'done'} title="Para a simulação e mantém os resultados">■ Stop</button>
+        <button className="btn" onClick={() => st().resetSim()} disabled={sim.clock === 0} title="Zera o relógio, as peças e os indicadores (o modelo não muda)">⟲ Reset</button>
         <button className="btn" onClick={replay} disabled={sim.clock === 0} title="Reinicia com a mesma semente: mesma sequência de eventos">↺ Replay</button>
         <button className="btn" onClick={runToEnd} disabled={model.nodes.length === 0 || run === 'done'} title="Calcula até o fim do turno sem animação">⏭ Fim</button>
         <select className="btn" aria-label="Velocidade" value={speed} onChange={(e) => st().setSpeed(Number(e.target.value))}>
@@ -178,7 +185,7 @@ export function Toolbar() {
       {help && <Tutorial onClose={() => setHelp(false)} />}
       {lib && <Library onClose={() => setLib(false)} />}
       {showSaved && <SavedModels onClose={() => st().setShowSaved(false)} />}
-      <span className={`live${run === 'running' ? ' on' : ''}`}><i />{run === 'running' ? 'Ao vivo' : run === 'done' ? 'Concluído' : run === 'paused' ? 'Pausado' : 'Pronto'}</span>
+      <span className={`live${run === 'running' ? ' on' : ''}`}><i />{run === 'running' ? 'Ao vivo' : run === 'done' ? (sim.clock < model.settings.duration ? 'Parado' : 'Concluído') : run === 'paused' ? 'Pausado' : 'Pronto'}</span>
       <UphField />
       <div className="clock" aria-live="off">
         {fmtTime(sim.clock)} <small>/ {fmtTime(sim.duration - sim.t0)}</small>

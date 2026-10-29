@@ -73,6 +73,7 @@ export const LIBRARY: LibItem[] = [
       { text: 'Clique no posto de montagem. Em "Combinar peças neste posto", deixe uma entrada como Principal e as outras como Componente, com a quantidade por produto.', img: 'combinar-2' },
       { text: 'Dê ▶ Start. Se faltar componente, o posto fica Esperando peça; o fornecedor mais lento aparece como gargalo.', img: 'combinar-3' },
     ],
+    tip: 'A Principal tem que vir de um bloco que recebe material. Se ela vem de um bloco sem seta de entrada, os componentes enchem a fila e o posto nunca começa: aumentar a fila não resolve.',
     example: 'combine',
   },
   {

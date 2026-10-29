@@ -9,6 +9,7 @@ export interface FixAction {
   node?: { id: string; patch: Partial<NodeDef> };
   link?: { id: string; patch: Partial<LinkDef> };
   pool?: { id: string; patch: Partial<PoolDef> };
+  addLink?: { from: string; to: string };
 }
 
 export interface Issue {
@@ -58,6 +59,18 @@ export function staticIssues(m: Model): Issue[] {
     const outs = m.links.filter((l) => l.from === n.id);
     if (n.type === 'source' && outs.length === 0)
       out.push({ key: `srcout:${n.id}`, nodeId: n.id, title: `${n.name} não está ligado a nada`, why: 'O material não tem para onde ir, então nenhuma peça entra na linha.', fix: 'Use Conectar (ou arraste a bolinha do bloco) até o primeiro posto.' });
+    if (n.type !== 'source' && n.type !== 'sink' && ins.length === 0 && outs.length > 0) {
+      const src = m.nodes.find((x) => x.type === 'source');
+      out.push({
+        key: `noin:${n.id}`,
+        nodeId: n.id,
+        title: `${n.name} não recebe material`,
+        why: `Nenhuma seta chega em ${n.name}, então ele nunca produz. Quem depende dele (${outs.map((l) => nameOf(m, l.to)).join(', ')}) fica esperando.`,
+        fix: src ? `Ligue ${src.name} (ou o posto anterior) a ${n.name}. Se ele não faz parte do fluxo, apague o bloco.` : `Ligue um bloco de entrada a ${n.name}, ou apague o bloco.`,
+        // se ele entrega a Principal de uma montagem, a correção certa vem no aviso da montagem
+        action: src && !outs.some((l) => m.links.some((x) => x.to === l.to && x.role === 'part')) ? { label: `Ligar ${src.name} → ${n.name}`, addLink: { from: src.id, to: n.id } } : undefined,
+      });
+    }
     if (n.poolId) usedPool(n.poolId, n.name, n.id);
     const parts = ins.filter((l) => l.role === 'part');
     if (parts.length && parts.length === ins.length)
@@ -133,6 +146,15 @@ function factIssue(m: Model, f: StuckFact): Issue {
         title: `${n} só recebe componentes, sem entrada Principal`,
         why: 'Sem a entrada Principal o posto nunca começa.',
         fix: 'Em Combinar peças, marque uma entrada como Principal.',
+      };
+    case 'waitMain':
+      return {
+        key: `waitmain:${f.node}`,
+        nodeId: f.node,
+        title: `${n} tem componente, mas o produto não chega de ${f.from.map((x) => nameOf(m, x)).join(' / ')}`,
+        why: `Em Combinar peças, ${nameOf(m, f.partFrom)} entra como Componente e ${f.from.map((x) => nameOf(m, x)).join(' / ')} como Principal (a peça que vira o produto). Os componentes chegaram, mas a Principal não vem, então o posto não começa. Aumentar a fila não resolve.`,
+        fix: `Confira se ${f.from.map((x) => nameOf(m, x)).join(' / ')} recebe material. Se o produto entra por ${nameOf(m, f.partFrom)}, mude essa entrada para Principal.`,
+        action: { label: `Tornar ${nameOf(m, f.partFrom)} a Principal`, link: { id: f.part, patch: { role: undefined, partQty: undefined } } },
       };
     case 'trip':
       return {

@@ -40,6 +40,7 @@ export function StallAlert() {
     const s = st();
     if (a.node) s.updateNode(a.node.id, a.node.patch);
     if (a.link) s.updateLink(a.link.id, a.link.patch);
+    if (a.addLink) s.addLink(a.addLink.from, a.addLink.to);
     if (a.pool) s.patchModel({ pools: (s.model.pools ?? []).map((p) => (p.id === a.pool!.id ? { ...p, ...a.pool!.patch } : p)) });
     setFixed((f) => [...f, x.key]);
   };
