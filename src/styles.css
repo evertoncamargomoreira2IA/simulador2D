@@ -431,7 +431,7 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .start .saved { max-height: 40vh; overflow: auto; }
 .uph { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid var(--accent); border-radius: 8px; font-size: 12px; color: var(--muted); }
 .uph span { color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 11px; }
-.uph input { width: 64px; padding: 3px 6px; font-size: 13px; font-weight: 700; }
+.uph input { width: 84px; padding: 3px 6px; font-size: 13px; font-weight: 700; }
 .uph small { font-variant-numeric: tabular-nums; }
 .ref-tile { position: relative; cursor: pointer; }
 .ref-tile select { position: absolute; inset: 0; opacity: 0; cursor: pointer; }

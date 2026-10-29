@@ -118,7 +118,7 @@ export function buildLine(rows: StationRow[], opts: { name: string; cycleTime?: 
   } else {
     serpentine(mainSeq, reworkOf);
   }
-  return { name: opts.name, nodes, links, settings: { ...DEFAULT_SETTINGS, takt: ct } };
+  return { name: opts.name, nodes, links, settings: { ...DEFAULT_SETTINGS } };
 }
 
 /** Layout em serpentina (U), retrabalhos abaixo da inspeção correspondente. */
@@ -218,6 +218,6 @@ export function elementsModel(): Model {
     nodes,
     links,
     pools: [],
-    settings: { ...DEFAULT_SETTINGS, takt: 50, studyMode: 'elements', startFull: true, warmup: 0 },
+    settings: { ...DEFAULT_SETTINGS, studyMode: 'elements', startFull: true, warmup: 0 },
   };
 }

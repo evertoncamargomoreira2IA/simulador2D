@@ -135,7 +135,7 @@ const EXAMPLE: Model = (() => {
       l('CAR', 'WH', { poolId: 'AGV1', length: 200 }),
     ],
     pools: [makePool('agv', { id: 'AGV1', name: 'AGV expedição', count: 1, speed: 1 })],
-    settings: { ...DEFAULT_SETTINGS, takt: 50.7, startFull: true },
+    settings: { ...DEFAULT_SETTINGS, startFull: true },
   };
 })();
 

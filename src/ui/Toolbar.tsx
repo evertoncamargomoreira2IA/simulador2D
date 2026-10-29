@@ -69,12 +69,12 @@ export function Toolbar() {
           value=""
           onChange={(e) => {
             const ex = privateExample();
-            if (e.target.value === 'real' && ex) st().setModel(ex, 'Linha real carregada sobre o layout DXF.');
+            if (e.target.value === 'real' && ex) st().openModel(ex, 'Linha real carregada sobre o layout DXF.');
             const main = e.target.value === 'main' ? privateExample('main') : null;
-            if (main) st().setModel(main, 'Main line com operações e atividades de cada posto. Veja Análises → Yamazumi.');
-            if (e.target.value === 'lp2') st().setModel(lp2Model(), 'Exemplo LP2 carregado (70 postos, 12 s por posto).');
-            if (e.target.value === 'elements') st().setModel(elementsModel(), 'Linha exemplo com operações e atividades: estudo por elemento. Veja Análises → Yamazumi.');
-            if (e.target.value === 'simple') st().setModel(simpleModel(), 'Linha exemplo simples carregada.');
+            if (main) st().openModel(main, 'Main line com operações e atividades de cada posto. Veja Análises → Yamazumi.');
+            if (e.target.value === 'lp2') st().openModel(lp2Model(), 'Exemplo LP2 carregado (70 postos, 12 s por posto).');
+            if (e.target.value === 'elements') st().openModel(elementsModel(), 'Linha exemplo com operações e atividades: estudo por elemento. Veja Análises → Yamazumi.');
+            if (e.target.value === 'simple') st().openModel(simpleModel(), 'Linha exemplo simples carregada.');
           }}
         >
           <option value="" disabled>Exemplos…</option>
@@ -190,14 +190,15 @@ function UphField() {
         type="number"
         min={0}
         step={1}
-        value={uph}
+        value={uph || ''}
+        placeholder={eff > 0 ? `auto ${(3600 / eff).toFixed(1)}` : 'auto'}
         onChange={(e) => {
           const u = Number(e.target.value);
           useStore.getState().updateSettings({ takt: u > 0 ? Math.round((3600 / u) * 1000) / 1000 : 0 });
         }}
       />
-      <small title={takt > 0 ? '' : 'Sem meta: o takt de referência é o tempo do posto gargalo (planejado).'}>
-        {takt > 0 ? `takt ${takt.toFixed(1)} s` : eff > 0 ? `takt do gargalo ${eff.toFixed(1)} s` : 'takt –'}
+      <small title={takt > 0 ? '' : 'Meta zerada: o takt vem da operação (tempo do posto gargalo planejado). Digite um UPH para fixar uma meta.'}>
+        {takt > 0 ? `takt ${takt.toFixed(1)} s` : eff > 0 ? `takt da operação ${eff.toFixed(1)} s` : 'takt –'}
       </small>
     </label>
   );

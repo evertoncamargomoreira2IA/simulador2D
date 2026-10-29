@@ -334,7 +334,7 @@ export function makePool(kind: PoolKind, partial: Partial<PoolDef> = {}): PoolDe
 export const DEFAULT_SETTINGS: SimSettings = {
   duration: 8 * 3600,
   warmup: 0,
-  takt: 12,
+  takt: 0,
   seed: 42,
   transportSpeed: 1,
   pxPerMeter: 40,

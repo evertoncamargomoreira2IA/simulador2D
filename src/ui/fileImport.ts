@@ -63,7 +63,7 @@ export async function importAnyFile(f: File): Promise<void> {
       const bg = parseDxf(await f.text(), m.settings.pxPerMeter || 40);
       const nodes = m.nodes.map((n) => ({ ...n }));
       const moved = snapNodesToLabels(bg, nodes);
-      st.setModel(
+      st.openModel(
         { ...m, nodes, background: bg },
         `Planta "${f.name}" carregada (${(bg.width / bg.pxPerMeter).toFixed(0)} × ${(bg.height / bg.pxPerMeter).toFixed(0)} m). ${moved ? `${moved} blocos posicionados pelo nome no desenho.` : 'Arraste os blocos sobre a planta.'}`,
       );
@@ -76,7 +76,7 @@ export async function importAnyFile(f: File): Promise<void> {
       const meters = Number(ans.replace(',', '.'));
       if (!(meters > 0)) throw new Error('largura inválida');
       const bg = await imageBackground(f, meters, m.settings.pxPerMeter || 40);
-      st.setModel(
+      st.openModel(
         { ...m, background: bg },
         `Layout "${f.name}" carregado como planta (${meters} × ${(bg.height / bg.pxPerMeter).toFixed(0)} m). Arraste os blocos sobre ele.`,
       );
@@ -95,8 +95,8 @@ export async function importAnyFile(f: File): Promise<void> {
     if (r.keepBackground && cur.background) {
       const k = (cur.settings.pxPerMeter || 40) / (r.model.settings.pxPerMeter || 40);
       const nodes = r.model.nodes.map((n) => ({ ...n, x: n.x * k, y: n.y * k }));
-      st.setModel({ ...r.model, nodes, background: cur.background, zones: cur.zones, settings: { ...r.model.settings, pxPerMeter: cur.settings.pxPerMeter } }, `${r.info} Planta mantida.`);
-    } else st.setModel(r.model, r.info);
+      st.openModel({ ...r.model, nodes, background: cur.background, zones: cur.zones, settings: { ...r.model.settings, pxPerMeter: cur.settings.pxPerMeter } }, `${r.info} Planta mantida.`);
+    } else st.openModel(r.model, r.info);
   } catch (err) {
     st.setMessage(`Não foi possível abrir "${f.name}": ${(err as Error).message}`);
   }

@@ -37,13 +37,13 @@ export function SoeImport({ onClose }: { onClose: () => void }) {
   const soe = parsed[sheet] ?? null;
   const match = soe ? mergeSoe(model, soe) : null;
   const [mode, setMode] = useState<'merge' | 'new'>(() => (match && match.matched > 0 ? 'merge' : 'new'));
-  const [useTakt, setUseTakt] = useState(true);
+  const [useTakt, setUseTakt] = useState(false);
   if (!src) return null;
 
   const apply = () => {
     if (!soe) return;
     const st = useStore.getState();
-    const takt = useTakt && soe.takt ? { takt: soe.takt } : {};
+    const takt = { takt: useTakt && soe.takt ? soe.takt : 0 };
     if (mode === 'merge' && match && match.matched > 0) {
       st.setModel(
         { ...match.model, settings: { ...match.model.settings, ...takt, studyMode: 'elements' } },

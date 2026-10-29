@@ -47,7 +47,7 @@ export async function openSaved(m: SavedMeta): Promise<boolean> {
     st.setMessage(`Não consegui abrir "${m.nome}".`);
     return false;
   }
-  st.setModel(loaded, `"${m.nome}" aberto (salvo em ${new Date(m.atualizado).toLocaleString('pt-BR')}).`);
+  st.openModel(loaded, `"${m.nome}" aberto (salvo em ${new Date(m.atualizado).toLocaleString('pt-BR')}).`);
   st.setSaved({ id: m.id, model: useStore.getState().model });
   return true;
 }

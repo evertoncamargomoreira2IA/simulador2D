@@ -4,6 +4,7 @@ import { elementsModel } from '../src/model/builder';
 import { Simulator } from '../src/engine/simulator';
 import { lineKpi } from '../src/engine/metrics';
 import { stopMinutes, STOP_PRESETS } from '../src/engine/types';
+import { effectiveTakt } from '../src/engine/balance';
 
 const st = (id: string, times: number[]) => ({ id, ops: [{ name: id, activities: times.map((t, i) => ({ name: `${id}${i}`, time: t, kind: 'va' as const })) }] });
 
@@ -26,8 +27,11 @@ describe('balanceamento automático', () => {
   it('exemplo com atividades cabe no takt', () => {
     const m = elementsModel();
     const posts = m.nodes.filter((n) => n.operations?.length && n.capacity <= 1);
-    const r = autoBalance(posts.map((n) => ({ id: n.id, ops: n.operations!, efficiency: n.efficiency })), m.settings.takt);
-    expect(r.maxLoad).toBeLessThanOrEqual(m.settings.takt + 1e-6);
+    const takt = effectiveTakt(m);
+    expect(m.settings.takt).toBe(0);
+    const r = autoBalance(posts.map((n) => ({ id: n.id, ops: n.operations!, efficiency: n.efficiency })), takt);
+    expect(r.used).toBeGreaterThan(0);
+    expect(r.maxLoad).toBeLessThanOrEqual(takt + 1e-6);
   });
 });
 

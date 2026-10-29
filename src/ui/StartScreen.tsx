@@ -29,17 +29,17 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
   }, []);
 
   const startBlank = () => {
-    st().setModel(blankModel(name.trim() || 'Novo trabalho'), 'Trabalho novo. Arraste a planta (DXF ou imagem) para a tela e monte a linha pela paleta: cada bloco novo já sai ligado ao anterior.');
+    st().openModel(blankModel(name.trim() || 'Novo trabalho'), 'Trabalho novo. Arraste a planta (DXF ou imagem) para a tela e monte a linha pela paleta: cada bloco novo já sai ligado ao anterior.');
     onClose();
   };
   const example = (k: 'real' | 'main' | 'lp2' | 'simple' | 'elements') => {
     const ex = privateExample();
     const main = k === 'main' ? privateExample('main') : null;
-    if (main) st().setModel(main, 'Main line com operações e atividades de cada posto. Veja Análises → Yamazumi.');
-    if (k === 'real' && ex) st().setModel(ex, 'Linha real carregada sobre o layout DXF. Clique em ▶ Start.');
-    if (k === 'lp2') st().setModel(lp2Model(), 'Exemplo LP2 carregado (70 postos, 12 s por posto).');
-    if (k === 'elements') st().setModel(elementsModel(), 'Linha exemplo com operações e atividades: estudo por elemento. Veja Análises → Yamazumi.');
-    if (k === 'simple') st().setModel(simpleModel(), 'Linha exemplo simples carregada.');
+    if (main) st().openModel(main, 'Main line com operações e atividades de cada posto. Veja Análises → Yamazumi.');
+    if (k === 'real' && ex) st().openModel(ex, 'Linha real carregada sobre o layout DXF. Clique em ▶ Start.');
+    if (k === 'lp2') st().openModel(lp2Model(), 'Exemplo LP2 carregado (70 postos, 12 s por posto).');
+    if (k === 'elements') st().openModel(elementsModel(), 'Linha exemplo com operações e atividades: estudo por elemento. Veja Análises → Yamazumi.');
+    if (k === 'simple') st().openModel(simpleModel(), 'Linha exemplo simples carregada.');
     onClose();
   };
 
@@ -65,7 +65,7 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
                 const f = e.target.files?.[0];
                 e.target.value = '';
                 if (!f) return;
-                if (!/\.(xlsx|xls|csv|txt|json)$/i.test(f.name)) st().setModel(blankModel(f.name.replace(/\.[^.]+$/, '')));
+                if (!/\.(xlsx|xls|csv|txt|json)$/i.test(f.name)) st().openModel(blankModel(f.name.replace(/\.[^.]+$/, '')));
                 await importAnyFile(f);
                 onClose();
               }}

@@ -61,6 +61,7 @@ interface State {
   realSource: string;
   setReal: (rows: Record<string, RealRow>, source: string) => void;
 
+  openModel: (m: Model, message?: string) => void;
   setModel: (m: Model, message?: string) => void;
   updateNode: (id: string, patch: Partial<NodeDef>) => void;
   moveNodes: (ids: string[], dx: number, dy: number) => void;
@@ -198,6 +199,8 @@ export const useStore = create<State>((set, get) => {
     },
     setShowStart: (showStart) => set({ showStart }),
 
+    // Abrir trabalho (novo, exemplo, salvo, importado): a meta começa zerada e o takt vem da operação (gargalo).
+    openModel: (m, message) => get().setModel({ ...m, settings: { ...m.settings, takt: 0 } }, message),
     setModel: (m, message) =>
       edit(m, { selected: [], selectedLink: null, connectFrom: null, saved: null, message: message ?? `Modelo "${m.name}" carregado.` }, `abrir "${m.name}"`),
 
