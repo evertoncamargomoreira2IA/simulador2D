@@ -720,3 +720,26 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .stall-ok { color: #2ecc71; font-weight: 700; align-self: center; }
 .props .trail { display: grid; gap: 6px; }
 .props .trail .small { font-size: 12px; margin: 0; line-height: 1.4; }
+
+/* Painel real × simulado e página do leitor */
+.panel-chart { display: block; }
+.pc-grid { stroke: var(--line); stroke-width: 1; }
+.pc-takt { stroke: var(--st-down); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.pc-soe { stroke: var(--ink); stroke-width: 2; }
+.pc-label { fill: var(--muted); font-size: 10px; }
+.pc-sim { fill: var(--accent); }
+.pc-real { fill: #e8913a; }
+.pc-real.bad { fill: var(--st-down); }
+.pc-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 6px 0 0; }
+.pc-legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -2px; margin-right: -4px; }
+.pc-legend .sw.pc-sim { background: var(--accent); }
+.pc-legend .sw.pc-real { background: #e8913a; }
+.pc-legend .sw.pc-real.bad { background: var(--st-down); }
+.pc-legend .sw.soe { height: 2px; background: var(--ink); }
+.pc-legend .sw.takt { height: 0; border-top: 2px dashed var(--st-down); border-radius: 0; }
+td.good { color: var(--st-working); }
+.reader { min-height: 100vh; background: var(--bg); color: var(--ink); padding: 16px; box-sizing: border-box; max-width: 1280px; margin: 0 auto; }
+.reader-head { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.reader-head h1 { font-size: 20px; margin: 0; }
+.reader .tiles { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.reader-overlay { position: fixed; inset: 0; z-index: 60; overflow: auto; background: var(--bg); }

@@ -10,6 +10,7 @@ import { applyTheme, fmtTime, loadTheme } from './theme';
 import { effectiveTakt } from '../engine/balance';
 import { Tutorial, downloadSoeForm, downloadTemplate } from './Tutorial';
 import { Library } from './Library';
+import { PanelModal } from './Panel';
 import { RecentSelect, SavedModels, saveAsLocal, saveCurrent } from './SaveDialog';
 
 const SPEEDS = [1, 2, 5, 10, 30, 60, 120, 300, 600];
@@ -18,6 +19,7 @@ export function Toolbar() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [help, setHelp] = useState(false);
   const [lib, setLib] = useState(false);
+  const [panel, setPanel] = useState(false);
   const showSaved = useStore((s) => s.showSaved);
   const saved = useStore((s) => s.saved);
   const undoLabel = useStore((s) => s.undoLabel);
@@ -183,12 +185,14 @@ export function Toolbar() {
       <div className="group" role="group" aria-label="Análises">
         <button className="btn" onClick={() => st().setAnalysis('ciclo')} title="Cycle × takt, gargalos, spaghetti, custos, energia, carbono, cenários e real × simulado">Análises</button>
         <button className="btn" onClick={() => st().setOpsFor(st().selected[0] ?? '')} title="Operações e atividades de cada posto (estudo por elemento e Yamazumi)">Operações</button>
+        <button className="btn" onClick={() => setPanel(true)} title="Painel real × simulado por posto e publicação para leitores (link só leitura)">📊 Painel</button>
         <button className="btn ai" onClick={() => st().setAnalysis('ia')} title="Sugestões de melhoria com IA">✦ IA</button>
         <button className="btn" onClick={() => setHelp(true)} title="Passo a passo, siglas e funções">? Como usar</button>
         <button className="btn lib-btn" onClick={() => setLib(true)} title="Biblioteca de soluções: dúvidas comuns com passo a passo em imagens">💡 Biblioteca</button>
       </div>
       {help && <Tutorial onClose={() => setHelp(false)} />}
       {lib && <Library onClose={() => setLib(false)} />}
+      {panel && <PanelModal onClose={() => setPanel(false)} />}
       {showSaved && <SavedModels onClose={() => st().setShowSaved(false)} />}
       <span className={`live${run === 'running' ? ' on' : ''}`}><i />{run === 'running' ? 'Ao vivo' : run === 'done' ? (sim.clock < model.settings.duration ? 'Parado' : 'Concluído') : run === 'paused' ? 'Pausado' : 'Pronto'}</span>
       <UphField />

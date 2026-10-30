@@ -43,6 +43,7 @@ export const SIGLAS: [string, string, string][] = [
 
 /** [onde, função, o que faz] */
 export const FUNCOES: [string, string, string][] = [
+  ['Barra', '📊 Painel', 'Painel real × simulado por posto (SOE, simulado e real, desvios e alertas). Publicar para leitores grava a foto; quem tem o link só como leitor abre direto no painel, sem o editor. 👁 Ver como leitor mostra essa visão.'],
   ['Análises', 'Dados reais', 'Leituras de cada posto (API, arquivo ou linha simulada): ciclo real por posto e operação, descarte de discrepantes, mínimo de amostras, ritmo, tolerâncias e alerta contra o SOE; aplica o tempo real no modelo.'],
   ['Barra', 'Início', 'Trabalho novo, trabalhos salvos, abrir arquivo ou exemplos.'],
   ['Layout', 'Botão direito no bloco', 'Menu do posto: detalhes (todos os indicadores), propriedades, operações, Yamazumi, dados reais, posto de referência, adicionar bloco ligado e apagar.'],
