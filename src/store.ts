@@ -1,6 +1,7 @@
 // Estado global da interface (Zustand). O simulador fica fora do estado reativo
 // e a tela é redesenhada por `tick` durante a animação.
 
+import type { RealEvent } from './engine/timeStudy';
 import { create } from 'zustand';
 import { History } from './engine/history';
 import { lineKpi, type LineKpi } from './engine/metrics';
@@ -26,7 +27,7 @@ export interface Layers {
   counts: boolean;
 }
 
-export type AnalysisTab = 'ciclo' | 'yamazumi' | 'rebalancear' | 'replicas' | 'turnos' | 'throughput' | 'gargalos' | 'spaghetti' | 'custos' | 'energia' | 'carbono' | 'cenarios' | 'real' | 'ia';
+export type AnalysisTab = 'ciclo' | 'yamazumi' | 'rebalancear' | 'replicas' | 'turnos' | 'throughput' | 'gargalos' | 'spaghetti' | 'custos' | 'energia' | 'carbono' | 'cenarios' | 'coleta' | 'real' | 'ia';
 
 export interface RealRow {
   name: string;
@@ -65,6 +66,10 @@ interface State {
   real: Record<string, RealRow>;
   realSource: string;
   setReal: (rows: Record<string, RealRow>, source: string) => void;
+  /** Leituras da operação (API, arquivo ou linha simulada) para o estudo de tempos. */
+  realEvents: RealEvent[];
+  realEventsSource: string;
+  setRealEvents: (ev: RealEvent[], source: string) => void;
 
   openModel: (m: Model, message?: string) => void;
   setModel: (m: Model, message?: string) => void;
@@ -403,6 +408,9 @@ export const useStore = create<State>((set, get) => {
     real: {},
     realSource: '',
     setReal: (real, realSource) => set({ real, realSource }),
+    realEvents: [],
+    realEventsSource: '',
+    setRealEvents: (realEvents, realEventsSource) => set({ realEvents, realEventsSource }),
     setMessage: (message) => set({ message }),
     saved: null,
     setSaved: (saved) => set({ saved }),

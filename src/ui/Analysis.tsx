@@ -14,6 +14,7 @@ import { ThroughputTab } from './Throughput';
 import { Yamazumi } from './Yamazumi';
 import { Rebalance } from './Rebalance';
 import { Replicas } from './Replicas';
+import { RealData } from './RealData';
 import { Shifts } from './Shifts';
 import { loadScenarios, runScenario, saveScenarios, type Scenario } from './scenarios';
 import { Bars, Kpi, Modal } from './Modal';
@@ -33,6 +34,7 @@ const TABS: { k: AnalysisTab; label: string }[] = [
   { k: 'energia', label: 'Energia' },
   { k: 'carbono', label: 'Carbono' },
   { k: 'cenarios', label: 'Cenários' },
+  { k: 'coleta', label: 'Dados reais' },
   { k: 'real', label: 'Real × simulado' },
   { k: 'ia', label: 'IA' },
 ];
@@ -63,6 +65,7 @@ export function Analysis() {
         {tab === 'energia' && <Energy />}
         {tab === 'carbono' && <Carbon />}
         {tab === 'cenarios' && <Scenarios />}
+        {tab === 'coleta' && <RealData />}
         {tab === 'real' && <RealVsSim />}
         {tab === 'ia' && <Advisor />}
       </div>

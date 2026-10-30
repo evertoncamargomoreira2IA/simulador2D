@@ -43,6 +43,7 @@ export const SIGLAS: [string, string, string][] = [
 
 /** [onde, função, o que faz] */
 export const FUNCOES: [string, string, string][] = [
+  ['Análises', 'Dados reais', 'Leituras de cada posto (API, arquivo ou linha simulada): ciclo real por posto e operação, descarte de discrepantes, mínimo de amostras, ritmo, tolerâncias e alerta contra o SOE; aplica o tempo real no modelo.'],
   ['Barra', 'Início', 'Trabalho novo, trabalhos salvos, abrir arquivo ou exemplos.'],
   ['Barra', 'Exemplos', 'Linhas prontas para testar (simples, 70 postos, com atividades).'],
   ['Barra', '↶ ↷', 'Desfazer e refazer (Ctrl+Z / Ctrl+Y).'],
