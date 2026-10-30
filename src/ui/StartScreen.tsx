@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_SETTINGS } from '../engine/types';
 import { modelStore, type SavedMeta } from '../io/storage';
-import { elementsModel, lp2Model, simpleModel, combineModel, supplyModel, transportModel } from '../model/builder';
+import { elementsModel, lp2Model, simpleModel, combineModel, mixModel, supplyModel, transportModel } from '../model/builder';
 import { privateExample, useStore } from '../store';
 import { ACCEPT, importAnyFile } from './fileImport';
 import { Modal } from './Modal';
@@ -33,7 +33,7 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
     st().openModel(blankModel(name.trim() || 'Novo trabalho'), 'Trabalho novo. Arraste a planta (DXF ou imagem) para a tela e monte a linha pela paleta: cada bloco novo já sai ligado ao anterior.');
     onClose();
   };
-  const example = (k: 'real' | 'main' | 'lp2' | 'simple' | 'elements' | 'combine' | 'transport' | 'supply') => {
+  const example = (k: 'real' | 'main' | 'lp2' | 'simple' | 'elements' | 'combine' | 'transport' | 'supply' | 'mix') => {
     const ex = privateExample();
     const main = k === 'main' ? privateExample('main') : null;
     if (main) st().openModel(main, 'Main line com operações e atividades de cada posto. Veja Análises → Yamazumi.');
@@ -42,6 +42,7 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
     if (k === 'elements') st().openModel(elementsModel(), 'Linha exemplo com operações e atividades: estudo por elemento. Veja Análises → Yamazumi.');
     if (k === 'transport') st().openModel(transportModel(), 'Exemplo: dois buffers abastecem o Posto destino; o abastecedor leva 4 peças por viagem. Clique em ▶ Start.');
     if (k === 'combine') st().openModel(combineModel(), 'Exemplo: 3 postos fazem peças diferentes, o AMR e o abastecedor levam até o Posto X, que junta tudo em um produto. Clique em ▶ Start e no Posto X.');
+    if (k === 'mix') st().setModel(mixModel(), 'Exemplo: linha com 3 modelos (A 60%, B 30%, C 10%), troca de modelo na programação e no teste. Abra 🎨 Mix e clique em ▶ Rodar turno com o mix.');
     if (k === 'supply') st().setModel(supplyModel(), 'Exemplo: supermercado → kitting → milk run → linha (10 montagem, 5 off-line, 4 teste, 5 packing) → FGI → expedição, meta 100 UPH. Clique em ▶ Start.');
     if (k === 'simple') st().openModel(simpleModel(), 'Linha exemplo simples carregada.');
     onClose();
@@ -83,6 +84,7 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
             <button className="btn" onClick={() => example('simple')}>Exemplo: linha simples</button>
             <button className="btn" onClick={() => example('elements')}>Exemplo: linha com atividades (Yamazumi)</button>
             <button className="btn" onClick={() => example('supply')}>Exemplo: abastecimento e FGI (100 UPH)</button>
+            <button className="btn" onClick={() => example('mix')}>Exemplo: mix de 3 modelos</button>
             <button className="btn" onClick={() => example('combine')}>Exemplo: combinar peças com AMR</button>
             <button className="btn" onClick={() => example('transport')}>Exemplo: operador levando peças</button>
           </div>

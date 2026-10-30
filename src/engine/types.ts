@@ -35,6 +35,29 @@ export function baseCycle(n: Pick<NodeDef, 'cycleTime' | 'operations'>, settings
   return settings?.studyMode === 'elements' && n.operations?.length ? operationsTime(n.operations) : n.cycleTime;
 }
 
+/** Curva do tempo de ciclo. Média = tempo do posto; a variação vem do cv ou de min/max. */
+export type DistKind = 'lognormal' | 'normal' | 'triangular' | 'uniform' | 'exponential' | 'constant' | 'empirical';
+
+export interface TimeDist {
+  kind: DistKind;
+  /** Triangular e uniforme: limites (s). Vazio = derivados da média e do cv. */
+  min?: number;
+  max?: number;
+  /** Empírica: tempos medidos (s); o sorteio escolhe um deles, reescalado para a média do posto. */
+  samples?: number[];
+}
+
+/** Modelo de produto do mix (ex.: A 60%, B 40%). */
+export interface ProductDef {
+  id: string;
+  name: string;
+  color: string;
+  /** Participação no mix (qualquer escala; é normalizada). */
+  share: number;
+  /** Fator sobre o ciclo de todos os postos sem tempo próprio para este modelo (1 = igual ao SOE). */
+  factor: number;
+}
+
 export interface NodeDef {
   id: string;
   name: string;
@@ -95,6 +118,12 @@ export interface NodeDef {
   crewSide?: 'top' | 'bottom' | 'left' | 'right';
   /** Posição livre do operador (px, relativa ao centro do bloco), definida arrastando o boneco. */
   crewOffset?: { x: number; y: number };
+  /** Curva do tempo de ciclo (padrão lognormal com o cv). */
+  dist?: TimeDist;
+  /** Mix: tempo de ciclo do posto por modelo de produto (s). Vazio = ciclo × fator do modelo. */
+  productTimes?: Record<string, number>;
+  /** Mix: tempo de troca quando o modelo da peça muda (s). */
+  changeover?: number;
 }
 
 /** Posição de cada giga/posto paralelo do nó (1 ou 2 fileiras distribuídas na área). */
@@ -230,6 +259,10 @@ export interface Model {
   chartOrder?: string[];
   /** Postos escondidos nos gráficos (ids). */
   chartHidden?: string[];
+  /** Mix de modelos de produto. Vazio = produto único. */
+  products?: ProductDef[];
+  /** Sequência fixa de produção (ids, repetida em ciclo). Vazio = sorteio pelo % do mix. */
+  sequence?: string[];
 }
 
 export type NodeState = 'working' | 'starved' | 'blocked' | 'resource' | 'down' | 'setup' | 'break' | 'off';

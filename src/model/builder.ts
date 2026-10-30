@@ -1,6 +1,6 @@
 // Monta modelos a partir de listas de postos e faz o layout automático em serpentina.
 
-import { DEFAULT_SETTINGS, makeNode, makePool, MANUAL_PATCH, newId, operationsTime, type ActivityKind, type LinkDef, type Model, type NodeDef, type NodeType, type Operation } from '../engine/types';
+import { DEFAULT_SETTINGS, makeNode, makePool, MANUAL_PATCH, newId, operationsTime, type ActivityKind, type LinkDef, type Model, type NodeDef, type NodeType, type Operation, type TimeDist } from '../engine/types';
 import { LP2_STATIONS } from './lp2';
 import { supplyPlant } from './plant';
 
@@ -363,5 +363,66 @@ export function supplyModel(): Model {
     background: supplyPlant(),
     refStation: 'PK5',
     settings: { ...DEFAULT_SETTINGS, takt: 36, startFull: true, warmup: 0, pxPerMeter: 20, duration: 8 * 3600 },
+  };
+}
+
+/**
+ * Exemplo de mix: linha de 8 postos que faz 3 modelos (A 60%, B 30%, C 10%), takt 40 s (90 UPH).
+ * O modelo B pesa no aparafusamento e o C no teste; a programação e o teste param para trocar de modelo.
+ * Cada posto usa uma curva de tempo diferente (lognormal, triangular, normal, uniforme).
+ */
+export function mixModel(): Model {
+  const rows: [string, number, Record<string, number>, number, TimeDist?][] = [
+    ['Preparação', 34, {}, 0, { kind: 'triangular' }],
+    ['Montagem base', 36, { B: 38 }, 0],
+    ['Aparafusamento', 33, { B: 44, C: 39 }, 0, { kind: 'normal' }],
+    ['Cabeamento', 35, { C: 42 }, 0],
+    ['Programação', 30, { C: 36 }, 12, { kind: 'uniform' }],
+    ['Teste funcional', 70, { C: 88 }, 20, { kind: 'triangular' }],
+    ['Inspeção final', 32, {}, 0, { kind: 'normal' }],
+    ['Embalagem', 34, { B: 37 }, 0],
+  ];
+  const nodes: NodeDef[] = [];
+  const links: LinkDef[] = [];
+  const add = (n: NodeDef) => {
+    const prev = nodes[nodes.length - 1];
+    nodes.push(n);
+    if (prev) links.push({ id: newId('L'), from: prev.id, to: n.id, weight: 1 });
+  };
+  add(makeNode('source', { name: 'Kits', x: 100, y: 220 }));
+  rows.forEach(([name, cycleTime, productTimes, changeover, dist], i) =>
+    add(
+      makeNode(name === 'Inspeção final' ? 'inspection' : 'machine', {
+        ...MANUAL_PATCH,
+        id: `X${i + 1}`,
+        name,
+        x: 240 + i * 130,
+        y: 220,
+        cycleTime,
+        cv: 0.08,
+        capacity: name === 'Teste funcional' ? 2 : 1,
+        operators: name === 'Teste funcional' ? 2 : 1,
+        queueCap: 2,
+        availability: 1,
+        productTimes: Object.keys(productTimes).length ? productTimes : undefined,
+        changeover: changeover || undefined,
+        dist,
+        area: name === 'Teste funcional' ? { w: 100, h: 50 } : undefined,
+      }),
+    ),
+  );
+  add(makeNode('sink', { name: 'Produto acabado', x: 240 + rows.length * 130, y: 220 }));
+  return {
+    name: 'Exemplo: mix de 3 modelos (A 60%, B 30%, C 10%)',
+    nodes,
+    links,
+    pools: [],
+    refStation: 'X8',
+    products: [
+      { id: 'A', name: 'A', color: '#22d3ee', share: 60, factor: 1 },
+      { id: 'B', name: 'B', color: '#e8913a', share: 30, factor: 1 },
+      { id: 'C', name: 'C', color: '#a78bfa', share: 10, factor: 1 },
+    ],
+    settings: { ...DEFAULT_SETTINGS, takt: 40, startFull: true, warmup: 0 },
   };
 }

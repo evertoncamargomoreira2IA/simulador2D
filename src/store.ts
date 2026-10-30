@@ -104,6 +104,11 @@ interface State {
   showOrder: boolean;
   /** Janela de operações e atividades aberta (id do posto, '' = primeiro). */
   opsFor: string | null;
+  /** Posto com a janela Curva do tempo aberta e janela do Mix de modelos. */
+  fitFor: string | null;
+  showMix: boolean;
+  setFitFor: (id: string | null) => void;
+  setShowMix: (v: boolean) => void;
   /** Ctrl+clique: operador/veículo e seta escolhidos para o vínculo de transporte. */
   bindPick: { poolId?: string; linkId?: string } | null;
   /** Janela de vínculo de transporte aberta. */
@@ -377,6 +382,10 @@ export const useStore = create<State>((set, get) => {
     },
     showOrder: false,
     opsFor: null,
+    fitFor: null,
+    showMix: false,
+    setFitFor: (fitFor) => set({ fitFor }),
+    setShowMix: (showMix) => set({ showMix }),
     bindPick: null,
     transportFor: null,
     setTransportFor: (transportFor) => set({ transportFor, bindPick: null }),

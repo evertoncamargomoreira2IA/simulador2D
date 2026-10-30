@@ -43,6 +43,8 @@ export const SIGLAS: [string, string, string][] = [
 
 /** [onde, função, o que faz] */
 export const FUNCOES: [string, string, string][] = [
+  ['Barra', '🎨 Mix', 'Mix de modelos: produtos com % do mix ou sequência fixa (ex.: A A B), tempo de cada posto por modelo, tempo de troca de modelo, UPH do mix e de cada modelo sozinho. As peças aparecem na cor do modelo.'],
+  ['Posto', '📈 Curva do tempo', 'Escolhe a curva do tempo de ciclo (lognormal, normal, triangular, uniforme, exponencial, constante ou empírica). Ajustar curva: cole tempos ou use os dados reais do posto; o teste KS indica a curva que melhor representa.'],
   ['Barra', '📊 Painel', 'Painel real × simulado por posto (SOE, simulado e real, desvios e alertas). Publicar para leitores grava a foto; quem tem o link só como leitor abre direto no painel, sem o editor. 👁 Ver como leitor mostra essa visão.'],
   ['Análises', 'Dados reais', 'Leituras de cada posto (API, arquivo ou linha simulada): ciclo real por posto e operação, descarte de discrepantes, mínimo de amostras, ritmo, tolerâncias e alerta contra o SOE; aplica o tempo real no modelo.'],
   ['Barra', 'Início', 'Trabalho novo, trabalhos salvos, abrir arquivo ou exemplos.'],

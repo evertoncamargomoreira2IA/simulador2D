@@ -20,8 +20,9 @@
 import { effectiveTakt } from './balance';
 import { MinHeap } from './heap';
 import { pointAt, polyLength, polyline, reversePts } from './path';
+import { sampleTime } from './dist';
 import { Rng } from './rng';
-import { baseCycle, slotPositions, type LinkDef, type Model, type NodeDef, type NodeState, type PoolDef, type ShiftStop } from './types';
+import { baseCycle, slotPositions, type LinkDef, type Model, type NodeDef, type NodeState, type PoolDef, type ProductDef, type ShiftStop } from './types';
 
 export interface Entity {
   id: number;
@@ -55,6 +56,8 @@ export interface Entity {
   assembled?: Set<string>;
   /** Trecho pelo qual entrou na fila do posto atual (carrinho/bin do item). */
   via?: LinkRt;
+  /** Modelo de produto (mix). */
+  product?: string;
 }
 
 interface Job {
@@ -128,6 +131,10 @@ export interface NodeRt {
   workCount: number;
   slots: { x: number; y: number }[];
   slotBusy: boolean[];
+  /** Mix: último modelo processado e trocas de modelo feitas. */
+  lastProduct?: string;
+  changeovers: number;
+  changeoverTime: number;
 }
 
 export interface Move {
@@ -261,6 +268,12 @@ export class Simulator {
   private seq = 0;
   private rng: Rng;
   private entitySeq = 0;
+  /** Sorteio do mix separado do resto: o mesmo modelo sem mix dá exatamente o mesmo resultado. */
+  private mixRng: Rng;
+  private seqIndex = 0;
+  private productById = new Map<string, ProductDef>();
+  /** Produção da linha por modelo de produto (no ponto de medição). */
+  readonly producedBy: Record<string, number> = {};
   private lastSample = { t: 0, completed: 0 };
   readonly sampleEvery: number;
   readonly ppm: number;
@@ -280,6 +293,8 @@ export class Simulator {
     // Takt zerado: usa o tempo do gargalo planejado como referência.
     this.model = model.settings.takt > 0 ? model : { ...model, settings: { ...model.settings, takt: effectiveTakt(model) } };
     this.rng = new Rng(model.settings.seed);
+    this.mixRng = new Rng(model.settings.seed * 31 + 7);
+    for (const p of model.products ?? []) this.productById.set(p.id, p);
     const ppm = (this.ppm = model.settings.pxPerMeter || 40);
     const poolById = new Map<string, PoolRt>();
     for (const def of model.pools ?? []) {
@@ -318,6 +333,8 @@ export class Simulator {
         down: false,
         paused: false,
         setupUntil: def.setupTime > 0 ? def.setupTime : 0,
+        changeovers: 0,
+        changeoverTime: 0,
         state: 'off',
         stateSince: 0,
         stateTime: zeroStates(),
@@ -577,6 +594,28 @@ export class Simulator {
     }
   }
 
+  /** Próximo modelo do mix: sequência fixa em ciclo, ou sorteio pelo % de cada modelo. */
+  private nextProduct(): string | undefined {
+    const ps = this.model.products;
+    if (!ps?.length) return undefined;
+    const seq = (this.model.sequence ?? []).filter((id) => this.productById.has(id));
+    if (seq.length) return seq[this.seqIndex++ % seq.length];
+    const total = ps.reduce((a, p) => a + Math.max(0, p.share), 0);
+    if (total <= 0) return ps[0].id;
+    let r = this.mixRng.next() * total;
+    for (const p of ps) if ((r -= Math.max(0, p.share)) < 0) return p.id;
+    return ps[ps.length - 1].id;
+  }
+
+  /** Tempo médio do posto para o modelo da peça: tempo próprio, ou ciclo × fator do modelo. */
+  private meanTime(n: NodeRt, product?: string): number {
+    const base = baseCycle(n.def, this.model.settings);
+    if (!product) return base;
+    const own = n.def.productTimes?.[product];
+    if (own !== undefined && own > 0) return own;
+    return base * (this.productById.get(product)?.factor ?? 1);
+  }
+
   private newEntity(src: NodeRt): Entity {
     const e: Entity = {
       id: ++this.entitySeq,
@@ -595,6 +634,7 @@ export class Simulator {
       qty: 1,
       work: 0,
       counted: false,
+      product: this.nextProduct(),
     };
     e.next = this.route(src, e);
     return e;
@@ -900,7 +940,15 @@ export class Simulator {
         this.retry.add(l.from);
       }
       const handling = n.def.handlingTime ?? 0;
-      const duration = walk + (unit ? handling : 0) + this.rng.lognormal(baseCycle(n.def, this.model.settings) / (n.def.efficiency || 1), n.def.cv);
+      // troca de modelo: o posto para o tempo de troca quando o modelo muda
+      let change = 0;
+      if (e.product && n.def.changeover && n.lastProduct && n.lastProduct !== e.product) {
+        change = n.def.changeover;
+        n.changeovers++;
+        n.changeoverTime += change;
+      }
+      if (e.product) n.lastProduct = e.product;
+      const duration = walk + change + (unit ? handling : 0) + sampleTime(this.rng, this.meanTime(n, e.product) / (n.def.efficiency || 1), n.def.cv, n.def.dist);
       const job: Job = { entity: e, start: this.now, end: this.now + duration, duration, remaining: duration, token: 0 };
       if (unit) {
         if (handling > 0) this.schedule(this.now + walk + handling, 'unitFree', { unit });
@@ -935,6 +983,7 @@ export class Simulator {
       members,
       work: 0,
       counted: true,
+      product: n.queue[0]?.product,
     };
     let need = size;
     while (need > 0 && n.queue.length > 0) {
@@ -1149,6 +1198,7 @@ export class Simulator {
     e.counted = true;
     this.lastOutputAt = this.now;
     const q = e.qty;
+    if (e.product) this.producedBy[e.product] = (this.producedBy[e.product] ?? 0) + q;
     this.completed += q;
     this.completedGood += q === 1 ? (e.reworks === 0 ? 1 : 0) : Math.max(0, q - e.reworks);
     if (e.members) for (const r of e.members) this.leadTimeSum += this.now - r;

@@ -287,6 +287,7 @@ export function CanvasView() {
   }
 
   const byId = useMemo(() => new Map(model.nodes.map((n) => [n.id, n])), [model.nodes]);
+  const productColor = useMemo(() => new Map((model.products ?? []).map((p) => [p.id, p.color])), [model.products]);
   const topIds = kpi.completed > 0 ? kpi.ranking.slice(0, 5).map((r) => r.id) : [];
   const co2ById = useMemo(() => {
     const m = new Map<string, number>();
@@ -601,6 +602,7 @@ export function CanvasView() {
 
         {layers.entities && (
           <Layer listening={false}>
+            {/* peças do mix na cor do modelo */}
             {[...sim.transits].filter((t) => !t.unit).map((t) => {
               const a = t.link.from.def;
               const b = t.link.to.def;
@@ -614,7 +616,7 @@ export function CanvasView() {
                   x={x}
                   y={y}
                   radius={5}
-                  fill={t.entity.reworks > 0 ? colors.state.blocked : colors.transport}
+                  fill={t.entity.reworks > 0 ? colors.state.blocked : (t.entity.product && productColor.get(t.entity.product)) || colors.transport}
                   stroke={colors.raised}
                   strokeWidth={1.5}
                 />
@@ -1390,6 +1392,8 @@ function NodeMenu({ id, sx, sy, onClose, onAdd }: { id: string; sx: number; sy: 
     ['🧩 Operações e atividades', () => st.setOpsFor(id), !station],
     ['📐 Yamazumi da linha', () => st.setAnalysis('yamazumi'), !station],
     ['⏱ Dados reais (tempo medido)', () => st.setAnalysis('coleta'), !station],
+    ['📈 Curva do tempo (ajustar)', () => st.setFitFor(id), !station],
+    ['🎨 Mix de modelos', () => st.setShowMix(true), !station],
     [isRef ? '☆ Tirar como posto de referência do UPH' : '⭐ Usar como posto de referência do UPH', () => st.setRefStation(isRef ? undefined : id), !station],
     ['➕ Adicionar bloco ligado depois', () => onAdd(id, n.x + 120, n.y), n.type === 'sink'],
     ['🗑 Apagar', () => st.deleteSelection()],

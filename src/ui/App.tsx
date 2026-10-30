@@ -16,6 +16,8 @@ import { Analysis } from './Analysis';
 import { StationDetail } from './StationDetail';
 import { TransportBind } from './TransportBind';
 import { OpsEditor } from './OpsEditor';
+import { FitCurve } from './FitCurve';
+import { MixModal } from './Mix';
 import { SoeImport } from './SoeImport';
 import { StationOrder } from './StationOrder';
 import { StartScreen } from './StartScreen';
@@ -24,6 +26,8 @@ import { StallAlert } from './StallAlert';
 export function App() {
   const showOrder = useStore((s) => s.showOrder);
   const opsFor = useStore((s) => s.opsFor);
+  const fitFor = useStore((s) => s.fitFor);
+  const showMix = useStore((s) => s.showMix);
   const transportFor = useStore((s) => s.transportFor);
   const showSoe = useStore((s) => s.showSoe);
   const showStart = useStore((s) => s.showStart);
@@ -137,6 +141,8 @@ export function App() {
       {showSoe && <SoeImport onClose={() => useStore.getState().setShowSoe(false)} />}
       {transportFor && <TransportBind start={transportFor} onClose={() => useStore.getState().setTransportFor(null)} />}
       <StallAlert />
+      {fitFor !== null && <FitCurve nodeId={fitFor} onClose={() => useStore.getState().setFitFor(null)} />}
+      {showMix && <MixModal onClose={() => useStore.getState().setShowMix(false)} />}
       {opsFor !== null && <OpsEditor start={opsFor} onClose={() => useStore.getState().setOpsFor(null)} />}
     </div>
   );

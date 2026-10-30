@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { lineKpi } from '../engine/metrics';
 import { exportModelCsv, exportModelJson, exportResultsXlsx } from '../io/exporter';
 import { ACCEPT, importAnyFile } from './fileImport';
-import { elementsModel, lp2Model, simpleModel, combineModel, supplyModel, transportModel } from '../model/builder';
+import { elementsModel, lp2Model, simpleModel, combineModel, mixModel, supplyModel, transportModel } from '../model/builder';
 import { privateExample, useStore } from '../store';
 import { applyTheme, fmtTime, loadTheme } from './theme';
 import { effectiveTakt } from '../engine/balance';
@@ -86,6 +86,7 @@ export function Toolbar() {
             if (e.target.value === 'elements') st().openModel(elementsModel(), 'Linha exemplo com operações e atividades: estudo por elemento. Veja Análises → Yamazumi.');
             if (e.target.value === 'transport') st().openModel(transportModel(), 'Exemplo: dois buffers abastecem o Posto destino; o abastecedor leva 4 peças por viagem.');
             if (e.target.value === 'combine') st().openModel(combineModel(), 'Exemplo: 3 postos, AMR e abastecedor levam as peças ao Posto X, que junta tudo em um produto.');
+            if (e.target.value === 'mix') st().setModel(mixModel(), 'Exemplo: linha com 3 modelos (A 60%, B 30%, C 10%), troca de modelo na programação e no teste. Abra 🎨 Mix e clique em ▶ Rodar turno com o mix.');
             if (e.target.value === 'supply') st().setModel(supplyModel(), 'Exemplo: supermercado → kitting → milk run → linha (10 montagem, 5 off-line, 4 teste, 5 packing) → FGI → expedição, meta 100 UPH. Clique em ▶ Start.');
             if (e.target.value === 'simple') st().openModel(simpleModel(), 'Linha exemplo simples carregada.');
           }}
@@ -94,6 +95,7 @@ export function Toolbar() {
           {__EXAMPLE__ && <option value="real">Linha real (layout DXF)</option>}
           {__EXAMPLE_MAIN__ && <option value="main">Linha real: main line com atividades</option>}
           <option value="supply">Abastecimento e FGI (100 UPH)</option>
+          <option value="mix">Mix de 3 modelos (A, B, C)</option>
           <option value="lp2">Linha LP2 (70 postos)</option>
           <option value="simple">Linha simples</option>
           <option value="elements">Linha com atividades (Yamazumi)</option>
@@ -185,6 +187,7 @@ export function Toolbar() {
       <div className="group" role="group" aria-label="Análises">
         <button className="btn" onClick={() => st().setAnalysis('ciclo')} title="Cycle × takt, gargalos, spaghetti, custos, energia, carbono, cenários e real × simulado">Análises</button>
         <button className="btn" onClick={() => st().setOpsFor(st().selected[0] ?? '')} title="Operações e atividades de cada posto (estudo por elemento e Yamazumi)">Operações</button>
+        <button className="btn" onClick={() => st().setShowMix(true)} title="Mix de modelos: % de cada produto ou sequência fixa, tempo por modelo e troca de modelo">🎨 Mix</button>
         <button className="btn" onClick={() => setPanel(true)} title="Painel real × simulado por posto e publicação para leitores (link só leitura)">📊 Painel</button>
         <button className="btn ai" onClick={() => st().setAnalysis('ia')} title="Sugestões de melhoria com IA">✦ IA</button>
         <button className="btn" onClick={() => setHelp(true)} title="Passo a passo, siglas e funções">? Como usar</button>

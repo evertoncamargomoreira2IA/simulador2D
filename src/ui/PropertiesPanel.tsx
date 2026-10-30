@@ -7,6 +7,8 @@ import { nodeKpi } from '../engine/metrics';
 import type { LinkDef, NodeDef, NodeState, NodeType, PoolDef, PoolKind } from '../engine/types';
 import { isAssembly, makePool, MANUAL_PATCH, newId, POOL_LABEL, TYPE_LABEL } from '../engine/types';
 import { useStore } from '../store';
+import { DIST_LABEL } from '../engine/dist';
+import type { DistKind } from '../engine/types';
 import { HowTo } from './HowTo';
 import { fmt, pct, STATE_LABEL } from './theme';
 
@@ -261,6 +263,27 @@ export function PropertiesPanel() {
               );
             })}
           </div>
+
+          {(n.type === 'machine' || n.type === 'inspection' || n.type === 'rework') && (
+            <div className="section dist-row">
+              <p className="label">Curva do tempo e mix</p>
+              <label className="field full">
+                <span>Curva do tempo de ciclo</span>
+                <select id="node-dist" value={n.dist?.kind ?? 'lognormal'} onChange={(e) => upd({ dist: e.target.value === 'lognormal' ? undefined : { ...(n.dist ?? {}), kind: e.target.value as DistKind } })}>
+                  {(Object.keys(DIST_LABEL) as DistKind[]).map((k) => (
+                    <option key={k} value={k} disabled={k === 'empirical' && !n.dist?.samples?.length}>{DIST_LABEL[k]}{k === 'empirical' && n.dist?.samples?.length ? ` · ${n.dist.samples.length} tempos` : ''}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="row-btns">
+                <button className="btn" onClick={() => useStore.getState().setFitFor(n.id)} title="Cole tempos cronometrados ou use os dados reais do posto: o simulador escolhe a curva que melhor representa">📈 Ajustar curva</button>
+                <button className="btn" onClick={() => useStore.getState().setShowMix(true)} title="Modelos de produto, % do mix, tempo por modelo e troca de modelo">🎨 Mix{model.products?.length ? ` (${model.products.length})` : ''}</button>
+              </div>
+              {!!model.products?.length && (
+                <p className="hint">Troca de modelo: {fmt(n.changeover ?? 0, 0)} s · tempo próprio em {Object.keys(n.productTimes ?? {}).length} de {model.products.length} modelos.</p>
+              )}
+            </div>
+          )}
 
           <Combine nodeId={n.id} />
           <Supply nodeId={n.id} />

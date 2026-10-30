@@ -743,3 +743,12 @@ td.good { color: var(--st-working); }
 .reader-head h1 { font-size: 20px; margin: 0; }
 .reader .tiles { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .reader-overlay { position: fixed; inset: 0; z-index: 60; overflow: auto; background: var(--bg); }
+
+/* Mix de modelos e curva do tempo */
+.mix-products input, .mix-grid input { width: 100%; min-width: 64px; box-sizing: border-box; }
+.mix-products input[type='color'] { width: 36px; min-width: 36px; height: 26px; padding: 0; border: 0; background: none; }
+.grid-table .sw, .mix-grid .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; }
+.fit-text { width: 100%; box-sizing: border-box; font: inherit; background: var(--raised); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+.fit-bar { fill: color-mix(in srgb, var(--accent) 35%, transparent); stroke: var(--accent); stroke-width: 0.6; }
+.grid-table tr.sel td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.dist-row .row-btns { margin-top: 6px; }
