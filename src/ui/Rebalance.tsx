@@ -42,6 +42,8 @@ export function Rebalance() {
   const [moves, setMoves] = useState(0);
   const drag = useRef<Drag | null>(null);
   const [over, setOver] = useState<string | null>(null);
+  /** Bloco sendo arrastado (fantasma que segue o ponteiro). */
+  const [ghost, setGhost] = useState<{ name: string; color: string; x: number; y: number } | null>(null);
   const [auto, setAuto] = useState<(AutoBalanceResult & { stations: number }) | null>(null);
   useEffect(() => {
     setDraft(initial);
@@ -91,6 +93,48 @@ export function Rebalance() {
     }
     setDraft(next);
     setMoves(moves + 1);
+  };
+
+  // Arrasto por ponteiro (mouse, toque, caneta): funciona em qualquer navegador e dentro do artefato,
+  // onde o arrastar nativo do HTML pode não disparar. O destino é achado pelo ponto onde soltou.
+  const moveRef = useRef(move);
+  moveRef.current = move;
+  const targetAt = (x: number, y: number) => {
+    const el = document.elementFromPoint(x, y);
+    const col = el?.closest<HTMLElement>('[data-rb-col]');
+    const act = el?.closest<HTMLElement>('[data-rb-op]');
+    return {
+      col: col?.dataset.rbCol ?? null,
+      at: act ? { op: Number(act.dataset.rbOp), act: Number(act.dataset.rbAct) } : undefined,
+    };
+  };
+  const startDrag = (e: React.PointerEvent, d: Drag, name: string, color: string) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    let moved = false;
+    const onMove = (ev: PointerEvent) => {
+      if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
+      if (!moved) drag.current = d;
+      moved = true;
+      setGhost({ name, color, x: ev.clientX, y: ev.clientY });
+      setOver(targetAt(ev.clientX, ev.clientY).col);
+    };
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      setGhost(null);
+      setOver(null);
+      if (!moved) return;
+      const t = targetAt(ev.clientX, ev.clientY);
+      if (t.col) moveRef.current(t.col, t.at);
+      else drag.current = null;
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   };
 
   /** Redistribui as atividades na ordem, enchendo cada posto até o takt; os que sobram ficam vazios (sem pessoa). */
@@ -193,17 +237,8 @@ export function Rebalance() {
             return (
               <div
                 key={n.id}
-                className={`rb-col${over === n.id ? ' over' : ''}${ops ? '' : ' fixed'}`}
-                onDragOver={(e) => {
-                  if (!ops) return;
-                  e.preventDefault();
-                  setOver(n.id);
-                }}
-                onDragLeave={() => setOver((o) => (o === n.id ? null : o))}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  move(n.id);
-                }}
+                className={`rb-col${over === n.id && ops ? ' over' : ''}${ops ? '' : ' fixed'}`}
+                data-rb-col={ops ? n.id : undefined}
               >
                 <div className={`rb-total${t > takt ? ' bad' : ''}`}>
                   {fmt(t, 1)}
@@ -216,19 +251,11 @@ export function Rebalance() {
                         <div
                           key={`${oi}-${ai}-${a.name}`}
                           className="rb-act"
-                          draggable
+                          data-rb-op={oi}
+                          data-rb-act={ai}
                           style={{ height: Math.max(2, px(a.time * k)), background: KIND_COLOR[a.kind] }}
                           title={`${o.name} · ${a.name}: ${fmt(a.time, 1)} s (${ACTIVITY_LABEL[a.kind]}). Arraste para outro posto.`}
-                          onDragStart={(e) => {
-                            drag.current = { from: n.id, op: oi, act: ai };
-                            e.dataTransfer.effectAllowed = 'move';
-                          }}
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            move(n.id, { op: oi, act: ai });
-                          }}
+                          onPointerDown={(e) => startDrag(e, { from: n.id, op: oi, act: ai }, `${a.name} · ${fmt(a.time, 1)} s`, KIND_COLOR[a.kind])}
                         >
                           {px(a.time * k) > 14 && <span>{a.name}</span>}
                         </div>
@@ -246,6 +273,11 @@ export function Rebalance() {
           })}
         </div>
       </div>
+      {ghost && (
+        <div className="rb-ghost" style={{ left: ghost.x + 12, top: ghost.y + 8, background: ghost.color }}>
+          {ghost.name}
+        </div>
+      )}
       <p className="hint">
         Arraste um bloco (atividade) para outro posto: ele entra na operação "Recebidas" do destino, ou na posição do bloco onde você soltar. A altura é por peça da linha (÷ gigas, fração e lote) e já conta a ineficiência. UPH estimado = 3600 ÷ maior posto; o simulado roda 2 h do modelo proposto.
       </p>

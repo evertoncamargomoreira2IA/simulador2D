@@ -495,6 +495,8 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .rb-act.none { background: #64748b88; cursor: default; }
 .rb-act span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rb-act:hover { filter: brightness(1.15); }
+.rb-act { touch-action: none; user-select: none; }
+.rb-ghost { position: fixed; z-index: 3000; pointer-events: none; color: #fff; font-size: 11px; padding: 4px 8px; border-radius: 6px; box-shadow: 0 6px 18px rgb(0 0 0 / 0.4); white-space: nowrap; opacity: 0.92; }
 .rb-name { font-size: 11px; text-align: center; height: 32px; overflow: hidden; line-height: 14px; margin-top: 4px; }
 .glossary td { vertical-align: top; font-size: 12.5px; }
 .glossary td:first-child { white-space: nowrap; }
