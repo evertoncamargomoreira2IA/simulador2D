@@ -180,7 +180,7 @@ export function PanelView({ snap }: { snap: PanelSnapshot }) {
       <table className="grid-table section">
         <thead>
           <tr>
-            <th>Posto</th><th>SOE (s)</th>{v !== 'real' && <th>Simulado (s)</th>}{v !== 'sim' && <th>Real (s)</th>}{v !== 'sim' && <th>Real × SOE</th>}{v === 'lado' && <th>Real × simulado</th>}<th>Peças sim.</th>{v !== 'sim' && <th>Leituras</th>}
+            <th>Posto</th><th>SOE (s)</th>{v !== 'real' && <th>Simulado (s)</th>}{v !== 'sim' && <th>Real (s)</th>}{v !== 'sim' && <th>Real × SOE</th>}{v === 'lado' && <th>Real × simulado</th>}<th>Peças sim.</th>{v !== 'sim' && <th>Peças real (no turno)</th>}
           </tr>
         </thead>
         <tbody>
