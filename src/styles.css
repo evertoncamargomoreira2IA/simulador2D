@@ -691,7 +691,9 @@ button.link { background: none; border: 0; padding: 0; color: inherit; font: inh
 .lib-btn { border-color: #f5c542 !important; color: #ffd866 !important; box-shadow: 0 0 10px rgb(245 197 66 / 0.35); }
 .lib { display: grid; grid-template-columns: 260px 1fr; gap: 16px; min-height: 0; }
 .lib-list { display: flex; flex-direction: column; gap: 6px; overflow: auto; max-height: 70vh; padding-right: 4px; }
-.lib-search { width: 100%; }
+.lib-searchbox { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px; background: var(--raised); border: 1px solid var(--accent); border-radius: 8px; padding: 2px 8px; }
+.lib-search { flex: 1; min-width: 0; width: 100%; background: none; border: 0; color: var(--ink); font: inherit; padding: 6px 0; outline: none; }
+.lib-clear { background: none; border: 0; color: var(--muted); font-size: 18px; cursor: pointer; padding: 0 2px; }
 .lib-item { text-align: left; background: var(--raised, rgb(255 255 255 / 0.04)); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.3; cursor: pointer; }
 .lib-item small { display: block; color: var(--accent); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
 .lib-item.on, .lib-item:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }

@@ -169,6 +169,14 @@ export function CanvasView() {
       setQuick({ from: wire.from, sx: p.x, sy: p.y, ...toWorld(p.x, p.y) });
     } else if (!wire.moved && st.tool === 'connect') st.setConnectFrom(wire.from);
   }
+  // Menu do botão direito no bloco: detalhes e opções do posto.
+  const [menu, setMenu] = useState<{ id: string; sx: number; sy: number } | null>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setMenu(null);
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [menu]);
   // Adição rápida ao soltar a seta fora de um bloco.
   const [quick, setQuick] = useState<{ from: string; sx: number; sy: number; x: number; y: number } | null>(null);
   function quickAdd(b: (typeof QUICK)[number]['type']) {
@@ -211,6 +219,7 @@ export function CanvasView() {
   }, []);
   function onStageDown(e: Konva.KonvaEventObject<MouseEvent>) {
     if (quick) setQuick(null);
+    if (menu) setMenu(null);
     if (e.evt.button === 1 || e.evt.button === 2 || (e.evt.button === 0 && e.evt.altKey)) {
       e.evt.preventDefault();
       pan.current = { sx: e.evt.clientX, sy: e.evt.clientY, vx: view.x, vy: view.y };
@@ -489,6 +498,13 @@ export function CanvasView() {
                 stage={stageRef}
                 onWire={canWire && n.type !== 'sink' ? () => startWire(n.id) : undefined}
                 wireTarget={!!wire && wire.moved && wire.from !== n.id}
+                onMenu={(cx, cy) => {
+                  const r = wrap.current?.getBoundingClientRect();
+                  if (!r) return;
+                  setQuick(null);
+                  useStore.getState().select([n.id]);
+                  setMenu({ id: n.id, sx: cx - r.left, sy: cy - r.top });
+                }}
                 onSelect={(add) => {
                   const st = useStore.getState();
                   if (st.pendingPool && n.type !== 'source' && n.type !== 'sink') {
@@ -622,6 +638,7 @@ export function CanvasView() {
           </Layer>
         )}
       </Stage>
+      {menu && <NodeMenu {...menu} onClose={() => setMenu(null)} onAdd={(from, x, y) => setQuick({ from, sx: menu.sx, sy: menu.sy, x, y })} />}
       {quick && (
         <div
           className="quick-add"
@@ -729,6 +746,8 @@ interface NodeShapeProps {
   assembly: boolean;
   /** Começa uma ligação arrastando a bolinha do bloco. */
   onWire?: () => void;
+  /** Botão direito: menu do posto (posição na tela). */
+  onMenu?: (clientX: number, clientY: number) => void;
   /** Destaque de bloco que recebe a seta sendo arrastada. */
   wireTarget: boolean;
 }
@@ -748,7 +767,7 @@ function crewPlace(def: NodeDef, labels: boolean): { x: number; y: number; row: 
   }
 }
 
-function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable, labels, counts, stage, onSelect, people, now, topRank, co2Heat, dim, assembly, onWire, wireTarget }: NodeShapeProps) {
+function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable, labels, counts, stage, onSelect, people, now, topRank, co2Heat, dim, assembly, onWire, wireTarget, onMenu }: NodeShapeProps) {
   const [hover, setHover] = useState(false);
   const stateColor = colors.state[rt.state];
   const stroke = selected ? colors.accent : stateColor;
@@ -785,6 +804,11 @@ function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable
       onDblClick={(e) => {
         e.cancelBubble = true;
         linkNearest(def.id);
+      }}
+      onContextMenu={(e) => {
+        e.evt.preventDefault();
+        e.cancelBubble = true;
+        onMenu?.(e.evt.clientX, e.evt.clientY);
       }}
       onDblTap={(e) => {
         e.cancelBubble = true;
@@ -1346,5 +1370,54 @@ function PlantHandle({ bg, color }: { bg: Background; color: string }) {
         boundBoxFunc={(oldB, newB) => (newB.width < 20 || newB.height < 20 ? oldB : newB)}
       />
     </>
+  );
+}
+
+/** Menu do botão direito no bloco: o que dá para ver e fazer com o posto. */
+function NodeMenu({ id, sx, sy, onClose, onAdd }: { id: string; sx: number; sy: number; onClose: () => void; onAdd: (from: string, x: number, y: number) => void }) {
+  const st = useStore.getState();
+  const n = useStore((s) => s.model.nodes.find((x) => x.id === id));
+  const isRef = useStore((s) => s.model.refStation === id);
+  if (!n) return null;
+  const station = n.type === 'machine' || n.type === 'inspection' || n.type === 'rework';
+  const go = (f: () => void) => () => {
+    f();
+    onClose();
+  };
+  const items: [string, () => void, boolean?][] = [
+    ['📊 Detalhes do posto (todos os indicadores)', () => st.setDetail(id)],
+    ['✏️ Propriedades (painel da direita)', () => st.setMessage(`"${n.name}" selecionado: edite tempo, gigas, operadores e falhas no painel da direita.`)],
+    ['🧩 Operações e atividades', () => st.setOpsFor(id), !station],
+    ['📐 Yamazumi da linha', () => st.setAnalysis('yamazumi'), !station],
+    ['⏱ Dados reais (tempo medido)', () => st.setAnalysis('coleta'), !station],
+    [isRef ? '☆ Tirar como posto de referência do UPH' : '⭐ Usar como posto de referência do UPH', () => st.setRefStation(isRef ? undefined : id), !station],
+    ['➕ Adicionar bloco ligado depois', () => onAdd(id, n.x + 120, n.y), n.type === 'sink'],
+    ['🗑 Apagar', () => st.deleteSelection()],
+  ];
+  return (
+    <div
+      className="quick-add node-menu"
+      style={{ left: sx, top: sy }}
+      role="menu"
+      aria-label={`Opções de ${n.name}`}
+      onContextMenu={(e) => e.preventDefault()}
+      ref={(el) => {
+        // cabe inteiro na área do layout
+        const box = el?.parentElement;
+        if (!el || !box) return;
+        const pad = 8;
+        el.style.top = `${Math.max(pad, Math.min(sy, box.clientHeight - el.offsetHeight - pad))}px`;
+        el.style.left = `${Math.max(pad, Math.min(sx, box.clientWidth - el.offsetWidth - pad))}px`;
+      }}
+    >
+      <p className="label">{n.name}</p>
+      {items
+        .filter(([, , hide]) => !hide)
+        .map(([label, f]) => (
+          <button key={label} role="menuitem" className="btn" onClick={go(f)}>
+            {label}
+          </button>
+        ))}
+    </div>
   );
 }

@@ -45,6 +45,8 @@ export const SIGLAS: [string, string, string][] = [
 export const FUNCOES: [string, string, string][] = [
   ['Análises', 'Dados reais', 'Leituras de cada posto (API, arquivo ou linha simulada): ciclo real por posto e operação, descarte de discrepantes, mínimo de amostras, ritmo, tolerâncias e alerta contra o SOE; aplica o tempo real no modelo.'],
   ['Barra', 'Início', 'Trabalho novo, trabalhos salvos, abrir arquivo ou exemplos.'],
+  ['Layout', 'Botão direito no bloco', 'Menu do posto: detalhes (todos os indicadores), propriedades, operações, Yamazumi, dados reais, posto de referência, adicionar bloco ligado e apagar.'],
+  ['Barra', '💡 Biblioteca', 'Dúvidas comuns com passo a passo em imagens e exemplo pronto; campo de busca por palavra-chave (sem acento, várias palavras).'],
   ['Barra', 'Exemplos', 'Linhas prontas para testar (simples, 70 postos, com atividades).'],
   ['Barra', '↶ ↷', 'Desfazer e refazer (Ctrl+Z / Ctrl+Y).'],
   ['Simulação', '⚠ Linha travada', 'Se um bloco para de andar por configuração (componente que não chega, agrupamento que não completa, recurso com 0 unidades, montagem sem Principal, linha sem produto acabado), a simulação pausa e mostra o que fazer, com botão para ajustar.'],

@@ -20,9 +20,28 @@ export interface LibItem {
   tip?: string;
   example?: LibExample;
   screen?: AnalysisTab;
+  /** palavras-chave extras para a busca (sinônimos, siglas) */
+  keys?: string;
 }
 
 export const LIBRARY: LibItem[] = [
+  {
+    id: 'dados-reais',
+    q: 'Como uso os dados reais da linha (tempo de cada posto) no estudo?',
+    tag: 'Dados reais',
+    why: 'Cada posto manda uma leitura por peça: posto, número de série, início e fim (e a operação, se houver). Com elas o simulador calcula o ciclo real, tira os valores fora da curva e compara com o SOE. Enquanto a API dos postos não existe, a linha simulada faz o papel da linha real.',
+    steps: [
+      { text: 'Abra um exemplo (ou a sua linha) e vá em Análises → Dados reais.', img: 'reais-1' },
+      { text: 'Escolha as horas e a diferença do SOE e clique em ▶ Gerar leituras. Com a API pronta, cole o endereço e clique em Buscar da API; ou importe um Excel com posto, serie, inicio, fim, operacao.', img: 'reais-2' },
+      { text: 'Ajuste as regras: descartar fora de ± 2 desvios, ritmo, tolerâncias, alerta (10%), erro e confiança do número mínimo de amostras.', img: 'reais-3' },
+      { text: 'Leia a tabela: amostras usadas, descartadas, mínimo de amostras (vermelho = faltam leituras), tempo padrão, SOE e desvio (vermelho = acima do alerta). Clique no posto para ver as operações e os valores descartados.', img: 'reais-4' },
+      { text: 'Clique em Aplicar no modelo (no posto ou em todos) para simular com o tempo e a variação reais. A aba Real × simulado recebe os mesmos números.', img: 'reais-5' },
+    ],
+    tip: 'Nenhum dado de pessoa é guardado (LGPD): só posto, turno e número de série. Se o estudo estiver por elementos, mude para tempo de ciclo do posto para usar o tempo real.',
+    example: 'elements',
+    screen: 'coleta',
+    keys: 'api coleta cronometragem cronoanalise tempo real leitura scan scanner serie discrepante outlier desvio padrao sigma amostras ritmo tolerancia allowance tempo padrao soe alerta lgpd integracao digital twin',
+  },
   {
     id: 'vincular',
     q: 'Como vinculo um operador, AGV ou AMR a um transporte?',

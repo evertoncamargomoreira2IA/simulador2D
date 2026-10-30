@@ -9,6 +9,24 @@ import { Modal } from './Modal';
 const IMGS = import.meta.glob('../assets/library/*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const img = (k: string) => IMGS[`../assets/library/${k}.webp`];
 
+const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+/** Busca por palavra-chave: sem acento, todas as palavras precisam aparecer (pergunta, tema, passos, dica ou palavras-chave). */
+export function searchLibrary(q: string): LibItem[] {
+  const words = fold(q).split(/\s+/).filter(Boolean);
+  if (!words.length) return LIBRARY;
+  return LIBRARY.map((x) => {
+    const head = fold(`${x.q} ${x.tag} ${x.keys ?? ''}`);
+    const body = fold(`${x.why} ${x.steps.map((s) => s.text).join(' ')} ${x.tip ?? ''}`);
+    if (!words.every((w) => head.includes(w) || body.includes(w))) return null;
+    // pergunta, tema e palavras-chave pesam mais que o texto dos passos
+    return { x, score: words.reduce((a, w) => a + (head.includes(w) ? 3 : 1), 0) };
+  })
+    .filter((r): r is { x: LibItem; score: number } => !!r)
+    .sort((a, b) => b.score - a.score)
+    .map((r) => r.x);
+}
+
 const EXAMPLES: Record<LibExample, { build: () => ReturnType<typeof simpleModel>; msg: string }> = {
   transport: { build: transportModel, msg: 'Exemplo: dois buffers abastecem o Posto destino; o abastecedor leva 4 peças por viagem. Clique em ▶ Start.' },
   combine: { build: combineModel, msg: 'Exemplo: três postos, AMR e abastecedor levam as peças ao Posto X, que junta tudo em um produto. Clique em ▶ Start.' },
@@ -20,11 +38,9 @@ export function Library({ onClose, start }: { onClose: () => void; start?: strin
   const [sel, setSel] = useState(start ?? LIBRARY[0].id);
   const [q, setQ] = useState('');
   const [zoom, setZoom] = useState<string | null>(null);
-  const list = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    return t ? LIBRARY.filter((x) => `${x.q} ${x.tag} ${x.why}`.toLowerCase().includes(t)) : LIBRARY;
-  }, [q]);
-  const it = LIBRARY.find((x) => x.id === sel) ?? LIBRARY[0];
+  const list = useMemo(() => searchLibrary(q), [q]);
+  // com busca ativa, mostra o primeiro resultado se o escolhido saiu da lista
+  const it = (q.trim() && !list.some((x) => x.id === sel) ? list[0] : LIBRARY.find((x) => x.id === sel)) ?? LIBRARY[0];
 
   const openExample = (k: LibExample, item: LibItem) => {
     const ex = EXAMPLES[k];
@@ -37,7 +53,12 @@ export function Library({ onClose, start }: { onClose: () => void; start?: strin
     <Modal title="💡 Biblioteca de soluções" sub="As dúvidas mais comuns, com passo a passo em imagens e um exemplo pronto para abrir." onClose={onClose} wide>
       <div className="lib">
         <nav className="lib-list" aria-label="Dúvidas">
-          <input className="lib-search" placeholder="Buscar dúvida…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar dúvida" />
+          <div className="lib-searchbox">
+            <span aria-hidden>🔍</span>
+            <input className="lib-search" placeholder="Palavra-chave: AMR, Yamazumi, API, takt…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar por palavra-chave" autoFocus />
+            {q && <button className="lib-clear" onClick={() => setQ('')} aria-label="Limpar busca">×</button>}
+          </div>
+          <small className="muted">{q.trim() ? `${list.length} de ${LIBRARY.length} respostas` : `${LIBRARY.length} respostas`}</small>
           {list.map((x) => (
             <button key={x.id} className={`lib-item${x.id === it.id ? ' on' : ''}`} onClick={() => setSel(x.id)}>
               <small>{x.tag}</small>
