@@ -2,7 +2,7 @@
 
 import type { AnalysisTab } from '../store';
 
-export type LibExample = 'transport' | 'combine' | 'elements' | 'simple';
+export type LibExample = 'transport' | 'combine' | 'elements' | 'simple' | 'supply';
 
 export interface LibStep {
   text: string;
@@ -25,6 +25,22 @@ export interface LibItem {
 }
 
 export const LIBRARY: LibItem[] = [
+  {
+    id: 'abastecimento',
+    q: 'Como mostro o abastecimento de materiais (supermercado, kitting, milk run) e o FGI?',
+    tag: 'Abastecimento',
+    why: 'O material sai do supermercado, vira kit no kitting e o rebocador do milk run leva pelo corredor até a linha e o off-line. No fim, o produto embalado vai para o FGI e a empilhadeira leva à expedição. Cada etapa é um bloco, e o transporte é uma seta vinculada ao recurso.',
+    steps: [
+      { text: 'Abra o exemplo pronto (Exemplos → Abastecimento e FGI). A planta no fundo mostra recebimento, supermercado, kitting, off-line, linha, teste, packing, FGI e expedição.', img: 'abast-1' },
+      { text: 'Supermercado → Kitting → Kits prontos: o kit é preparado por 2 pessoas e espera a viagem. Off-line: cada supermercado alimenta uma submontagem.', img: 'abast-2' },
+      { text: 'O milk run é o recurso "Rebocador milk run" (2 unidades) vinculado às setas que saem dos supermercados, 20 peças por viagem e 2 carrinhos no posto. As setas seguem o corredor (trilha).', img: 'abast-3' },
+      { text: 'Dê ▶ Start: veja os rebocadores andando no corredor e os carrinhos esvaziando ao lado dos postos.', img: 'abast-4' },
+      { text: 'No fim, Packing 5 → FGI (estoque de acabados) → empilhadeira com 40 caixas por viagem → Expedição. Clique no FGI para ver o estoque.', img: 'abast-5' },
+    ],
+    tip: 'Para testar menos abastecimento, mude o rebocador para 1 unidade ou a viagem para 40 peças e veja onde a linha passa a esperar material.',
+    example: 'supply',
+    keys: 'pagamento de materiais abastecimento milk run rebocador tugger supermercado kitting kit fgi estoque acabado expedicao empilhadeira logistica intralogistica 100 uph',
+  },
   {
     id: 'dados-reais',
     q: 'Como uso os dados reais da linha (tempo de cada posto) no estudo?',

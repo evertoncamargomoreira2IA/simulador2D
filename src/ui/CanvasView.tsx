@@ -1052,7 +1052,7 @@ const Plant = memo(function Plant({ bg, line, text }: { bg: Background; line: st
         c.globalAlpha = bg.opacity ?? (bg.image ? 0.55 : 1);
         if (img?.complete && img.naturalWidth) c.drawImage(img, 0, 0, bg.width, bg.height);
         c.strokeStyle = line;
-        c.lineWidth = 1 / (bg.scale ?? 1);
+        c.lineWidth = 1.25 / (bg.scale ?? 1);
         c.beginPath();
         for (const p of bg.paths) {
           c.moveTo(p[0], p[1]);

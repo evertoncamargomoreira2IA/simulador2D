@@ -47,7 +47,7 @@ export const FUNCOES: [string, string, string][] = [
   ['Barra', 'Início', 'Trabalho novo, trabalhos salvos, abrir arquivo ou exemplos.'],
   ['Layout', 'Botão direito no bloco', 'Menu do posto: detalhes (todos os indicadores), propriedades, operações, Yamazumi, dados reais, posto de referência, adicionar bloco ligado e apagar.'],
   ['Barra', '💡 Biblioteca', 'Dúvidas comuns com passo a passo em imagens e exemplo pronto; campo de busca por palavra-chave (sem acento, várias palavras).'],
-  ['Barra', 'Exemplos', 'Linhas prontas para testar (simples, 70 postos, com atividades).'],
+  ['Barra', 'Exemplos', 'Linhas prontas para testar (simples, 70 postos, com atividades, abastecimento e FGI de 100 UPH sobre planta vetorial).'],
   ['Barra', '↶ ↷', 'Desfazer e refazer (Ctrl+Z / Ctrl+Y).'],
   ['Simulação', '⚠ Linha travada', 'Se um bloco para de andar por configuração (componente que não chega, agrupamento que não completa, recurso com 0 unidades, montagem sem Principal, linha sem produto acabado), a simulação pausa e mostra o que fazer, com botão para ajustar.'],
   ['Barra', 'Salvar / Salvos / Recentes', 'Guarda o trabalho e reabre os 10 últimos.'],

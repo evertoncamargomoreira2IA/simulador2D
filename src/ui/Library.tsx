@@ -1,7 +1,7 @@
 // Biblioteca de soluções: lista de dúvidas, passo a passo com prints e botão para abrir o exemplo pronto.
 
 import { useMemo, useState } from 'react';
-import { combineModel, elementsModel, simpleModel, transportModel } from '../model/builder';
+import { combineModel, elementsModel, simpleModel, supplyModel, transportModel } from '../model/builder';
 import { useStore } from '../store';
 import { LIBRARY, type LibExample, type LibItem } from './library';
 import { Modal } from './Modal';
@@ -31,6 +31,7 @@ const EXAMPLES: Record<LibExample, { build: () => ReturnType<typeof simpleModel>
   transport: { build: transportModel, msg: 'Exemplo: dois buffers abastecem o Posto destino; o abastecedor leva 4 peças por viagem. Clique em ▶ Start.' },
   combine: { build: combineModel, msg: 'Exemplo: três postos, AMR e abastecedor levam as peças ao Posto X, que junta tudo em um produto. Clique em ▶ Start.' },
   elements: { build: elementsModel, msg: 'Exemplo: linha com operações e atividades. Veja Análises → Yamazumi.' },
+  supply: { build: supplyModel, msg: 'Exemplo: supermercado → kitting → milk run → linha (10 montagem, 5 off-line, 4 teste, 5 packing) → FGI → expedição, meta 100 UPH. Clique em ▶ Start.' },
   simple: { build: simpleModel, msg: 'Linha exemplo simples carregada.' },
 };
 
@@ -44,7 +45,9 @@ export function Library({ onClose, start }: { onClose: () => void; start?: strin
 
   const openExample = (k: LibExample, item: LibItem) => {
     const ex = EXAMPLES[k];
-    useStore.getState().openModel(ex.build(), ex.msg);
+    // o exemplo de abastecimento já vem com a meta (100 UPH); os outros começam com a meta zerada
+    if (k === 'supply') useStore.getState().setModel(ex.build(), ex.msg);
+    else useStore.getState().openModel(ex.build(), ex.msg);
     if (item.screen) useStore.getState().setAnalysis(item.screen);
     onClose();
   };

@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { lineKpi } from '../engine/metrics';
 import { exportModelCsv, exportModelJson, exportResultsXlsx } from '../io/exporter';
 import { ACCEPT, importAnyFile } from './fileImport';
-import { elementsModel, lp2Model, simpleModel, combineModel, transportModel } from '../model/builder';
+import { elementsModel, lp2Model, simpleModel, combineModel, supplyModel, transportModel } from '../model/builder';
 import { privateExample, useStore } from '../store';
 import { applyTheme, fmtTime, loadTheme } from './theme';
 import { effectiveTakt } from '../engine/balance';
@@ -84,12 +84,14 @@ export function Toolbar() {
             if (e.target.value === 'elements') st().openModel(elementsModel(), 'Linha exemplo com operações e atividades: estudo por elemento. Veja Análises → Yamazumi.');
             if (e.target.value === 'transport') st().openModel(transportModel(), 'Exemplo: dois buffers abastecem o Posto destino; o abastecedor leva 4 peças por viagem.');
             if (e.target.value === 'combine') st().openModel(combineModel(), 'Exemplo: 3 postos, AMR e abastecedor levam as peças ao Posto X, que junta tudo em um produto.');
+            if (e.target.value === 'supply') st().setModel(supplyModel(), 'Exemplo: supermercado → kitting → milk run → linha (10 montagem, 5 off-line, 4 teste, 5 packing) → FGI → expedição, meta 100 UPH. Clique em ▶ Start.');
             if (e.target.value === 'simple') st().openModel(simpleModel(), 'Linha exemplo simples carregada.');
           }}
         >
           <option value="" disabled>Exemplos…</option>
           {__EXAMPLE__ && <option value="real">Linha real (layout DXF)</option>}
           {__EXAMPLE_MAIN__ && <option value="main">Linha real: main line com atividades</option>}
+          <option value="supply">Abastecimento e FGI (100 UPH)</option>
           <option value="lp2">Linha LP2 (70 postos)</option>
           <option value="simple">Linha simples</option>
           <option value="elements">Linha com atividades (Yamazumi)</option>

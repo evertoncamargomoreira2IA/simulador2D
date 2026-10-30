@@ -2,6 +2,7 @@
 
 import { DEFAULT_SETTINGS, makeNode, makePool, MANUAL_PATCH, newId, operationsTime, type ActivityKind, type LinkDef, type Model, type NodeDef, type NodeType, type Operation } from '../engine/types';
 import { LP2_STATIONS } from './lp2';
+import { supplyPlant } from './plant';
 
 export interface StationRow {
   id?: string;
@@ -282,5 +283,85 @@ export function elementsModel(): Model {
     links,
     pools: [],
     settings: { ...DEFAULT_SETTINGS, studyMode: 'elements', startFull: true, warmup: 0 },
+  };
+}
+
+/**
+ * Exemplo de abastecimento e FGI: linha de 100 UPH (takt 36 s) com 10 postos de montagem, 5 off-line,
+ * 4 operadores de teste e 5 de packing. O material sai do supermercado, o kit é preparado no kitting e o
+ * rebocador do milk run leva tudo pelo corredor; o produto embalado vai para o FGI e a empilhadeira leva à expedição.
+ */
+export function supplyModel(): Model {
+  const nodes: NodeDef[] = [];
+  const links: LinkDef[] = [];
+  const nd = (type: NodeType, id: string, name: string, x: number, y: number, extra: Partial<NodeDef> = {}) => {
+    const n = makeNode(type, { id, name, x, y, ...extra });
+    nodes.push(n);
+    return n;
+  };
+  const L = (from: string, to: string, extra: Partial<LinkDef> = {}) => links.push({ id: newId('L'), from, to, weight: 1, ...extra });
+  const manual = (cycleTime: number, extra: Partial<NodeDef> = {}): Partial<NodeDef> => ({ ...MANUAL_PATCH, cycleTime, operators: 1, cv: 0.08, queueCap: 1, layer: 'Produção', ...extra });
+  const AISLE = 335;
+  const milkRun = (x0: number, x1: number): Partial<LinkDef> => ({ poolId: 'MR', tripQty: 20, bins: 2, path: [{ x: x0, y: AISLE }, { x: x1, y: AISLE }] });
+
+  // supermercado → kitting → kits prontos
+  nd('source', 'SK', 'SM kit base', 400, 110, { layer: 'Abastecimento' });
+  nd('machine', 'KIT', 'Kitting (preparação do kit)', 1100, 160, manual(64, { capacity: 2, operators: 2, area: { w: 90, h: 40 }, layer: 'Abastecimento' }));
+  nd('buffer', 'KP', 'Kits prontos', 1380, 220, { capacity: 40, layer: 'Abastecimento' });
+  L('SK', 'KIT');
+  L('KIT', 'KP');
+
+  // linha principal: 10 postos de montagem
+  const MT = [33, 34, 32, 35, 33, 34, 31, 35, 33, 34];
+  MT.forEach((ct, i) => {
+    const id = `M${i + 1}`;
+    const offline = i % 2 === 1;
+    nd('machine', id, `Montagem ${i + 1}`, 320 + i * 110, 555, manual(ct, offline ? { assembly: true, partBuffer: 3 } : {}));
+    if (i > 0) L(`M${i}`, id);
+  });
+  L('KP', 'M1', milkRun(1380, 320));
+
+  // off-line: 5 submontagens, cada uma alimenta um posto par da linha
+  const OL = [34, 33, 35, 32, 34];
+  OL.forEach((ct, j) => {
+    const x = 430 + j * 220;
+    const sx = 520 + j * 70;
+    // fornecedor/recebimento repõe a posição do supermercado; o milk run puxa dela
+    nd('source', `SO${j + 1}`, `Recebimento OL${j + 1}`, 80 + (j % 2) * 90, 80 + Math.floor(j / 2) * 80, { layer: 'Abastecimento' });
+    nd('buffer', `SM${j + 1}`, `SM off-line ${j + 1}`, sx, 230, { capacity: 60, layer: 'Abastecimento' });
+    nd('machine', `OL${j + 1}`, `Off-line ${j + 1}`, x, 430, manual(ct, { queueCap: 2 }));
+    L(`SO${j + 1}`, `SM${j + 1}`);
+    L(`SM${j + 1}`, `OL${j + 1}`, milkRun(sx, x));
+    L(`OL${j + 1}`, `M${2 * j + 2}`, { role: 'part' });
+  });
+
+  // teste: 4 bancadas, 4 operadores
+  nd('inspection', 'TST', 'Teste funcional', 1480, 555, { cycleTime: 136, capacity: 4, operators: 4, cv: 0.05, queueCap: 2, area: { w: 90, h: 60 } });
+  L('M10', 'TST');
+
+  // packing: 5 postos voltando para a esquerda
+  const PK = [33, 35, 34, 32, 34];
+  PK.forEach((ct, k) => {
+    nd('machine', `PK${k + 1}`, `Packing ${k + 1}`, 1480 - k * 170, 800, manual(ct));
+    L(k === 0 ? 'TST' : `PK${k}`, `PK${k + 1}`);
+  });
+
+  // FGI e expedição
+  nd('buffer', 'FGI', 'FGI (estoque de acabados)', 480, 800, { capacity: 400, layer: 'Expedição' });
+  nd('sink', 'EXP', 'Expedição', 130, 800, { layer: 'Expedição', outputPoint: false });
+  L('PK5', 'FGI');
+  L('FGI', 'EXP', { poolId: 'EMP', tripQty: 40 });
+
+  return {
+    name: 'Exemplo: abastecimento (supermercado, kitting, milk run) e FGI – 100 UPH',
+    nodes,
+    links,
+    pools: [
+      makePool('agv', { id: 'MR', name: 'Rebocador milk run', count: 2, speed: 1.2, loadTime: 20, x: 1100, y: AISLE }),
+      makePool('forklift', { id: 'EMP', name: 'Empilhadeira', count: 1, x: 400, y: 660 }),
+    ],
+    background: supplyPlant(),
+    refStation: 'PK5',
+    settings: { ...DEFAULT_SETTINGS, takt: 36, startFull: true, warmup: 0, pxPerMeter: 20, duration: 8 * 3600 },
   };
 }
