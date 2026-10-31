@@ -12,6 +12,8 @@ import { HowTo } from './HowTo';
 import { Kpi } from './Modal';
 import { norm } from './StationDetail';
 import { fmt, pct } from './theme';
+import { curveRows, StationCurves } from './StationCurves';
+import { effectiveTakt } from '../engine/balance';
 
 export function RealData() {
   const model = useStore((s) => s.model);
@@ -27,6 +29,8 @@ export function RealData() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const rows = useMemo(() => studyEvents(events, model, o), [events, model, o]);
+  const [view, setView] = useState<'tabela' | 'curvas'>('tabela');
+  const curves = useMemo(() => (view === 'curvas' ? curveRows(rows, events, model, o.sigma, o.alertPct, effectiveTakt(model)) : []), [view, rows, events, model, o]);
   const alerts = rows.filter((r) => r.alert).length;
   const discarded = rows.reduce((a, r) => a + r.out.length, 0);
   const short = rows.filter((r) => r.kept < r.needed).length;
@@ -211,7 +215,13 @@ export function RealData() {
             <button className="btn" onClick={() => apply(rows)}>Aplicar todos no modelo</button>
             <span className="muted">Troca o tempo de ciclo pelo tempo padrão real e o cv pela variação medida.</span>
           </div>
-          <table className="grid-table section">
+          <div className="row-btns section" role="group" aria-label="Ver o estudo como">
+            <button className={`btn${view === 'tabela' ? ' on' : ''}`} aria-pressed={view === 'tabela'} onClick={() => setView('tabela')}>Tabela</button>
+            <button className={`btn${view === 'curvas' ? ' on' : ''}`} aria-pressed={view === 'curvas'} onClick={() => setView('curvas')}>📈 Curva normal por posto</button>
+            <span className="muted">Média, desvio em segundos e em %, faixas de 68% e 95% das peças e confiabilidade de cada posto.</span>
+          </div>
+          {view === 'curvas' && <StationCurves rows={curves} />}
+          {view === 'tabela' && <table className="grid-table section">
             <thead>
               <tr>
                 <th>Posto / operação</th><th>Usadas</th><th>Descartadas</th><th>Média (s)</th><th>Desvio (s)</th><th>Mín. amostras</th><th>Tempo padrão (s)</th><th>SOE (s)</th><th>Desvio</th><th />
@@ -249,7 +259,7 @@ export function RealData() {
                 </Fragment>
               ))}
             </tbody>
-          </table>
+          </table>}
         </>
       )}
       {!rows.length && <p className="hint section">Sem leituras ainda. Comece por ▶ Gerar leituras para ver o estudo com a linha simulada.</p>}

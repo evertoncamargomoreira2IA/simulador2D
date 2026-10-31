@@ -752,3 +752,26 @@ td.good { color: var(--st-working); }
 .fit-bar { fill: color-mix(in srgb, var(--accent) 35%, transparent); stroke: var(--accent); stroke-width: 0.6; }
 .grid-table tr.sel td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .dist-row .row-btns { margin-top: 6px; }
+
+/* Curva normal por posto (dados reais) */
+.curve-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-top: 8px; }
+.curve-card { border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: 8px; background: var(--raised); padding: 8px 10px; }
+.curve-card.good { border-left-color: var(--st-working); }
+.curve-card.warn { border-left-color: #e8913a; }
+.curve-card.bad { border-left-color: var(--st-down); }
+.curve-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; }
+.rel { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px; border: 1px solid currentColor; }
+.rel.good { color: var(--st-working); }
+.rel.warn, .warn { color: #e8913a; }
+.rel.bad { color: var(--st-down); }
+.curve-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; margin: 4px 0 0; font-size: 11.5px; }
+.curve-stats div { display: flex; justify-content: space-between; gap: 6px; border-bottom: 1px dashed var(--line); padding: 2px 0; }
+.curve-stats dt { color: var(--muted); }
+.curve-stats dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+.cv-hist { fill: color-mix(in srgb, var(--muted) 30%, transparent); }
+.cv-band2 { fill: color-mix(in srgb, var(--accent) 14%, transparent); }
+.cv-band1 { fill: color-mix(in srgb, var(--accent) 32%, transparent); }
+.cv-curve { stroke: var(--accent); stroke-width: 2; }
+.cv-mean { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 2 2; }
+.cv-zone { fill: color-mix(in srgb, var(--st-working) 6%, transparent); }
+.pc-label.dim { opacity: 0.7; font-size: 9px; }
