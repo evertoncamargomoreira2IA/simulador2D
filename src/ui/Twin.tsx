@@ -18,6 +18,7 @@ interface Snap {
   data(): Record<string, unknown> | undefined;
 }
 interface Db {
+  collection(path: string): { get(): Promise<{ docs: { id: string; data(): Record<string, unknown> | undefined }[] }> };
   doc(path: string): {
     set(d: Record<string, unknown>): Promise<void>;
     get(): Promise<Snap>;
@@ -32,6 +33,7 @@ const getDb = async (): Promise<Db | null> => {
 export const TWIN_DOCS = { modelo: 'gemeo/modelo', estado: 'gemeo/estado', scans: 'gemeo/scans' };
 /** Scans guardados no banco (os mais recentes): cabe folgado no limite de 256 KiB por documento. */
 const MAX_SCANS = 5000;
+const HIST = 'historico';
 
 export interface TwinNode {
   state: string;
@@ -42,6 +44,10 @@ export interface TwinNode {
   ciclo?: number;
   /** Intervalos descartados (fora de média ± 2 desvios). */
   fora?: number;
+  /** Relógio do último scan do posto (s): a bolinha pisca enquanto chegam scans. */
+  ult?: number;
+  /** Minutos perdidos nos intervalos fora do desvio (paradas, falta de peça). */
+  paradoMin?: number;
 }
 export interface TwinState {
   sessao: string;
@@ -79,6 +85,7 @@ const plain = (m: Model): Model => ({ ...m, background: undefined, settings: { .
 class Emitter {
   scans: ScanRead[] = [];
   sessao = `s${Date.now().toString(36)}`;
+  inicio = Date.now();
   dirty = false;
   private n = 0;
   constructor(
@@ -120,7 +127,8 @@ class Emitter {
       if (r.def.type === 'sink') pecas += r.processed;
       if (!STATION(r.def.type)) continue;
       const c = scanCycle(byName.get(r.def.name) ?? []);
-      postos[r.def.id] = { state: r.state, fila: r.queue.length, fazendo: r.processing.length, feitas: r.processed, ciclo: c.mean || undefined, fora: c.out.length };
+      const lost = c.out.reduce((a, x) => a + Math.max(0, x - c.mean), 0) / 60;
+      postos[r.def.id] = { state: r.state, fila: r.queue.length, fazendo: r.processing.length, feitas: r.processed, ciclo: c.mean || undefined, fora: c.out.length, ult: last.get(r.def.name), paradoMin: Math.round(lost * 10) / 10 };
     }
     const relogio = Math.max(0, s.now - s.t0);
     return { sessao: this.sessao, fonte: this.fonte, nome: this.model.name, relogio, rodando: running, pecas, uph: relogio > 0 ? (pecas * 3600) / relogio : 0, em: Date.now(), postos };
@@ -131,7 +139,13 @@ class Emitter {
     await db.doc(TWIN_DOCS.estado).set({ json: JSON.stringify(this.state(running)), em: Date.now() }).catch(() => undefined);
     if (++this.n % 2 === 0 && this.dirty) {
       this.dirty = false;
-      await db.doc(TWIN_DOCS.scans).set({ sessao: this.sessao, ...packScans(this.scans), em: Date.now() }).catch(() => undefined);
+      const packed = packScans(this.scans);
+      await db.doc(TWIN_DOCS.scans).set({ sessao: this.sessao, ...packed, em: Date.now() }).catch(() => undefined);
+      // histórico: cada sessão fica guardada para o estudo depois (reprodução histórica, curvas, Excel)
+      await db
+        .doc(`${HIST}/${this.sessao}`)
+        .set({ sessao: this.sessao, fonte: this.fonte, nome: this.model.name, inicio: this.inicio, em: Date.now(), relogio: Math.max(0, this.sim.now - this.sim.t0), modelo: JSON.stringify(plain(this.model)), ...packed })
+        .catch(() => undefined);
     }
   }
   stop() {
@@ -278,43 +292,37 @@ export function TwinBar() {
   );
 }
 
-/** No monitoramento, o rodapé mostra só o real de cada posto (sem indicadores de simulação). */
-export function TwinTable() {
-  const twin = useStore((s) => s.twin);
-  const nodes = useStore((s) => s.model.nodes);
-  const takt = useStore((s) => s.model.settings.takt);
-  const LABEL: Record<string, string> = { working: 'trabalhando', starved: 'esperando peça', blocked: 'bloqueado', down: 'parado', setup: 'setup', break: 'pausa', off: 'desligado', resource: 'esperando recurso', transport: 'transporte' };
-  return (
-    <section className="dash twin-dash" aria-label="Postos em tempo real">
-      <div style={{ gridColumn: '1 / -1', minWidth: 0, overflow: 'auto' }}>
-        <p className="label">📡 Monitoramento real · o que cada posto está fazendo (sem simulação)</p>
-        {!twin ? (
-          <p className="hint">Esperando a linha. Em 📡 Monitoramento real, ligue a linha virtual (servidor de teste), siga a linha física ou ligue a API.</p>
-        ) : (
-          <table className="grid-table">
-            <thead>
-              <tr><th>Posto</th><th>Estado agora</th><th>Peças (scans)</th><th>Ciclo pelos scans</th><th>× takt</th><th>Fora do desvio</th><th>Fila</th></tr>
-            </thead>
-            <tbody>
-              {nodes.filter((n) => twin.postos[n.id]).map((n) => {
-                const p = twin.postos[n.id];
-                const over = takt > 0 && (p.ciclo ?? 0) / Math.max(1, n.capacity) > takt;
-                return (
-                  <tr key={n.id}>
-                    <td>{n.name}</td>
-                    <td><i className="dot" style={{ background: `var(--st-${p.state === 'starved' ? 'starved' : p.state === 'working' ? 'working' : p.state === 'blocked' ? 'blocked' : p.state === 'down' ? 'down' : 'off'})` }} /> {LABEL[p.state] ?? p.state}</td>
-                    <td>{p.feitas}</td>
-                    <td>{p.ciclo ? `${fmt(p.ciclo, 1)} s` : '–'}</td>
-                    <td className={over ? 'bad' : 'good'}>{p.ciclo && takt > 0 ? `${fmt(((p.ciclo / Math.max(1, n.capacity)) / takt) * 100, 0)}%` : '–'}</td>
-                    <td>{p.fora ?? 0}</td>
-                    <td>{p.fila}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </section>
-  );
+export interface HistItem {
+  sessao: string;
+  fonte: string;
+  nome: string;
+  inicio: number;
+  em: number;
+  relogio: number;
+  scans: number;
+}
+/** Sessões gravadas (o que rodou), mais recentes primeiro. */
+export async function listHistory(): Promise<HistItem[] | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const snap = await db.collection(HIST).get();
+  return snap.docs
+    .map((d) => d.data())
+    .filter((d): d is Record<string, unknown> => !!d && !!d.sessao)
+    .map((d) => ({ sessao: String(d.sessao), fonte: String(d.fonte ?? ''), nome: String(d.nome ?? ''), inicio: Number(d.inicio) || 0, em: Number(d.em) || 0, relogio: Number(d.relogio) || 0, scans: Array.isArray(d.s) ? d.s.length : 0 }))
+    .sort((a, b) => b.inicio - a.inicio);
+}
+/** Abre uma sessão gravada: modelo + scans. */
+export async function loadHistory(sessao: string): Promise<{ model: Model | null; scans: ScanRead[] } | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const d = (await db.doc(`${HIST}/${sessao}`).get()).data();
+  if (!d) return null;
+  let model: Model | null = null;
+  try {
+    model = d.modelo ? (JSON.parse(String(d.modelo)) as Model) : null;
+  } catch {
+    model = null;
+  }
+  return { model, scans: unpackScans(d as unknown as Packed) };
 }

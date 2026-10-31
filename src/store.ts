@@ -124,6 +124,10 @@ interface State {
   showStart: boolean;
   /** Esta aba faz papel da linha física e transmite os ciclos para o gêmeo digital. */
   physical: boolean;
+  /** Laterais escondidas (blocos à esquerda, propriedades à direita). */
+  hideLeft: boolean;
+  hideRight: boolean;
+  setSides: (p: { hideLeft?: boolean; hideRight?: boolean }) => void;
   setPhysical: (v: boolean) => void;
   /** Último estado recebido da linha física (gêmeo digital). */
   twin: TwinState | null;
@@ -233,6 +237,9 @@ export const useStore = create<State>((set, get) => {
     },
     setShowStart: (showStart) => set({ showStart }),
     physical: false,
+    hideLeft: false,
+    hideRight: false,
+    setSides: (p) => set(p),
     setPhysical: (physical) => set({ physical }),
     twin: null,
     setTwin: (twin) => set({ twin }),

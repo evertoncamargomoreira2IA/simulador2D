@@ -45,6 +45,8 @@ export function CanvasView() {
   const colors = useCanvasColors();
 
   const model = useStore((s) => s.model);
+  const hideLeft = useStore((s) => s.hideLeft);
+  const hideRight = useStore((s) => s.hideRight);
   const sim = useStore((s) => s.sim);
   useStore((s) => s.tick);
   const kpi = useStore((s) => s.kpi);
@@ -667,7 +669,11 @@ export function CanvasView() {
           <button className="btn ghost" onClick={() => setQuick(null)}>Cancelar</button>
         </div>
       )}
+      <button className="btn side-toggle l" onClick={() => useStore.getState().setSides({ hideLeft: !hideLeft })} title={hideLeft ? 'Mostrar a barra de blocos' : 'Esconder a barra de blocos'}>
+        {hideLeft ? '▶ Blocos' : '◀'}
+      </button>
       <div className="zoom">
+        <button className="btn" onClick={() => useStore.getState().setSides({ hideRight: !hideRight })} title={hideRight ? 'Mostrar o painel do modelo' : 'Esconder o painel do modelo'}>{hideRight ? 'Modelo ◀' : '▶'}</button>
         <button className="btn" onClick={() => zoomBy(1.2)} aria-label="Aproximar">+</button>
         <button className="btn" onClick={() => zoomBy(1 / 1.2)} aria-label="Afastar">−</button>
         <button className="btn" onClick={fit}>Enquadrar</button>
@@ -769,11 +775,28 @@ function crewPlace(def: NodeDef, labels: boolean): { x: number; y: number; row: 
   }
 }
 
+/** Pisca (liga/desliga a cada 0,6 s) enquanto `on`: mostra que o posto está mandando dados. */
+function useBlink(on: boolean): boolean {
+  const [b, setB] = useState(false);
+  useEffect(() => {
+    if (!on) return;
+    const id = setInterval(() => setB((x) => !x), 600);
+    return () => clearInterval(id);
+  }, [on]);
+  return on && b;
+}
+
 function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable, labels, counts, stage, onSelect, people, now, topRank, co2Heat, dim, assembly, onWire, wireTarget, onMenu }: NodeShapeProps) {
   const [hover, setHover] = useState(false);
   // gêmeo digital: o bloco mostra o estado real do posto, não a simulação
   const real = useStore((s) => s.twin?.postos[def.id]);
   const realOut = useStore((s) => (s.twin && def.type === 'sink' ? s.twin.pecas : null));
+  const relogio = useStore((s) => s.twin?.relogio ?? 0);
+  const blink = useBlink(!!real);
+  // coletando: scan recente (até 3 ciclos); sem scan há mais de 10 ciclos: parado/sem dados
+  const age = real?.ult !== undefined ? relogio - real.ult : Infinity;
+  const cyc = real?.ciclo || def.cycleTime || 30;
+  const live = age <= 3 * cyc ? colors.state.working : age <= 10 * cyc ? colors.state.blocked : colors.state.down;
   const stateColor = real ? colors.state[real.state as keyof typeof colors.state] ?? colors.state[rt.state] : colors.state[rt.state];
   const stroke = selected ? colors.accent : stateColor;
   const sw = selected ? 3 : 2;
@@ -971,6 +994,12 @@ function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable
           fill={colors.accent}
           listening={false}
         />
+      )}
+      {real && (
+        <Group x={-W / 2 + 2} y={-H / 2 + 2} listening={false}>
+          <Circle radius={blink ? 12 : 7} fill={live} opacity={blink ? 0.3 : 0} />
+          <Circle radius={6} fill={live} opacity={blink ? 1 : 0.45} shadowColor={live} shadowBlur={blink ? 10 : 0} />
+        </Group>
       )}
       {wireTarget && <Rect x={-W / 2 - 5} y={-H / 2 - 5} width={W + 10} height={H + 10} cornerRadius={8} stroke={colors.accent} strokeWidth={2} dash={[5, 4]} listening={false} />}
       {onWire && (hover || selected) && (

@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { importAnyFile } from './fileImport';
 import { useStore } from '../store';
-import { PhysicalSource, TwinBar, TwinTable } from './Twin';
+import { PhysicalSource } from './Twin';
+import { TwinDash } from './TwinDash';
 import { CanvasView } from './CanvasView';
 import { Dashboard } from './Dashboard';
 import { Palette } from './Palette';
@@ -33,6 +34,12 @@ export function App() {
   const showSoe = useStore((s) => s.showSoe);
   const showStart = useStore((s) => s.showStart);
   const monitoring = useStore((s) => s.model.settings.study === 'monitoramento');
+  const hideLeft = useStore((s) => s.hideLeft);
+  const hideRight = useStore((s) => s.hideRight);
+  // monitoramento: laterais escondidas para a linha e os gráficos ocuparem a tela (dá para abrir de novo)
+  useEffect(() => {
+    useStore.getState().setSides({ hideLeft: monitoring, hideRight: monitoring });
+  }, [monitoring]);
   const [dropping, setDropping] = useState(false);
   useEffect(() => {
     let raf = 0;
@@ -120,7 +127,7 @@ export function App() {
 
   return (
     <div
-      className="app"
+      className={`app${hideLeft ? ' no-left' : ''}${hideRight ? ' no-right' : ''}`}
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes('Files')) return;
         e.preventDefault();
@@ -149,10 +156,9 @@ export function App() {
       <Toolbar />
       <Palette />
       <CanvasView />
-      <TwinBar />
       <PhysicalSource />
       <PropertiesPanel />
-      {monitoring ? <TwinTable /> : <Dashboard />}
+      {monitoring ? <TwinDash /> : <Dashboard />}
       <StationDetail />
       <Analysis />
       {showStart && <StartScreen onClose={() => useStore.getState().setShowStart(false)} />}
