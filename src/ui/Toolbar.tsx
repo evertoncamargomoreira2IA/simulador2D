@@ -1,6 +1,7 @@
 // Barra superior: arquivo (modelos, importar, exportar) e controle da simulação.
 
 import { refreshKeepingWork } from './Recover';
+import { sendToOnline } from './OfflineBridge';
 import { useRef, useState } from 'react';
 import { lineKpi } from '../engine/metrics';
 import { exportModelCsv, exportModelJson, exportResultsXlsx } from '../io/exporter';
@@ -78,8 +79,8 @@ export function Toolbar() {
             href={__ONLINE_URL__}
             target="_blank"
             rel="noreferrer"
-            title="Baixa o modelo desta tela (JSON) e abre o projeto online: lá, Importar esse arquivo deixa as duas versões iguais"
-            onClick={() => exportModelJson(useStore.getState().model)}
+            title="Copia o modelo desta tela e abre o projeto online: lá, aperte Ctrl+V e confirme Importar (o JSON também é baixado, de reserva)"
+            onClick={() => void sendToOnline(useStore.getState().model)}
           >
             🔗 Projeto online
           </a>

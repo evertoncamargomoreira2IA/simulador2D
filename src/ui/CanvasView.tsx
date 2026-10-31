@@ -313,7 +313,7 @@ export function CanvasView() {
   const movedByLink = new Map(sim.links.map((l) => [l.def.id, l.moved]));
 
   const monitoringLock = useStore((s) => s.model.settings.study === 'monitoramento');
-  const locked = useStore((s) => s.locked) || monitoringLock;
+  const locked = useStore((s) => !!s.model.settings.frozen) || monitoringLock;
   const draggable = tool === 'select' && run !== 'running' && !locked;
   const canWire = run !== 'running' && !locked;
 
@@ -682,10 +682,15 @@ export function CanvasView() {
         <button
           className={`btn${locked ? ' on' : ''}`}
           disabled={monitoringLock}
-          onClick={() => useStore.getState().setSides({ locked: !useStore.getState().locked })}
-          title={monitoringLock ? 'No monitoramento real os blocos ficam sempre travados (quem acompanha não mexe no layout)' : locked ? 'Destravar: volta a arrastar e editar os blocos' : 'Travar o layout: ninguém arrasta nem apaga blocos sem querer'}
+          onClick={() => {
+            const st = useStore.getState();
+            const on = !st.model.settings.frozen;
+            st.setFrozen(on);
+            st.setMessage(on ? '❄ Blocos congelados: ninguém arrasta, liga nem apaga blocos. Fica salvo junto com o modelo (quem abrir também vê congelado).' : 'Blocos descongelados: dá para arrastar e editar de novo.');
+          }}
+          title={monitoringLock ? 'No monitoramento real os blocos ficam sempre congelados (quem acompanha não mexe no layout)' : locked ? 'Descongelar: volta a arrastar e editar os blocos' : 'Congelar blocos: ninguém arrasta, liga nem apaga blocos sem querer (fica salvo no modelo)'}
         >
-          {locked ? '🔒 Travado' : '🔓 Travar'}
+          {locked ? '❄ Congelados' : '❄ Congelar blocos'}
         </button>
         {model.background && (
           <button

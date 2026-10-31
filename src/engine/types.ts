@@ -236,6 +236,8 @@ export interface SimSettings {
   /** Tipo de estudo: simulação (tempos sorteados das curvas), reprodução histórica (tempos gravados, na ordem)
    *  ou monitoramento real (leituras da API chegando ao vivo). */
   study?: StudyKind;
+  /** Blocos congelados: ninguém arrasta, liga nem apaga blocos (vai junto com o modelo salvo). */
+  frozen?: boolean;
   /** Reprodução histórica: tempos gravados de cada posto (id do nó → segundos, na ordem em que aconteceram). */
   replay?: Record<string, number[]>;
   /** De onde vieram as leituras da reprodução (arquivo, API, período). */

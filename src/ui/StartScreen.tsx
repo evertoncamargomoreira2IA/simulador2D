@@ -1,5 +1,6 @@
 // Tela de início: novo trabalho, trabalho salvo, exemplo ou arquivo.
 
+import { pasteFromClipboard } from './OfflineBridge';
 import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_SETTINGS } from '../engine/types';
 import { modelStore, type SavedMeta } from '../io/storage';
@@ -58,6 +59,12 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
             <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && startBlank()} placeholder="Nome do trabalho (ex.: Linha 4 – proposta A)" aria-label="Nome do novo trabalho" />
             <button className="btn primary" onClick={startBlank}>Criar em branco</button>
           </div>
+          {!__OFFLINE__ && (
+            <p className="hint">
+              Veio do arquivo offline? Lá, clique em 🔗 Projeto online; aqui, aperte <b>Ctrl+V</b> ou{' '}
+              <button className="btn" onClick={() => void pasteFromClipboard()}>📋 Colar do offline</button>
+            </p>
+          )}
           <div className="row-btns section">
             <button className="btn" onClick={() => fileRef.current?.click()} title="Planilha padrão, Excel, CSV, JSON do simulador, DXF ou imagem do layout">
               Abrir arquivo…

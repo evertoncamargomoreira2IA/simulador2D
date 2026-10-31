@@ -92,6 +92,7 @@ interface State {
   setSnap: (v: boolean) => void;
   toggleLayer: (k: keyof Layers) => void;
   updateSettings: (patch: Partial<Model['settings']>) => void;
+  setFrozen: (frozen: boolean) => void;
   /** Troca partes do modelo (recursos, planta) sem mexer na seleção. */
   patchModel: (patch: Partial<Model>) => void;
   /** Posto de referência do UPH (só visual: não zera a simulação). */
@@ -127,11 +128,9 @@ interface State {
   /** Laterais escondidas (blocos à esquerda, propriedades à direita). */
   hideLeft: boolean;
   hideRight: boolean;
-  /** Layout travado: ninguém arrasta nem apaga blocos (sempre travado no monitoramento). */
-  locked: boolean;
   /** Painel visual (KPIs + gráficos de barras) no lugar dos indicadores, também na simulação. */
   simDash: boolean;
-  setSides: (p: { hideLeft?: boolean; hideRight?: boolean; locked?: boolean; simDash?: boolean }) => void;
+  setSides: (p: { hideLeft?: boolean; hideRight?: boolean; simDash?: boolean }) => void;
   setPhysical: (v: boolean) => void;
   /** Último estado recebido da linha física (gêmeo digital). */
   twin: TwinState | null;
@@ -243,7 +242,6 @@ export const useStore = create<State>((set, get) => {
     physical: false,
     hideLeft: false,
     hideRight: false,
-    locked: false,
     simDash: false,
     setSides: (p) => set(p),
     setPhysical: (physical) => set({ physical }),
@@ -388,6 +386,11 @@ export const useStore = create<State>((set, get) => {
       edit({ ...m, settings: { ...m.settings, ...patch } }, {}, 'alterar configuração', `settings:${Object.keys(patch).sort().join(',')}`);
     },
     patchModel: (patch) => edit({ ...get().model, ...patch }, {}, 'alterar modelo', `model:${Object.keys(patch).sort().join(',')}`),
+    // Congelar blocos não muda a linha: não zera a simulação.
+    setFrozen: (frozen) => {
+      history.push(get().model, undefined, Date.now(), frozen ? 'congelar blocos' : 'descongelar blocos');
+      set({ model: { ...get().model, settings: { ...get().model.settings, frozen } }, ...labels() });
+    },
     // Só muda a vista dos gráficos: não zera a simulação.
     setChartView: (chartOrder, chartHidden) => {
       history.push(get().model, undefined, Date.now(), 'sequência dos postos');

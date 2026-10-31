@@ -24,6 +24,7 @@ import { SoeImport } from './SoeImport';
 import { StationOrder } from './StationOrder';
 import { StartScreen } from './StartScreen';
 import { StallAlert } from './StallAlert';
+import { PasteImport } from './OfflineBridge';
 
 export function App() {
   const showOrder = useStore((s) => s.showOrder);
@@ -119,8 +120,8 @@ export function App() {
       }
       const st = useStore.getState();
       const k = e.key.toLowerCase();
-      // layout travado (ou monitoramento): sem colar, recortar, duplicar nem apagar blocos
-      const lock = st.locked || st.model.settings.study === 'monitoramento';
+      // blocos congelados (ou monitoramento): sem colar, recortar, duplicar nem apagar blocos
+      const lock = !!st.model.settings.frozen || st.model.settings.study === 'monitoramento';
       if (lock && (e.key === 'Delete' || e.key === 'Backspace' || ((e.ctrlKey || e.metaKey) && (k === 'x' || k === 'v' || k === 'd')))) return;
       if ((e.ctrlKey || e.metaKey) && (k === 'c' || k === 'x' || k === 'v' || k === 'd' || k === 'a')) {
         e.preventDefault();
@@ -188,6 +189,7 @@ export function App() {
       {showSoe && <SoeImport onClose={() => useStore.getState().setShowSoe(false)} />}
       {transportFor && <TransportBind start={transportFor} onClose={() => useStore.getState().setTransportFor(null)} />}
       <StallAlert />
+      {!__OFFLINE__ && <PasteImport />}
       {fitFor !== null && <FitCurve nodeId={fitFor} onClose={() => useStore.getState().setFitFor(null)} />}
       {showMix && <MixModal onClose={() => useStore.getState().setShowMix(false)} />}
       {opsFor !== null && <OpsEditor start={opsFor} onClose={() => useStore.getState().setOpsFor(null)} />}
