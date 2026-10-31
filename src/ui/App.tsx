@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { importAnyFile } from './fileImport';
 import { useStore } from '../store';
-import { PhysicalSource, TwinBar } from './Twin';
+import { PhysicalSource, TwinBar, TwinTable } from './Twin';
 import { CanvasView } from './CanvasView';
 import { Dashboard } from './Dashboard';
 import { Palette } from './Palette';
@@ -32,6 +32,7 @@ export function App() {
   const transportFor = useStore((s) => s.transportFor);
   const showSoe = useStore((s) => s.showSoe);
   const showStart = useStore((s) => s.showStart);
+  const monitoring = useStore((s) => s.model.settings.study === 'monitoramento');
   const [dropping, setDropping] = useState(false);
   useEffect(() => {
     let raf = 0;
@@ -151,7 +152,7 @@ export function App() {
       <TwinBar />
       <PhysicalSource />
       <PropertiesPanel />
-      <Dashboard />
+      {monitoring ? <TwinTable /> : <Dashboard />}
       <StationDetail />
       <Analysis />
       {showStart && <StartScreen onClose={() => useStore.getState().setShowStart(false)} />}

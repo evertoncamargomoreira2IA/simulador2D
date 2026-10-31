@@ -6,7 +6,8 @@ import { replayModel, simulationModel, STUDY_LABEL, STUDY_WHY } from '../engine/
 import type { StudyKind } from '../engine/types';
 import { fetchEvents } from '../io/realFeed';
 import type { RealEvent } from '../engine/timeStudy';
-import { followTwin, type TwinState } from './Twin';
+import { followTwin, startVirtualLine, stopVirtualLine, type TwinState } from './Twin';
+import { tenStationModel } from '../model/builder';
 import { useStore } from '../store';
 import { HowTo } from './HowTo';
 import { Modal } from './Modal';
@@ -30,7 +31,7 @@ const lsSet = (k: string, v: string) => {
   }
 };
 
-type MonCfg = { kind: 'api' | 'gemeo'; url: string; every: number };
+type MonCfg = { kind: 'api' | 'gemeo' | 'virtual'; url: string; every: number; speed?: number };
 
 /** Estado dos postos a partir das leituras da API (quando a fonte não manda o estado pronto). */
 function twinFromEvents(ev: RealEvent[]): TwinState | null {
@@ -54,7 +55,7 @@ function twinFromEvents(ev: RealEvent[]): TwinState | null {
     lastCount = series.size;
   }
   const span = Math.max(1, now - t0);
-  return { sessao: 'api', nome: m.name, relogio: span, rodando: true, pecas: lastCount, uph: (lastCount * 3600) / span, em: Date.now(), postos };
+  return { sessao: 'api', fonte: 'API dos postos', nome: m.name, relogio: span, rodando: true, pecas: lastCount, uph: (lastCount * 3600) / span, em: Date.now(), postos };
 }
 
 export function StudyBar({ onPanel }: { onPanel: () => void }) {
@@ -67,7 +68,13 @@ export function StudyBar({ onPanel }: { onPanel: () => void }) {
   // monitoramento: só espelha a linha real (API ou linha física), não simula nada
   useEffect(() => {
     if (!mon) return;
-    if (mon.kind === 'gemeo') return followTwin((text) => setLast({ at: Date.now(), n: 0, text }));
+    if (mon.kind === 'gemeo' || mon.kind === 'virtual') {
+      const stop = followTwin((text) => setLast({ at: Date.now(), n: 0, text }));
+      return () => {
+        stop();
+        if (mon.kind === 'virtual') stopVirtualLine();
+      };
+    }
     let alive = true;
     const tick = async () => {
       try {
@@ -143,9 +150,20 @@ export function StudyBar({ onPanel }: { onPanel: () => void }) {
             st.resetSim();
             if (st.model.settings.replay) st.setModel(simulationModel(st.model, 'monitoramento'), 'Monitoramento real ligado.');
             else st.updateSettings({ study: 'monitoramento' });
+            if (cfg.kind === 'virtual') {
+              // servidor de teste: roda a linha aberta (ou a de 10 postos, se o trabalho estiver vazio)
+              const hasStations = st.model.nodes.some((n) => n.type === 'machine' || n.type === 'inspection' || n.type === 'rework');
+              void startVirtualLine(hasStations ? st.model : tenStationModel(), cfg.speed ?? 10).then((ok) => {
+                if (!ok) st.setMessage('A linha virtual usa o banco do artefato: só funciona no link online.');
+              });
+            }
             setMon(cfg);
             setMonitorOpen(false);
-            st.setMessage(cfg.kind === 'gemeo' ? 'Gêmeo digital: os blocos mostram o estado real de cada posto (selo 🏭). A simulação fica desligada no monitoramento.' : 'Monitoramento pela API: os blocos mostram as peças feitas em cada posto. A simulação fica desligada no monitoramento.');
+            st.setMessage(
+              cfg.kind === 'api'
+                ? 'Monitoramento pela API: os blocos mostram as peças feitas em cada posto. A simulação fica desligada no monitoramento.'
+                : 'Gêmeo digital: cada posto escaneia as peças; os blocos mostram o estado real e o ciclo pelo intervalo entre scans (selo 🏭). A simulação fica desligada no monitoramento.',
+            );
           }}
           onStop={() => setMon(null)}
           onClose={() => setMonitorOpen(false)}
@@ -169,58 +187,72 @@ function MonitorModal({ running, last, onStart, onStop, onClose, onPanel }: {
 }) {
   const [url, setUrl] = useState(() => running?.url || lsGet(URL_KEY));
   const [every, setEvery] = useState(running?.every ?? 60);
+  const [speed, setSpeed] = useState(running?.speed ?? 10);
   const ok = /^https?:\/\//.test(url);
   return (
-    <Modal title="📡 Monitoramento real" sub="Leituras da linha chegando de tempos em tempos; o painel compara o real com o simulado." onClose={onClose}>
+    <Modal title="📡 Monitoramento real" sub="Gêmeo digital: espelha a linha real (scans de cada posto). Não simula nada." onClose={onClose}>
       <HowTo
         title="Os 3 tipos de estudo"
         why="Deixe claro em todo estudo qual dos três você está fazendo: os números querem dizer coisas diferentes."
         steps={[`🎲 Simulação: ${STUDY_WHY.simulacao}`, `⏪ Reprodução histórica: ${STUDY_WHY.historico}`, `📡 Monitoramento real: ${STUDY_WHY.monitoramento}`]}
         tip="Ordem natural: monte e valide o modelo com a reprodução histórica, use a simulação para decidir e o monitoramento para acompanhar."
       />
-      <label className="field">
-        <span>Endereço da API (GET que devolve as leituras: posto, serie, inicio, fim)</span>
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://servidor-da-ti/api/leituras?linha=1" />
-      </label>
-      <div className="row-btns">
-        <label className="field inline">
-          <span>Atualizar a cada</span>
-          <select value={every} onChange={(e) => setEvery(Number(e.target.value))}>
-            {[10, 30, 60, 300].map((v) => <option key={v} value={v}>{v < 60 ? `${v} s` : `${v / 60} min`}</option>)}
-          </select>
-        </label>
-        <button
-          className="btn primary"
-          disabled={!ok}
-          title={ok ? 'Começa a buscar as leituras na API' : 'Informe o endereço da API (começa com http:// ou https://)'}
-          onClick={() => {
-            lsSet(URL_KEY, url);
-            onStart({ kind: 'api', url, every });
-          }}
-        >
-          ▶ Ligar com a API
-        </button>
-        <button className={`btn${ok ? '' : ' primary'}`} onClick={() => onStart({ kind: 'gemeo', url: '', every })} title="Segue a aba (ou o computador) que está como 🏭 Linha física, pelo banco do artefato">
-          🏭 Seguir a linha física (gêmeo digital)
-        </button>
+      <div className="mon-src">
+        <p className="label">1 · Linha virtual (servidor de teste) — comece por aqui</p>
+        <p className="hint">Roda a linha em segundo plano como se fosse a fábrica: cada posto escaneia a peça quando ela sai, os scans vão para o servidor (banco do artefato) e este gêmeo mostra tudo. Ciclo de cada posto = intervalo entre scans, sem os que ficam fora de média ± 2 desvios.</p>
+        <div className="row-btns">
+          <label className="field inline">
+            <span>Velocidade</span>
+            <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
+              {[1, 10, 60].map((v) => <option key={v} value={v}>{v === 1 ? 'tempo real (1×)' : `${v}× (1 min = ${v} min de turno)`}</option>)}
+            </select>
+          </label>
+          <button className="btn primary" onClick={() => onStart({ kind: 'virtual', url: '', every, speed })}>▶ Ligar linha virtual e acompanhar</button>
+        </div>
       </div>
-      {!ok && (
-        <p className="hint">
-          Sem API ainda? Use o <b>gêmeo digital</b>: abra este mesmo link em outra aba ou outro computador, clique em <b>🏭 Linha física</b> e em ▶ Start. Aqui, clique em <b>🏭 Seguir a linha física</b>: os blocos passam a mostrar o que a linha está fazendo, com alguns segundos de atraso.
-        </p>
-      )}
+      <div className="mon-src">
+        <p className="label">2 · Linha física em outra janela ou computador</p>
+        <p className="hint">Na outra janela: abra a linha, clique em 🏭 Linha física e ▶ Start. Aqui:</p>
+        <button className="btn" onClick={() => onStart({ kind: 'gemeo', url: '', every })}>🏭 Seguir a linha física</button>
+      </div>
+      <div className="mon-src">
+        <p className="label">3 · API dos postos (linha de verdade)</p>
+        <label className="field">
+          <span>Endereço (GET que devolve os scans: posto, serie, hora — ou inicio e fim)</span>
+          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://servidor-da-ti/api/scans?linha=1" />
+        </label>
+        <div className="row-btns">
+          <label className="field inline">
+            <span>Atualizar a cada</span>
+            <select value={every} onChange={(e) => setEvery(Number(e.target.value))}>
+              {[10, 30, 60, 300].map((v) => <option key={v} value={v}>{v < 60 ? `${v} s` : `${v / 60} min`}</option>)}
+            </select>
+          </label>
+          <button
+            className="btn"
+            disabled={!ok}
+            title={ok ? 'Começa a buscar os scans na API' : 'Informe o endereço da API (começa com http:// ou https://)'}
+            onClick={() => {
+              lsSet(URL_KEY, url);
+              onStart({ kind: 'api', url, every });
+            }}
+          >
+            ▶ Ligar com a API
+          </button>
+        </div>
+      </div>
       {running && (
         <div className="row-btns section">
           <span className="study-live" aria-hidden />
           <span>
-            Ligado ({running.kind === 'gemeo' ? 'gêmeo digital da linha física' : `${running.url}, a cada ${running.every < 60 ? `${running.every} s` : `${running.every / 60} min`}`}).
+            Ligado ({running.kind === 'virtual' ? `linha virtual, ${running.speed ?? 10}×` : running.kind === 'gemeo' ? 'gêmeo digital da linha física' : `${running.url}, a cada ${running.every < 60 ? `${running.every} s` : `${running.every / 60} min`}`}).
             {last && (last.text ? ` ${last.text}` : last.err ? ` Última tentativa falhou: ${last.err}.` : ` Última leitura às ${new Date(last.at).toLocaleTimeString('pt-BR')}: ${last.n} leituras.`)}
           </span>
           <button className="btn" onClick={onPanel}>📊 Ver painel</button>
           <button className="btn" onClick={onStop}>■ Desligar</button>
         </div>
       )}
-            <p className="hint">A API precisa liberar acesso a partir do navegador (CORS). Sem API, use a demonstração para ver como funciona. Nenhum nome de operador é lido (LGPD).</p>
+      <p className="hint">A API precisa liberar acesso a partir do navegador (CORS). Nenhum nome de operador é lido (LGPD).</p>
     </Modal>
   );
 }

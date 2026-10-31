@@ -1,6 +1,7 @@
 // Fontes de dados reais da operação: API do computador de cada posto, arquivo exportado
 // ou a fonte simulada (a linha do modelo rodando no lugar da linha real, até a API existir).
 
+import { scansToEvents, type ScanRead } from '../engine/scans';
 import { Rng } from '../engine/rng';
 import { Simulator } from '../engine/simulator';
 import type { RealEvent } from '../engine/timeStudy';
@@ -87,9 +88,18 @@ export function toSeconds(v: unknown): number | null {
  */
 export function eventsFromRows(rows: Record<string, unknown>[]): RealEvent[] {
   const out: RealEvent[] = [];
+  // coleta por escaneamento: só a hora do scan (sem início e fim) → ciclo = intervalo entre scans
+  const scans: ScanRead[] = [];
   for (const r of rows) {
     const posto = pick(r, ['posto', 'station', 'estacao', 'workstation']);
     const inicio = toSeconds(pick(r, ['inicio', 'start', 'entrada', 'scanin', 'begin']));
+    const hora = toSeconds(pick(r, ['hora', 'horario', 'scan', 'datahora', 'timestamp', 'time', 'leitura']));
+    if (inicio === null && hora !== null && posto !== undefined && posto !== '') {
+      const t = pick(r, ['turno', 'shift']);
+      const md = pick(r, ['modelo', 'model', 'produto', 'product', 'sku']);
+      scans.push({ posto: String(posto), serie: String(pick(r, ['serie', 'serial', 'sn', 'numeroserie', 'barcode', 'codigo']) ?? ''), hora, ...(t ? { turno: String(t) } : {}), ...(md ? { modelo: String(md) } : {}) });
+      continue;
+    }
     let fim = toSeconds(pick(r, ['fim', 'end', 'saida', 'scanout', 'finish']));
     const dur = pick(r, ['duracao', 'duration', 'ciclo', 'cycle', 'tempo']);
     if (posto === undefined || posto === '' || inicio === null) continue;
@@ -108,7 +118,7 @@ export function eventsFromRows(rows: Record<string, unknown>[]): RealEvent[] {
       ...(modelo !== undefined && modelo !== '' ? { modelo: String(modelo) } : {}),
     });
   }
-  return out;
+  return scans.length ? [...out, ...scansToEvents(scans)] : out;
 }
 
 /** Busca as leituras na API (GET que devolve uma lista JSON, ou { eventos: [...] }). */

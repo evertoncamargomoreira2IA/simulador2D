@@ -965,7 +965,7 @@ function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable
           y={H / 2 + (labels ? 18 : 5)}
           width={120}
           align="center"
-          text={real ? `🏭 ${real.feitas} feitas · fila ${real.fila}` : isBuffer ? `${q + inProc}/${cap} peças` : `fila ${q} · fazendo ${rt.processing.length}/${cap}${rt.done.length ? ` · pronta ${rt.done.length}` : ''}`}
+          text={real ? `🏭 ${real.feitas} pç${real.ciclo ? ` · ciclo ${real.ciclo.toFixed(1)} s` : ''} · fila ${real.fila}` : isBuffer ? `${q + inProc}/${cap} peças` : `fila ${q} · fazendo ${rt.processing.length}/${cap}${rt.done.length ? ` · pronta ${rt.done.length}` : ''}`}
           fontSize={10}
           fontStyle="bold"
           fill={colors.accent}
