@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_SETTINGS } from '../engine/types';
 import { modelStore, type SavedMeta } from '../io/storage';
-import { elementsModel, lp2Model, simpleModel, combineModel, mixModel, supplyModel, transportModel } from '../model/builder';
+import { elementsModel, lp2Model, simpleModel, combineModel, mixModel, supplyModel, tenStationModel, transportModel } from '../model/builder';
 import { privateExample, useStore } from '../store';
 import { ACCEPT, importAnyFile } from './fileImport';
 import { Modal } from './Modal';
@@ -33,7 +33,7 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
     st().openModel(blankModel(name.trim() || 'Novo trabalho'), 'Trabalho novo. Arraste a planta (DXF ou imagem) para a tela e monte a linha pela paleta: cada bloco novo já sai ligado ao anterior.');
     onClose();
   };
-  const example = (k: 'real' | 'main' | 'lp2' | 'simple' | 'elements' | 'combine' | 'transport' | 'supply' | 'mix') => {
+  const example = (k: 'real' | 'main' | 'lp2' | 'simple' | 'elements' | 'combine' | 'transport' | 'supply' | 'mix' | 'ten') => {
     const ex = privateExample();
     const main = k === 'main' ? privateExample('main') : null;
     if (main) st().openModel(main, 'Main line com operações e atividades de cada posto. Veja Análises → Yamazumi.');
@@ -45,6 +45,7 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
     if (k === 'mix') st().setModel(mixModel(), 'Exemplo: linha com 3 modelos (A 60%, B 30%, C 10%), troca de modelo na programação e no teste. Abra 🎨 Mix e clique em ▶ Rodar turno com o mix.');
     if (k === 'supply') st().setModel(supplyModel(), 'Exemplo: supermercado → kitting → milk run → linha (10 montagem, 5 off-line, 4 teste, 5 packing) → FGI → expedição, meta 100 UPH. Clique em ▶ Start.');
     if (k === 'simple') st().openModel(simpleModel(), 'Linha exemplo simples carregada.');
+    if (k === 'ten') st().setModel(tenStationModel(), 'Linha de 10 postos (a mesma da versão offline): takt 36 s, meta 100 UPH, variação de 15%. Clique em ▶ Start.');
     onClose();
   };
 
@@ -84,6 +85,7 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
             <button className="btn" onClick={() => example('simple')}>Exemplo: linha simples</button>
             <button className="btn" onClick={() => example('elements')}>Exemplo: linha com atividades (Yamazumi)</button>
             <button className="btn" onClick={() => example('supply')}>Exemplo: abastecimento e FGI (100 UPH)</button>
+            <button className="btn" onClick={() => example('ten')}>Exemplo: linha de 10 postos (espelho do offline)</button>
             <button className="btn" onClick={() => example('mix')}>Exemplo: mix de 3 modelos</button>
             <button className="btn" onClick={() => example('combine')}>Exemplo: combinar peças com AMR</button>
             <button className="btn" onClick={() => example('transport')}>Exemplo: operador levando peças</button>

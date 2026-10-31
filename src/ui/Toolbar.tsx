@@ -102,7 +102,7 @@ export function Toolbar() {
             if (e.target.value === 'combine') st().openModel(combineModel(), 'Exemplo: 3 postos, AMR e abastecedor levam as peças ao Posto X, que junta tudo em um produto.');
             if (e.target.value === 'mix') st().setModel(mixModel(), 'Exemplo: linha com 3 modelos (A 60%, B 30%, C 10%), troca de modelo na programação e no teste. Abra 🎨 Mix e clique em ▶ Rodar turno com o mix.');
             if (e.target.value === 'supply') st().setModel(supplyModel(), 'Exemplo: supermercado → kitting → milk run → linha (10 montagem, 5 off-line, 4 teste, 5 packing) → FGI → expedição, meta 100 UPH. Clique em ▶ Start.');
-            if (e.target.value === 'ten') st().openModel(tenStationModel(), 'Linha em U de 10 postos manuais, takt 36 s (meta 100 UPH), variação de 15%: a mesma que abre na versão offline. Clique em ▶ Start.');
+            if (e.target.value === 'ten') st().setModel(tenStationModel(), 'Linha em U de 10 postos manuais, takt 36 s (meta 100 UPH), variação de 15%: a mesma que abre na versão offline. Clique em ▶ Start.');
             if (e.target.value === 'simple') st().openModel(simpleModel(), 'Linha exemplo simples carregada.');
           }}
         >
