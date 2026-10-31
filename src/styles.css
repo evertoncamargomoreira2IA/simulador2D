@@ -857,3 +857,8 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .s-monitoramento .study-opt.on { background: var(--st-working); }
 .study-live { width: 8px; height: 8px; border-radius: 50%; background: var(--st-working); box-shadow: 0 0 8px var(--st-working); display: inline-block; animation: live-dot 1.4s ease-in-out infinite; }
 .study-opt.on .study-live { background: #04121f; box-shadow: none; }
+
+/* Gêmeo digital: faixa do que a linha física está fazendo agora */
+.twin-bar { position: fixed; top: 132px; left: 50%; transform: translateX(-50%); z-index: 30; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; max-width: min(900px, calc(100vw - 32px)); padding: 8px 14px; border-radius: 10px; border: 1px solid var(--st-working); background: color-mix(in srgb, var(--panel) 92%, transparent); box-shadow: 0 0 18px rgb(47 191 113 / 0.35); font-size: 12.5px; }
+.twin-bar b { color: var(--ink); }
+.twin-bar .bad { color: var(--st-down); font-weight: 600; }

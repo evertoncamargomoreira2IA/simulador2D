@@ -21,6 +21,8 @@ export function Toolbar() {
   const [help, setHelp] = useState(false);
   const [lib, setLib] = useState(false);
   const [panel, setPanel] = useState(false);
+  const physical = useStore((s) => s.physical);
+  const monitoring = useStore((s) => s.model.settings.study === 'monitoramento');
   const showSaved = useStore((s) => s.showSaved);
   const saved = useStore((s) => s.saved);
   const undoLabel = useStore((s) => s.undoLabel);
@@ -67,6 +69,7 @@ export function Toolbar() {
       <div className="brand">
         <b>{__APP_NAME__}</b>
         <span className="tag" title="Gêmeo digital centrado nas pessoas">Indústria 5.0</span>
+        {physical && <span className="tag offline" title="Esta aba transmite para o gêmeo digital">Linha física</span>}
         {__OFFLINE__ && <span className="tag offline" title="Arquivo offline: salve com Exportar → JSON; painel e IA só no link online">Offline</span>}
         {__OFFLINE__ && __ONLINE_URL__ && (
           <a
@@ -185,12 +188,27 @@ export function Toolbar() {
         {run === 'running' ? (
           <button className="btn primary" onClick={() => st().setRun('paused')}>❚❚ Pause</button>
         ) : (
-          <button className="btn primary" onClick={start} disabled={model.nodes.length === 0}>▶ Start</button>
+          <button className="btn primary" onClick={start} disabled={model.nodes.length === 0 || monitoring} title={monitoring ? 'No monitoramento real não há simulação: os blocos espelham a linha real. Troque para 🎲 Simulação para simular.' : undefined}>▶ Start</button>
         )}
-        <button className="btn" onClick={stop} disabled={sim.clock === 0 || run === 'done'} title="Para a simulação e mantém os resultados">■ Stop</button>
-        <button className="btn" onClick={() => st().resetSim()} disabled={sim.clock === 0} title="Zera o relógio, as peças e os indicadores (o modelo não muda)">⟲ Reset</button>
-        <button className="btn" onClick={replay} disabled={sim.clock === 0} title="Reinicia com a mesma semente: mesma sequência de eventos">↺ Replay</button>
-        <button className="btn" onClick={runToEnd} disabled={model.nodes.length === 0 || run === 'done'} title="Calcula até o fim do turno sem animação">⏭ Fim</button>
+        <button className="btn" onClick={stop} disabled={sim.clock === 0 || run === 'done' || monitoring} title="Para a simulação e mantém os resultados">■ Stop</button>
+        <button className="btn" onClick={() => st().resetSim()} disabled={sim.clock === 0 || monitoring} title="Zera o relógio, as peças e os indicadores (o modelo não muda)">⟲ Reset</button>
+        <button className="btn" onClick={replay} disabled={sim.clock === 0 || monitoring} title="Reinicia com a mesma semente: mesma sequência de eventos">↺ Replay</button>
+        <button className="btn" onClick={runToEnd} disabled={model.nodes.length === 0 || run === 'done' || monitoring} title="Calcula até o fim do turno sem animação">⏭ Fim</button>
+        {!__OFFLINE__ && (
+          <button
+            className={`btn${physical ? ' on' : ''}`}
+            disabled={monitoring}
+            onClick={() => {
+              const on = !physical;
+              st().setPhysical(on);
+              document.documentElement.dataset.flavor = on ? 'offline' : '';
+              st().setMessage(on ? 'Esta aba agora é a 🏭 linha física: clique em ▶ Start e ela transmite cada ciclo e o estado dos postos. Em outra aba ou computador, 📡 Monitoramento real → Seguir a linha física mostra o gêmeo digital.' : 'Linha física desligada: esta aba volta a ser o simulador.');
+            }}
+            title="Faz esta aba (ou este computador) fazer papel da linha de verdade e transmitir para o gêmeo digital"
+          >
+            🏭 Linha física
+          </button>
+        )}
         <select className="btn" aria-label="Velocidade" value={speed} onChange={(e) => st().setSpeed(Number(e.target.value))}>
           {SPEEDS.map((s) => (
             <option key={s} value={s}>{s}×</option>

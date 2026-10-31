@@ -1,11 +1,12 @@
 // Os 3 tipos de estudo, sempre visíveis na barra: Simulação (e se?), Reprodução histórica (o que aconteceu?)
 // e Monitoramento real (o que está acontecendo agora?).
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { replayModel, simulationModel, STUDY_LABEL, STUDY_WHY } from '../engine/replay';
 import type { StudyKind } from '../engine/types';
-import { fetchEvents, simulatedFeed, FEED_DEFAULTS } from '../io/realFeed';
-import { tenStationModel } from '../model/builder';
+import { fetchEvents } from '../io/realFeed';
+import type { RealEvent } from '../engine/timeStudy';
+import { followTwin, type TwinState } from './Twin';
 import { useStore } from '../store';
 import { HowTo } from './HowTo';
 import { Modal } from './Modal';
@@ -29,27 +30,51 @@ const lsSet = (k: string, v: string) => {
   }
 };
 
+type MonCfg = { kind: 'api' | 'gemeo'; url: string; every: number };
+
+/** Estado dos postos a partir das leituras da API (quando a fonte não manda o estado pronto). */
+function twinFromEvents(ev: RealEvent[]): TwinState | null {
+  const m = useStore.getState().model;
+  if (!ev.length) return null;
+  const t0 = Math.min(...ev.map((e) => e.inicio));
+  const now = Math.max(...ev.map((e) => e.fim));
+  const key = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const postos: TwinState['postos'] = {};
+  let lastCount = 0;
+  for (const n of m.nodes) {
+    if (!(n.type === 'machine' || n.type === 'inspection' || n.type === 'rework')) continue;
+    const mine = ev.filter((e) => key(e.posto) === key(n.name));
+    if (!mine.length) continue;
+    const series = new Set(mine.map((e) => e.serie));
+    const lastEnd = Math.max(...mine.map((e) => e.fim));
+    const busy = mine.filter((e) => e.fim >= now - 1 && e.inicio <= now).length;
+    // sem leitura há mais de 2 ciclos: o posto está esperando peça (ou parado)
+    const idle = now - lastEnd > 2 * (n.cycleTime || 30);
+    postos[n.id] = { state: busy ? 'working' : idle ? 'starved' : 'working', fila: 0, fazendo: busy, feitas: series.size };
+    lastCount = series.size;
+  }
+  const span = Math.max(1, now - t0);
+  return { sessao: 'api', nome: m.name, relogio: span, rodando: true, pecas: lastCount, uph: (lastCount * 3600) / span, em: Date.now(), postos };
+}
+
 export function StudyBar({ onPanel }: { onPanel: () => void }) {
   const model = useStore((s) => s.model);
   const study: StudyKind = model.settings.study ?? (model.settings.replay ? 'historico' : 'simulacao');
   const [monitorOpen, setMonitorOpen] = useState(false);
-  const [mon, setMon] = useState<{ url: string; every: number; demo: boolean } | null>(null);
-  const [last, setLast] = useState<{ at: number; n: number; err?: string } | null>(null);
-  const demoHours = useRef(0);
+  const [mon, setMon] = useState<MonCfg | null>(null);
+  const [last, setLast] = useState<{ at: number; n: number; err?: string; text?: string } | null>(null);
 
-  // monitoramento: busca as leituras de tempos em tempos (continua com a janela fechada)
+  // monitoramento: só espelha a linha real (API ou linha física), não simula nada
   useEffect(() => {
     if (!mon) return;
+    if (mon.kind === 'gemeo') return followTwin((text) => setLast({ at: Date.now(), n: 0, text }));
     let alive = true;
     const tick = async () => {
       try {
-        let ev;
-        if (mon.demo) {
-          demoHours.current = Math.min(8, demoHours.current + 0.25);
-          ev = simulatedFeed(useStore.getState().model, { ...FEED_DEFAULTS, hours: demoHours.current });
-        } else ev = await fetchEvents(mon.url);
+        const ev = await fetchEvents(mon.url);
         if (!alive) return;
-        loadRealEvents(ev, mon.demo ? `monitoramento (demonstração): ${fmt(demoHours.current, 2)} h de turno` : `monitoramento ${mon.url}`);
+        loadRealEvents(ev, `monitoramento ${mon.url}`);
+        useStore.getState().setTwin(twinFromEvents(ev));
         setLast({ at: Date.now(), n: ev.length });
       } catch (e) {
         if (alive) setLast({ at: Date.now(), n: 0, err: (e as Error).message });
@@ -60,6 +85,7 @@ export function StudyBar({ onPanel }: { onPanel: () => void }) {
     return () => {
       alive = false;
       clearInterval(id);
+      useStore.getState().setTwin(null);
     };
   }, [mon]);
 
@@ -111,27 +137,15 @@ export function StudyBar({ onPanel }: { onPanel: () => void }) {
           running={mon}
           last={last}
           onStart={(cfg) => {
-            demoHours.current = 0;
             const st = useStore.getState();
-            const hasStations = st.model.nodes.some((n) => n.type === 'machine' || n.type === 'inspection' || n.type === 'rework');
-            if (!hasStations) {
-              // sem linha não há o que comparar: a demonstração abre a linha de 10 postos; com API, pede a linha
-              if (!cfg.demo) {
-                st.setMessage('Monitoramento precisa da linha montada (os nomes dos postos iguais aos da API). Abra o trabalho da linha ou use 🧱 Montar linha a partir das leituras em Dados reais.');
-                return;
-              }
-              st.setModel({ ...tenStationModel(), settings: { ...tenStationModel().settings, study: 'monitoramento' } }, 'Demonstração do monitoramento: linha de 10 postos aberta; a linha simulada faz papel da real e manda 15 min de turno a cada 10 s.');
-            }
-            setMon(cfg);
-            if (!hasStations) {
-              setMonitorOpen(false);
-              onPanel();
-              return;
-            }
+            // monitorar é só espelhar: para a simulação e tira os tempos gravados
+            st.setRun('idle');
+            st.resetSim();
             if (st.model.settings.replay) st.setModel(simulationModel(st.model, 'monitoramento'), 'Monitoramento real ligado.');
             else st.updateSettings({ study: 'monitoramento' });
+            setMon(cfg);
             setMonitorOpen(false);
-            onPanel();
+            st.setMessage(cfg.kind === 'gemeo' ? 'Gêmeo digital: os blocos mostram o estado real de cada posto (selo 🏭). A simulação fica desligada no monitoramento.' : 'Monitoramento pela API: os blocos mostram as peças feitas em cada posto. A simulação fica desligada no monitoramento.');
           }}
           onStop={() => setMon(null)}
           onClose={() => setMonitorOpen(false)}
@@ -146,9 +160,9 @@ export function StudyBar({ onPanel }: { onPanel: () => void }) {
 }
 
 function MonitorModal({ running, last, onStart, onStop, onClose, onPanel }: {
-  running: { url: string; every: number; demo: boolean } | null;
-  last: { at: number; n: number; err?: string } | null;
-  onStart: (c: { url: string; every: number; demo: boolean }) => void;
+  running: MonCfg | null;
+  last: { at: number; n: number; err?: string; text?: string } | null;
+  onStart: (c: MonCfg) => void;
   onStop: () => void;
   onClose: () => void;
   onPanel: () => void;
@@ -181,28 +195,32 @@ function MonitorModal({ running, last, onStart, onStop, onClose, onPanel }: {
           title={ok ? 'Começa a buscar as leituras na API' : 'Informe o endereço da API (começa com http:// ou https://)'}
           onClick={() => {
             lsSet(URL_KEY, url);
-            onStart({ url, every, demo: false });
+            onStart({ kind: 'api', url, every });
           }}
         >
           ▶ Ligar com a API
         </button>
-        <button className={`btn${ok ? '' : ' primary'}`} onClick={() => onStart({ url: '', every: Math.min(every, 10), demo: true })} title="Sem API ainda: a linha simulada faz papel da linha real e manda 15 min de turno a cada atualização">
-          ▶ Demonstração (linha simulada)
+        <button className={`btn${ok ? '' : ' primary'}`} onClick={() => onStart({ kind: 'gemeo', url: '', every })} title="Segue a aba (ou o computador) que está como 🏭 Linha física, pelo banco do artefato">
+          🏭 Seguir a linha física (gêmeo digital)
         </button>
       </div>
+      {!ok && (
+        <p className="hint">
+          Sem API ainda? Use o <b>gêmeo digital</b>: abra este mesmo link em outra aba ou outro computador, clique em <b>🏭 Linha física</b> e em ▶ Start. Aqui, clique em <b>🏭 Seguir a linha física</b>: os blocos passam a mostrar o que a linha está fazendo, com alguns segundos de atraso.
+        </p>
+      )}
       {running && (
         <div className="row-btns section">
           <span className="study-live" aria-hidden />
           <span>
-            Ligado ({running.demo ? 'demonstração' : running.url}), a cada {running.every < 60 ? `${running.every} s` : `${running.every / 60} min`}.
-            {last && (last.err ? ` Última tentativa falhou: ${last.err}.` : ` Última leitura às ${new Date(last.at).toLocaleTimeString('pt-BR')}: ${last.n} leituras.`)}
+            Ligado ({running.kind === 'gemeo' ? 'gêmeo digital da linha física' : `${running.url}, a cada ${running.every < 60 ? `${running.every} s` : `${running.every / 60} min`}`}).
+            {last && (last.text ? ` ${last.text}` : last.err ? ` Última tentativa falhou: ${last.err}.` : ` Última leitura às ${new Date(last.at).toLocaleTimeString('pt-BR')}: ${last.n} leituras.`)}
           </span>
           <button className="btn" onClick={onPanel}>📊 Ver painel</button>
           <button className="btn" onClick={onStop}>■ Desligar</button>
         </div>
       )}
-      {!ok && <p className="hint">Ainda sem API? Clique em <b>▶ Demonstração</b>: o painel abre e se atualiza sozinho a cada 10 s (se o trabalho estiver vazio, abre a linha de 10 postos).</p>}
-      <p className="hint">A API precisa liberar acesso a partir do navegador (CORS). Sem API, use a demonstração para ver como funciona. Nenhum nome de operador é lido (LGPD).</p>
+            <p className="hint">A API precisa liberar acesso a partir do navegador (CORS). Sem API, use a demonstração para ver como funciona. Nenhum nome de operador é lido (LGPD).</p>
     </Modal>
   );
 }

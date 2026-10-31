@@ -8,6 +8,7 @@ import { lineKpi, type LineKpi } from './engine/metrics';
 import { Simulator } from './engine/simulator';
 import { DEFAULT_SETTINGS, makeNode, newId, type LinkDef, type Model, type NodeDef, type NodeType } from './engine/types';
 import { tenStationModel } from './model/builder';
+import type { TwinState } from './ui/Twin';
 
 export type Tool = 'select' | 'connect';
 export type RunState = 'idle' | 'running' | 'paused' | 'done';
@@ -121,6 +122,12 @@ interface State {
   setShowSoe: (v: boolean) => void;
   setOpsFor: (id: string | null) => void;
   showStart: boolean;
+  /** Esta aba faz papel da linha física e transmite os ciclos para o gêmeo digital. */
+  physical: boolean;
+  setPhysical: (v: boolean) => void;
+  /** Último estado recebido da linha física (gêmeo digital). */
+  twin: TwinState | null;
+  setTwin: (t: TwinState | null) => void;
   /** Equipe criada esperando o clique no posto que vai atender. */
   pendingPool: string | null;
   setPendingPool: (id: string | null) => void;
@@ -225,6 +232,10 @@ export const useStore = create<State>((set, get) => {
       );
     },
     setShowStart: (showStart) => set({ showStart }),
+    physical: false,
+    setPhysical: (physical) => set({ physical }),
+    twin: null,
+    setTwin: (twin) => set({ twin }),
 
     // Abrir trabalho (novo, exemplo, salvo, importado): a meta começa zerada e o takt vem da operação (gargalo).
     openModel: (m, message) => get().setModel({ ...m, settings: { ...m.settings, takt: 0 } }, message),

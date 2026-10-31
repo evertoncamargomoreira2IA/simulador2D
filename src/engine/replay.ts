@@ -15,7 +15,7 @@ export const STUDY_LABEL: Record<StudyKind, string> = {
 export const STUDY_WHY: Record<StudyKind, string> = {
   simulacao: 'E se? Os tempos são sorteados das curvas de cada posto (média, variação). Serve para testar mudanças antes de fazer: gigas, pessoas, layout, mix.',
   historico: 'O que aconteceu? Cada posto usa os tempos gravados nas leituras, na mesma ordem, pelo mesmo período. Serve para validar o modelo: a produção reproduzida tem que bater com a real.',
-  monitoramento: 'O que está acontecendo agora? As leituras chegam da API de tempos em tempos e o painel compara o real com o simulado ao vivo. Serve para acompanhar o turno e agir no desvio.',
+  monitoramento: 'O que está acontecendo agora? Gêmeo digital: os blocos espelham a linha real (API dos postos ou a linha física), com alguns segundos de atraso. Não simula nada: mostra o estado e as peças de cada posto para agir no desvio.',
 };
 
 const key = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();

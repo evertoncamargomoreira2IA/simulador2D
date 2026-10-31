@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { importAnyFile } from './fileImport';
 import { useStore } from '../store';
+import { PhysicalSource, TwinBar } from './Twin';
 import { CanvasView } from './CanvasView';
 import { Dashboard } from './Dashboard';
 import { Palette } from './Palette';
@@ -52,7 +53,22 @@ export function App() {
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    // aba escondida (ex.: a linha física atrás do gêmeo): o navegador pausa a animação, então avança por relógio
+    const bg = setInterval(() => {
+      if (!document.hidden) return;
+      const t = performance.now();
+      const st = useStore.getState();
+      if (st.run === 'running') {
+        st.sim.advanceTo(st.sim.now + ((t - last) / 1000) * st.speed);
+        if (st.sim.finished) st.setRun('done');
+        st.refresh(true);
+      }
+      last = t;
+    }, 1000);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearInterval(bg);
+    };
   }, []);
 
   useEffect(() => {
@@ -132,6 +148,8 @@ export function App() {
       <Toolbar />
       <Palette />
       <CanvasView />
+      <TwinBar />
+      <PhysicalSource />
       <PropertiesPanel />
       <Dashboard />
       <StationDetail />

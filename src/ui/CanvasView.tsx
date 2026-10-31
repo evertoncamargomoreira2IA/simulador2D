@@ -771,7 +771,10 @@ function crewPlace(def: NodeDef, labels: boolean): { x: number; y: number; row: 
 
 function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable, labels, counts, stage, onSelect, people, now, topRank, co2Heat, dim, assembly, onWire, wireTarget, onMenu }: NodeShapeProps) {
   const [hover, setHover] = useState(false);
-  const stateColor = colors.state[rt.state];
+  // gêmeo digital: o bloco mostra o estado real do posto, não a simulação
+  const real = useStore((s) => s.twin?.postos[def.id]);
+  const realOut = useStore((s) => (s.twin && def.type === 'sink' ? s.twin.pecas : null));
+  const stateColor = real ? colors.state[real.state as keyof typeof colors.state] ?? colors.state[rt.state] : colors.state[rt.state];
   const stroke = selected ? colors.accent : stateColor;
   const sw = selected ? 3 : 2;
   const startRef = useRef<{ x: number; y: number; others: { id: string; x: number; y: number }[] } | null>(null);
@@ -952,7 +955,7 @@ function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable
         <>
           <Text x={-50} y={H / 2 + 5} width={100} align="center" text={def.name} fontSize={11} fill={colors.ink} listening={false} wrap="none" ellipsis />
           {(def.type === 'sink' || def.type === 'source') && (
-            <Text x={-50} y={-H / 2 - 16} width={100} align="center" text={String(def.type === 'sink' ? rt.processed : rt.released)} fontSize={12} fontStyle="bold" fill={colors.muted} listening={false} />
+            <Text x={-50} y={-H / 2 - 16} width={100} align="center" text={realOut !== null ? `🏭 ${realOut}` : String(def.type === 'sink' ? rt.processed : rt.released)} fontSize={12} fontStyle="bold" fill={colors.muted} listening={false} />
           )}
         </>
       )}
@@ -962,7 +965,7 @@ function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable
           y={H / 2 + (labels ? 18 : 5)}
           width={120}
           align="center"
-          text={isBuffer ? `${q + inProc}/${cap} peças` : `fila ${q} · fazendo ${rt.processing.length}/${cap}${rt.done.length ? ` · pronta ${rt.done.length}` : ''}`}
+          text={real ? `🏭 ${real.feitas} feitas · fila ${real.fila}` : isBuffer ? `${q + inProc}/${cap} peças` : `fila ${q} · fazendo ${rt.processing.length}/${cap}${rt.done.length ? ` · pronta ${rt.done.length}` : ''}`}
           fontSize={10}
           fontStyle="bold"
           fill={colors.accent}
