@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { forecast, oee, pareto, recentRate, SEM_MOTIVO } from '../src/engine/twinKpi';
-import { stationsFromScans } from '../src/engine/scans';
+import { carryOver, stationsFromScans } from '../src/engine/scans';
 
 describe('indicadores do gêmeo digital', () => {
   it('OEE = disponibilidade × performance × qualidade', () => {
@@ -45,5 +45,20 @@ describe('indicadores do gêmeo digital', () => {
     expect(s.ciclo).toBeCloseTo(30);
     expect(s.fora).toBe(1);
     expect(s.paradoMin).toBeCloseTo(5, 0);
+  });
+});
+
+describe('WIP inicial pelos scans', () => {
+  it('conta as séries que o posto fez sem terem passado pelo anterior', () => {
+    const prev = new Map([['P2', ['P1']], ['P1', []]]);
+    const scans = [
+      { posto: 'P2', serie: 'A', hora: 10 }, // já estava no P2 quando o turno começou
+      { posto: 'P2', serie: 'B', hora: 20 },
+      { posto: 'P1', serie: 'C', hora: 30 },
+      { posto: 'P2', serie: 'C', hora: 60 },
+    ];
+    const c = carryOver(scans, prev);
+    expect(c.get('P2')).toBe(2);
+    expect(c.get('P1')).toBeUndefined();
   });
 });

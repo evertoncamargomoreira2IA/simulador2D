@@ -312,8 +312,10 @@ export function CanvasView() {
   const maxMoved = Math.max(1, ...sim.links.map((l) => l.moved));
   const movedByLink = new Map(sim.links.map((l) => [l.def.id, l.moved]));
 
-  const draggable = tool === 'select' && run !== 'running';
-  const canWire = run !== 'running';
+  const monitoringLock = useStore((s) => s.model.settings.study === 'monitoramento');
+  const locked = useStore((s) => s.locked) || monitoringLock;
+  const draggable = tool === 'select' && run !== 'running' && !locked;
+  const canWire = run !== 'running' && !locked;
 
   return (
     <div
@@ -677,6 +679,14 @@ export function CanvasView() {
         <button className="btn" onClick={() => zoomBy(1.2)} aria-label="Aproximar">+</button>
         <button className="btn" onClick={() => zoomBy(1 / 1.2)} aria-label="Afastar">−</button>
         <button className="btn" onClick={fit}>Enquadrar</button>
+        <button
+          className={`btn${locked ? ' on' : ''}`}
+          disabled={monitoringLock}
+          onClick={() => useStore.getState().setSides({ locked: !useStore.getState().locked })}
+          title={monitoringLock ? 'No monitoramento real os blocos ficam sempre travados (quem acompanha não mexe no layout)' : locked ? 'Destravar: volta a arrastar e editar os blocos' : 'Travar o layout: ninguém arrasta nem apaga blocos sem querer'}
+        >
+          {locked ? '🔒 Travado' : '🔓 Travar'}
+        </button>
         {model.background && (
           <button
             className={`btn${plantEdit ? ' on' : ''}`}
@@ -984,11 +994,11 @@ function NodeShape({ def, rt, colors, selected, bottleneck, reference, draggable
       )}
       {counts && def.type !== 'source' && def.type !== 'sink' && (
         <Text
-          x={-60}
+          x={real ? -80 : -60}
           y={H / 2 + (labels ? 18 : 5)}
-          width={120}
+          width={real ? 160 : 120}
           align="center"
-          text={real ? `🏭 ${real.feitas} pç${real.ciclo ? ` · ciclo ${real.ciclo.toFixed(1)} s` : ''} · fila ${real.fila}` : isBuffer ? `${q + inProc}/${cap} peças` : `fila ${q} · fazendo ${rt.processing.length}/${cap}${rt.done.length ? ` · pronta ${rt.done.length}` : ''}`}
+          text={real ? `🏭 ${real.feitas} pç${real.wip ? ` = ${real.feitas - real.wip} + ${real.wip} WIP inicial` : ''}\n${real.ciclo ? `ciclo ${real.ciclo.toFixed(1)} s · ` : ''}fila ${real.fila}` : isBuffer ? `${q + inProc}/${cap} peças` : `fila ${q} · fazendo ${rt.processing.length}/${cap}${rt.done.length ? ` · pronta ${rt.done.length}` : ''}`}
           fontSize={10}
           fontStyle="bold"
           fill={colors.accent}

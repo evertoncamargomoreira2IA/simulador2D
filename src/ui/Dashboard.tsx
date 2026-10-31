@@ -33,9 +33,14 @@ export function Dashboard() {
             Indicadores da linha
             {!startFull && sim.now < warmup && <span className="warm"> · aquecimento até {fmtTime(warmup).slice(0, 5)}</span>}
           </p>
-          <button className="btn" onClick={() => setOpen(!open)} style={{ padding: '1px 8px' }}>
-            {open ? 'Recolher' : 'Expandir'}
-          </button>
+          <span style={{ display: 'flex', gap: 6 }}>
+            <button className="btn" onClick={() => useStore.getState().setSides({ simDash: true })} style={{ padding: '1px 8px' }} title="Painel visual: os mesmos gráficos de barras do monitoramento (produção × meta, ciclo × takt, por hora, OEE e Pareto das perdas), com os números da simulação">
+              📊 Painel visual
+            </button>
+            <button className="btn" onClick={() => setOpen(!open)} style={{ padding: '1px 8px' }}>
+              {open ? 'Recolher' : 'Expandir'}
+            </button>
+          </span>
         </div>
         {open && (
           <div className="tiles">

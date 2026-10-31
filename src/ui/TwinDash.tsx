@@ -14,7 +14,8 @@ import { loadRealEvents } from './realLoad';
 import { fmt, fmtTime } from './theme';
 import { listHistory, loadAndon, loadHistory, saveAndon, twinCmd, type HistItem, type TwinState } from './Twin';
 import { ANDON_MOTIVOS, forecast, oee, pareto, recentRate, type AndonStop } from '../engine/twinKpi';
-import type { NodeDef } from '../engine/types';
+import type { Model, NodeDef } from '../engine/types';
+import type { NodeRt, Simulator } from '../engine/simulator';
 
 const STATION = (t: string) => t === 'machine' || t === 'inspection' || t === 'rework';
 
@@ -24,6 +25,8 @@ interface Bar {
   ref?: number;
   tone: 'ok' | 'good' | 'warn' | 'bad' | 'mute';
   text?: string;
+  /** Explicação extra no passar do mouse. */
+  tip?: string;
 }
 
 /** Barras verticais simples em SVG, com linha de referência (meta/takt) opcional. */
@@ -51,7 +54,7 @@ function Bars({ bars, line, lineLabel, unit, pair }: { bars: Bar[]; line?: numbe
           <g key={b.label + i}>
             {pair && b.ref !== undefined && <rect x={cx + 1} y={y(b.ref)} width={bw} height={B - y(b.ref)} rx={2} className="tb tb-ref"><title>{`Meta ${fmt(b.ref, 0)}`}</title></rect>}
             <rect x={x} y={y(b.value)} width={bw} height={Math.max(0, B - y(b.value))} rx={2} className={`tb tb-${b.tone}`}>
-              <title>{`${b.label}: ${b.text ?? fmt(b.value, 1)} ${unit}`}</title>
+              <title>{`${b.label}: ${b.text ?? fmt(b.value, 1)} ${unit}${b.tip ? ` (${b.tip})` : ''}`}</title>
             </rect>
             <text x={pair ? x + bw / 2 : cx} y={y(b.value) - 4} textAnchor="middle" className={`pc-label tb-v tb-v-${b.tone}`}>{b.text ?? fmt(b.value, b.value < 10 ? 1 : 0)}</text>
             <text x={cx} y={B + 13} textAnchor="middle" className="pc-label">{b.label}</text>
@@ -79,10 +82,52 @@ function isStopped(twin: TwinState, n: NodeDef): boolean {
 
 const short = (n: string) => n.replace(/^Posto\s*/i, 'P').replace(/\s*·.*$/, '');
 
-export function TwinDash() {
-  const twin = useStore((s) => s.twin);
+/** Painel visual da simulação: os mesmos números do gêmeo, só que vindos do simulador. */
+export function simTwin(sim: Simulator, model: Model): TwinState {
+  const relogio = Math.max(0, sim.now - sim.t0);
+  const postos: TwinState['postos'] = {};
+  let pecas = 0;
+  for (const r of sim.nodes) {
+    if (r.def.type === 'sink') pecas += r.processed;
+    if (!STATION(r.def.type)) continue;
+    const st = (k: keyof typeof r.stateTime) => r.stateTime[k] + (r.state === k ? Math.max(0, sim.now - r.stateSince) : 0);
+    const parado = st('down') + st('starved') + st('blocked') + st('setup') + st('resource');
+    const stopped = r.state === 'down' || r.state === 'starved' || r.state === 'blocked';
+    postos[r.def.id] = {
+      state: r.state,
+      fila: r.queue.length,
+      fazendo: r.processing.length,
+      feitas: r.processed,
+      // ciclo = tempo trabalhando por peça (× gigas, porque o gráfico divide pelas gigas)
+      ciclo: r.processed ? (st('working') * Math.max(1, r.def.capacity)) / r.processed : undefined,
+      fora: r.failures,
+      ult: stopped ? Math.max(0, r.stateSince - sim.t0) : relogio,
+      paradoMin: Math.round((parado / 60) * 10) / 10,
+    };
+  }
+  return { sessao: 'sim', fonte: 'simulação', nome: model.name, relogio, rodando: true, pecas, uph: relogio > 0 ? (pecas * 3600) / relogio : 0, em: Date.now(), postos };
+}
+
+/** Perdas da simulação por estado do posto, no formato do Pareto. */
+function simLosses(sim: Simulator): AndonStop[] {
+  const names: [keyof NodeRt['stateTime'], string][] = [['starved', 'Falta de peça (esperando o anterior)'], ['blocked', 'Bloqueado (próximo cheio)'], ['down', 'Quebra'], ['setup', 'Setup / troca de modelo'], ['resource', 'Esperando operador ou transporte'], ['break', 'Pausa do turno']];
+  const out: AndonStop[] = [];
+  for (const [k, motivo] of names) {
+    let t = 0;
+    for (const r of sim.nodes) if (STATION(r.def.type)) t += r.stateTime[k] + (r.state === k ? Math.max(0, sim.now - r.stateSince) : 0);
+    if (t > 30) out.push({ id: k, posto: '', motivo, inicio: 0, fim: t });
+  }
+  return out;
+}
+
+export function TwinDash({ simMode = false }: { simMode?: boolean }) {
+  const liveTwin = useStore((s) => s.twin);
   const model = useStore((s) => s.model);
-  const events = useStore((s) => s.realEvents);
+  const sim = useStore((s) => s.sim);
+  useStore((s) => s.tick); // redesenha com a simulação
+  const twin = simMode ? simTwin(sim, model) : liveTwin;
+  const realEvents = useStore((s) => s.realEvents);
+  const events = simMode ? [] : realEvents;
   const [hist, setHist] = useState(false);
   const takt = model.settings.takt;
   const stations = model.nodes.filter((n) => STATION(n.type) && twin?.postos[n.id]);
@@ -90,7 +135,8 @@ export function TwinDash() {
   const lastName = model.nodes.find((n) => lastIds.has(n.id))?.name;
 
   // produção por hora: scans do último posto agrupados pela hora do turno
-  const hourly = useMemo(() => {
+  const simHourly = simMode ? hourlyFromTimeline(sim) : null;
+  const hourlyReal = useMemo(() => {
     if (!lastName) return [];
     const by = new Map<number, number>();
     for (const e of events) if (e.posto === lastName) by.set(Math.floor(e.fim / 3600), (by.get(Math.floor(e.fim / 3600)) ?? 0) + 1);
@@ -100,6 +146,7 @@ export function TwinDash() {
     for (let h = Math.min(...hs); h <= Math.max(...hs); h++) out.push({ h, n: by.get(h) ?? 0 });
     return out.slice(-12);
   }, [events, lastName]);
+  const hourly = simHourly ?? hourlyReal;
 
   const meta = takt > 0 ? 3600 / takt : 0;
   const metaNow = twin && takt > 0 ? twin.relogio / takt : 0;
@@ -117,11 +164,11 @@ export function TwinDash() {
   const oees = stations.map((n) => ({ n, o: oee({ relogio: twin?.relogio ?? 0, feitas: twin?.postos[n.id]?.feitas ?? 0, ideal: ideal(n), paradoMin: twin?.postos[n.id]?.paradoMin ?? 0 }) }));
   const limit = oees.reduce<(typeof oees)[number] | null>((a, x) => (!a || ideal(x.n) > ideal(a.n) ? x : a), null);
   const lastHours = useMemo(() => (lastName ? events.filter((e) => e.posto === lastName).map((e) => e.fim) : []), [events, lastName]);
-  const prev = twin ? forecast({ pecas: twin.pecas, relogio: twin.relogio, duracao: model.settings.duration, takt, recente: recentRate(lastHours, twin.relogio) }) : null;
+  const prev = twin ? forecast({ pecas: twin.pecas, relogio: twin.relogio, duracao: model.settings.duration, takt, recente: simMode ? simRecent(sim) : recentRate(lastHours, twin.relogio) }) : null;
 
   // andon: paradas marcadas pelo operador (ficam no histórico da sessão)
   const [andon, setAndon] = useState<AndonStop[]>([]);
-  const sessao = twin?.sessao ?? '';
+  const sessao = simMode ? '' : (twin?.sessao ?? '');
   useEffect(() => {
     setAndon([]);
     if (sessao) void loadAndon(sessao).then(setAndon);
@@ -131,11 +178,11 @@ export function TwinDash() {
     if (sessao) void saveAndon(sessao, list);
   };
   // posto parado = sem scan há mais de 3 ciclos (ou em pane); fecha a parada aberta quando ele volta a escanear
-  const stopped = twin ? stations.filter((n) => isStopped(twin, n)) : [];
+  const stopped = twin && !simMode ? stations.filter((n) => isStopped(twin, n)) : [];
   const andonRef = useRef(andon);
   andonRef.current = andon;
   useEffect(() => {
-    if (!twin) return;
+    if (!twin || simMode) return;
     const open = andonRef.current.filter((a) => a.fim === undefined);
     if (!open.length) return;
     let changed = false;
@@ -148,43 +195,54 @@ export function TwinDash() {
     if (changed) putAndon(list);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [twin]);
-  const par = twin ? pareto(andon, twin.relogio, paradoMin) : [];
+  const par = !twin ? [] : simMode ? pareto(simLosses(sim), twin.relogio) : pareto(andon, twin.relogio, paradoMin);
+  const R = simMode ? '' : ' real';
 
   return (
-    <section className="dash twin-dash" aria-label="Monitoramento real">
+    <section className="dash twin-dash" aria-label={simMode ? 'Painel visual da simulação' : 'Monitoramento real'}>
       <div className="twin-head">
-        <p className="label">📡 Monitoramento real · tudo vem dos scans dos postos (nada é simulado)</p>
-        {twin && (
-          <span className="twin-src">
-            <i className="study-live" /> {twin.fonte} · {twin.rodando ? 'coletando' : 'parada'} · {fmtTime(twin.relogio)} de turno · <span className={Date.now() - twin.em > 10000 ? 'bad' : ''}>atraso {fmt(Math.max(0, (Date.now() - twin.em) / 1000), 0)} s</span>
-          </span>
+        {simMode ? (
+          <>
+            <p className="label">🎲 Simulação · painel visual (números da simulação, não da linha real)</p>
+            <span className="twin-src">{fmtTime(twin?.relogio ?? 0)} de turno simulado</span>
+            <button className="btn" onClick={() => useStore.getState().setSides({ simDash: false })} title="Volta para os indicadores detalhados (lead time, WIP, throughput no tempo)">📋 Indicadores detalhados</button>
+          </>
+        ) : (
+          <>
+            <p className="label">📡 Monitoramento real · tudo vem dos scans dos postos (nada é simulado)</p>
+            {twin && (
+              <span className="twin-src">
+                <i className="study-live" /> {twin.fonte} · {twin.rodando ? 'coletando' : 'parada'} · {fmtTime(twin.relogio)} de turno · <span className={Date.now() - twin.em > 10000 ? 'bad' : ''}>atraso {fmt(Math.max(0, (Date.now() - twin.em) / 1000), 0)} s</span>
+              </span>
+            )}
+            <span className="row-btns">
+              <button className="btn" onClick={() => twinCmd({ cmd: 'refresh' })} title="Atualizar: reconecta com a linha (use se os números pararem ou algo ficar estranho)">🔄 Atualizar</button>
+              <button
+                className="btn"
+                disabled={!twin}
+                onClick={() => {
+                  if (confirm('Zerar o turno? A coleta recomeça do zero numa sessão nova; a atual continua guardada no 📼 Histórico.')) twinCmd({ cmd: 'reset' });
+                }}
+                title="Começa um turno novo do zero (a coleta atual fica no histórico)"
+              >
+                ⟲ Zerar turno
+              </button>
+              <button className="btn" onClick={() => setHist(true)} title="Coletas gravadas: estudar, baixar em Excel ou retomar o monitoramento de onde parou (queda de energia)">📼 Histórico · ⟳ Retomar</button>
+            </span>
+          </>
         )}
-        <span className="row-btns">
-          <button className="btn" onClick={() => twinCmd({ cmd: 'refresh' })} title="Atualizar: reconecta com a linha (use se os números pararem ou algo ficar estranho)">🔄 Atualizar</button>
-          <button
-            className="btn"
-            disabled={!twin}
-            onClick={() => {
-              if (confirm('Zerar o turno? A coleta recomeça do zero numa sessão nova; a atual continua guardada no 📼 Histórico.')) twinCmd({ cmd: 'reset' });
-            }}
-            title="Começa um turno novo do zero (a coleta atual fica no histórico)"
-          >
-            ⟲ Zerar turno
-          </button>
-          <button className="btn" onClick={() => setHist(true)} title="Coletas gravadas: estudar, baixar em Excel ou retomar o monitoramento de onde parou (queda de energia)">📼 Histórico · ⟳ Retomar</button>
-        </span>
       </div>
       {!twin ? (
         <p className="hint">Esperando a linha. Em 📡 Monitoramento real, ligue a linha virtual (servidor de teste), siga a linha física ou ligue a API.</p>
       ) : (
         <>
           <div className="twin-kpis">
-            <Kpi k="Produção real" v={`${twin.pecas} pç`} u={`${fmtTime(twin.relogio)} de turno`} />
+            <Kpi k={`Produção${R}`} v={`${twin.pecas} pç`} u={`${fmtTime(twin.relogio)} de turno`} />
             <Kpi k="Meta até agora" v={metaNow ? `${fmt(metaNow, 0)} pç` : '–'} u={meta ? `${fmt(meta, 0)} pç/h` : 'sem takt'} />
             <Kpi k="Aderência" v={ader ? `${fmt(ader, 1)}%` : '–'} tone={ader >= 95 ? 'good' : ader >= 85 ? 'warn' : 'bad'} />
-            <Kpi k="UPH real" v={fmt(twin.uph, 1)} tone={meta && twin.uph >= meta ? 'good' : 'bad'} u={meta ? `meta ${fmt(meta, 0)}` : ''} />
-            <Kpi k="Gargalo real" v={worst?.name ?? '–'} tone="bad" u={worst && takt ? `${fmt((worst.load / takt) * 100, 0)}% do takt` : ''} />
-            <Kpi k="Paradas" v={`${paradas}`} tone={paradas ? 'warn' : 'good'} u={`${fmt(paradoMin, 1)} min perdidos (soma dos postos)`} />
+            <Kpi k={`UPH${R}`} v={fmt(twin.uph, 1)} tone={meta && twin.uph >= meta ? 'good' : 'bad'} u={meta ? `meta ${fmt(meta, 0)}` : ''} />
+            <Kpi k={`Gargalo${R}`} v={worst?.name ?? '–'} tone="bad" u={worst && takt ? `${fmt((worst.load / takt) * 100, 0)}% do takt` : ''} />
+            <Kpi k={simMode ? 'Quebras' : 'Paradas'} v={`${paradas}`} tone={paradas ? 'warn' : 'good'} u={`${fmt(paradoMin, 1)} min perdidos (soma dos postos)`} />
             <Kpi
               k="OEE da linha"
               v={limit ? `${fmt(limit.o.oee * 100, 0)}%` : '–'}
@@ -206,14 +264,18 @@ export function TwinDash() {
                 unit="peças"
                 bars={stations.map((n) => {
                   const v = twin.postos[n.id].feitas;
+                  const w = twin.postos[n.id].wip ?? 0;
                   const r = metaNow;
-                  return { label: short(n.name), value: v, ref: r || undefined, tone: !r ? 'ok' : v >= r ? 'good' : v >= r * 0.9 ? 'ok' : 'bad' };
+                  return { label: short(n.name), value: v, ref: r || undefined, tone: !r ? 'ok' : v >= r ? 'good' : v >= r * 0.9 ? 'ok' : 'bad', tip: w ? `${v - w} passaram pela linha + ${w} do WIP inicial` : undefined };
                 })}
               />
               <p className="legend"><i className="tb-good" /> acima da meta <i className="tb-ok" /> até 10% abaixo <i className="tb-bad" /> abaixo <i className="tb-ref" /> meta</p>
+              {stations.some((n) => (twin.postos[n.id].wip ?? 0) > 0) && (
+                <p className="hint">Posto com mais peças que o anterior? É o WIP inicial: peças que já estavam no posto quando o turno começou ({stations.filter((n) => (twin.postos[n.id].wip ?? 0) > 0).map((n) => `${short(n.name)} +${twin.postos[n.id].wip}`).join(', ')}).</p>
+              )}
             </div>
             <div className="twin-chart">
-              <p className="label">2 · Ciclo por posto (scans) × takt</p>
+              <p className="label">2 · Ciclo por posto {simMode ? '(trabalho por peça)' : '(scans)'} × takt</p>
               <Bars
                 unit="s"
                 line={takt || undefined}
@@ -254,8 +316,8 @@ export function TwinDash() {
               <p className="legend"><i className="tb-good" /> ≥ 85% <i className="tb-warn" /> 65–85% <i className="tb-bad" /> abaixo de 65% · qualidade 100% enquanto não houver dado de refugo</p>
             </div>
             <div className="twin-chart andon">
-              <p className="label">5 · 🚨 Andon · Pareto das perdas</p>
-              {stopped.length ? (
+              <p className="label">{simMode ? '5 · Pareto das perdas (tempo parado por motivo)' : '5 · 🚨 Andon · Pareto das perdas'}</p>
+              {simMode ? null : stopped.length ? (
                 <ul className="andon-open">
                   {stopped.map((n) => {
                     const p = twin.postos[n.id];
@@ -389,4 +451,31 @@ function HistoryModal({ onClose }: { onClose: () => void }) {
       )}
     </Modal>
   );
+}
+
+/** Produção por hora pela linha do tempo da simulação (peças concluídas em cada hora do turno). */
+function hourlyFromTimeline(sim: Simulator): { h: number; n: number }[] {
+  const tl = sim.timeline;
+  if (!tl.length) return [];
+  const t0 = sim.t0;
+  const at = (t: number) => {
+    let c = 0;
+    for (const p of tl) {
+      if (p.t > t) break;
+      c = p.completed;
+    }
+    return c;
+  };
+  const span = Math.max(0, sim.now - t0);
+  const out: { h: number; n: number }[] = [];
+  for (let h = 0; h * 3600 < span; h++) out.push({ h, n: at(Math.min(sim.now, t0 + (h + 1) * 3600)) - at(t0 + h * 3600) });
+  return out.slice(-12);
+}
+/** Ritmo dos últimos 30 min da simulação (peças/h). */
+function simRecent(sim: Simulator): number | undefined {
+  const tl = sim.timeline;
+  if (sim.now - sim.t0 < 900 || !tl.length) return undefined;
+  const ref = [...tl].reverse().find((p) => sim.now - p.t >= 1800) ?? tl[0];
+  const last = tl[tl.length - 1];
+  return last.t > ref.t ? ((last.completed - ref.completed) * 3600) / (last.t - ref.t) : undefined;
 }

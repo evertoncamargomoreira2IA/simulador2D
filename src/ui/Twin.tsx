@@ -143,6 +143,8 @@ export interface TwinNode {
   ult?: number;
   /** Minutos perdidos nos intervalos fora do desvio (paradas, falta de peça). */
   paradoMin?: number;
+  /** Peças do WIP inicial: já estavam no posto quando o turno começou (não passaram pelo anterior). */
+  wip?: number;
 }
 export interface TwinState {
   sessao: string;
@@ -175,6 +177,30 @@ export function unpackScans(p: Packed): ScanRead[] {
 
 const STATION = (t: string) => t === 'machine' || t === 'inspection' || t === 'rework';
 
+/** Para cada posto (pelo nome), os postos logo antes dele, pulando buffers e esteiras. Primeiro posto = vazio. */
+export function prevStations(m: Model): Map<string, string[]> {
+  const byId = new Map(m.nodes.map((n) => [n.id, n]));
+  const out = new Map<string, string[]>();
+  for (const n of m.nodes) {
+    if (!STATION(n.type)) continue;
+    const found = new Set<string>();
+    const seen = new Set<string>();
+    const walk = (id: string) => {
+      for (const l of m.links) {
+        if (l.to !== id || seen.has(l.from)) continue;
+        seen.add(l.from);
+        const f = byId.get(l.from);
+        if (!f) continue;
+        if (STATION(f.type)) found.add(f.name);
+        else if (f.type !== 'source') walk(f.id);
+      }
+    };
+    walk(n.id);
+    out.set(n.name, [...found]);
+  }
+  return out;
+}
+
 /** Continuação de uma coleta gravada (retomar depois de queda de energia). */
 export interface ResumeBase {
   sessao: string;
@@ -192,7 +218,17 @@ class Emitter {
   /** Relógio da coleta anterior (retomada): os scans novos continuam a partir dele. */
   private offset = 0;
   private baseFeitas = new Map<string, number>();
+  private prevOf: Map<string, string[]>;
+  private seen = new Map<string, Set<string>>();
+  private carry = new Map<string, number>();
   private n = 0;
+  /** Conta o WIP inicial no momento do scan (não depende de guardar todos os scans). */
+  private track(x: ScanRead) {
+    const prev = this.prevOf.get(x.posto) ?? [];
+    if (this.seen.get(x.posto)?.has(x.serie)) return;
+    if (prev.length && !prev.some((p) => this.seen.get(p)?.has(x.serie))) this.carry.set(x.posto, (this.carry.get(x.posto) ?? 0) + 1);
+    (this.seen.get(x.posto) ?? this.seen.set(x.posto, new Set()).get(x.posto)!).add(x.serie);
+  }
   constructor(
     private sim: Simulator,
     private model: Model,
@@ -200,7 +236,9 @@ class Emitter {
     private retomar?: MonResume,
     base?: ResumeBase,
   ) {
+    this.prevOf = prevStations(model);
     if (base) {
+      base.scans.forEach((x) => this.track(x));
       this.sessao = base.sessao;
       this.inicio = base.inicio;
       this.offset = base.relogio;
@@ -210,7 +248,9 @@ class Emitter {
     }
     sim.onCycle = ({ node, serial, end }) => {
       if (!STATION(node.type) || end < sim.t0) return;
-      this.scans.push({ posto: node.name, serie: `SN${String(serial).padStart(6, '0')}`, hora: end - sim.t0 + this.offset });
+      const x = { posto: node.name, serie: `SN${String(serial).padStart(6, '0')}`, hora: end - sim.t0 + this.offset };
+      this.scans.push(x);
+      this.track(x);
       if (this.scans.length > MAX_SCANS * 1.5) this.scans = this.scans.slice(-MAX_SCANS);
       this.dirty = true;
     };
@@ -239,7 +279,7 @@ class Emitter {
       const c = sc.get(r.def.name);
       const base = this.baseFeitas.get(r.def.name) ?? 0;
       if (lastIds.has(r.def.id)) basePecas += base;
-      postos[r.def.id] = { state: r.state, fila: r.queue.length, fazendo: r.processing.length, feitas: r.processed + base, ciclo: c?.ciclo, fora: c?.fora ?? 0, ult: c?.ult, paradoMin: c?.paradoMin ?? 0 };
+      postos[r.def.id] = { state: r.state, fila: r.queue.length, fazendo: r.processing.length, feitas: r.processed + base, ciclo: c?.ciclo, fora: c?.fora ?? 0, ult: c?.ult, paradoMin: c?.paradoMin ?? 0, wip: this.carry.get(r.def.name) ?? 0 };
     }
     pecas += basePecas;
     const relogio = this.relogio();

@@ -127,7 +127,11 @@ interface State {
   /** Laterais escondidas (blocos à esquerda, propriedades à direita). */
   hideLeft: boolean;
   hideRight: boolean;
-  setSides: (p: { hideLeft?: boolean; hideRight?: boolean }) => void;
+  /** Layout travado: ninguém arrasta nem apaga blocos (sempre travado no monitoramento). */
+  locked: boolean;
+  /** Painel visual (KPIs + gráficos de barras) no lugar dos indicadores, também na simulação. */
+  simDash: boolean;
+  setSides: (p: { hideLeft?: boolean; hideRight?: boolean; locked?: boolean; simDash?: boolean }) => void;
   setPhysical: (v: boolean) => void;
   /** Último estado recebido da linha física (gêmeo digital). */
   twin: TwinState | null;
@@ -239,6 +243,8 @@ export const useStore = create<State>((set, get) => {
     physical: false,
     hideLeft: false,
     hideRight: false,
+    locked: false,
+    simDash: false,
     setSides: (p) => set(p),
     setPhysical: (physical) => set({ physical }),
     twin: null,

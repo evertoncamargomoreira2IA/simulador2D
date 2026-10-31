@@ -6,8 +6,8 @@ import { replayModel, simulationModel, STUDY_LABEL, STUDY_WHY } from '../engine/
 import type { StudyKind } from '../engine/types';
 import { fetchEvents } from '../io/realFeed';
 import type { RealEvent } from '../engine/timeStudy';
-import { followTwin, listHistory, twinCmd, type HistItem, loadHistory, saveHistory, startVirtualLine, stopVirtualLine, type TwinCmd, type TwinState } from './Twin';
-import { scansToEvents, stationsFromScans, type ScanRead } from '../engine/scans';
+import { prevStations, followTwin, listHistory, twinCmd, type HistItem, loadHistory, saveHistory, startVirtualLine, stopVirtualLine, type TwinCmd, type TwinState } from './Twin';
+import { carryOver, scansToEvents, stationsFromScans, type ScanRead } from '../engine/scans';
 import { tenStationModel } from '../model/builder';
 import { useStore } from '../store';
 import { HowTo } from './HowTo';
@@ -69,6 +69,7 @@ function twinFromScans(scans: ScanRead[], sessao: string): TwinState | null {
   const now = Math.max(...scans.map((e) => e.hora));
   const key = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
   const sc = new Map([...stationsFromScans(scans)].map(([k, v]) => [key(k), v]));
+  const wip = new Map([...carryOver(scans, prevStations(m))].map(([k, v]) => [key(k), v]));
   const lastIds = new Set(m.links.filter((l) => m.nodes.find((n) => n.id === l.to)?.type === 'sink').map((l) => l.from));
   const postos: TwinState['postos'] = {};
   let pecas = 0;
@@ -78,7 +79,7 @@ function twinFromScans(scans: ScanRead[], sessao: string): TwinState | null {
     if (!c) continue;
     // sem scan há mais de 3 ciclos: o posto está parado (ou esperando peça)
     const idle = c.ult !== undefined && now - c.ult > 3 * (c.ciclo || n.cycleTime || 30);
-    postos[n.id] = { state: idle ? 'starved' : 'working', fila: 0, fazendo: idle ? 0 : 1, feitas: c.feitas, ciclo: c.ciclo, fora: c.fora, ult: c.ult !== undefined ? c.ult - t0 : undefined, paradoMin: c.paradoMin };
+    postos[n.id] = { state: idle ? 'starved' : 'working', fila: 0, fazendo: idle ? 0 : 1, feitas: c.feitas, ciclo: c.ciclo, fora: c.fora, ult: c.ult !== undefined ? c.ult - t0 : undefined, paradoMin: c.paradoMin, wip: wip.get(key(n.name)) ?? 0 };
     if (lastIds.has(n.id)) pecas += c.feitas;
   }
   const span = Math.max(1, now - t0);

@@ -75,3 +75,20 @@ export function stationsFromScans(scans: ScanRead[]): Map<string, ScanStation> {
   }
   return out;
 }
+
+/**
+ * Peças do WIP inicial por posto: séries escaneadas no posto que nunca passaram pelo posto anterior
+ * (já estavam na linha quando o turno começou). Explica por que um posto pode ter mais peças que o anterior.
+ * prevOf: para cada posto, os postos imediatamente antes dele (vazio = primeiro posto, não conta).
+ */
+export function carryOver(scans: ScanRead[], prevOf: Map<string, string[]>): Map<string, number> {
+  const seen = new Map<string, Set<string>>();
+  const out = new Map<string, number>();
+  for (const s of [...scans].sort((a, b) => a.hora - b.hora)) {
+    const prev = prevOf.get(s.posto) ?? [];
+    if (seen.get(s.posto)?.has(s.serie)) continue; // mesma série lida duas vezes no posto: conta uma
+    if (prev.length && !prev.some((p) => seen.get(p)?.has(s.serie))) out.set(s.posto, (out.get(s.posto) ?? 0) + 1);
+    (seen.get(s.posto) ?? seen.set(s.posto, new Set()).get(s.posto)!).add(s.serie);
+  }
+  return out;
+}

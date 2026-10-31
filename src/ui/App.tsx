@@ -36,6 +36,7 @@ export function App() {
   const monitoring = useStore((s) => s.model.settings.study === 'monitoramento');
   const hideLeft = useStore((s) => s.hideLeft);
   const hideRight = useStore((s) => s.hideRight);
+  const simDash = useStore((s) => s.simDash);
   // monitoramento: laterais escondidas para a linha e os gráficos ocuparem a tela (dá para abrir de novo)
   useEffect(() => {
     useStore.getState().setSides({ hideLeft: monitoring, hideRight: monitoring });
@@ -118,6 +119,9 @@ export function App() {
       }
       const st = useStore.getState();
       const k = e.key.toLowerCase();
+      // layout travado (ou monitoramento): sem colar, recortar, duplicar nem apagar blocos
+      const lock = st.locked || st.model.settings.study === 'monitoramento';
+      if (lock && (e.key === 'Delete' || e.key === 'Backspace' || ((e.ctrlKey || e.metaKey) && (k === 'x' || k === 'v' || k === 'd')))) return;
       if ((e.ctrlKey || e.metaKey) && (k === 'c' || k === 'x' || k === 'v' || k === 'd' || k === 'a')) {
         e.preventDefault();
         if (k === 'c') st.copySelection();
@@ -176,7 +180,7 @@ export function App() {
       <CanvasView />
       <PhysicalSource />
       <PropertiesPanel />
-      {monitoring ? <TwinDash /> : <Dashboard />}
+      {monitoring ? <TwinDash /> : simDash ? <TwinDash simMode /> : <Dashboard />}
       <StationDetail />
       <Analysis />
       {showStart && <StartScreen onClose={() => useStore.getState().setShowStart(false)} />}
