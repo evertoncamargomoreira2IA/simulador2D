@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { replayModel, simulationModel, STUDY_LABEL, STUDY_WHY } from '../engine/replay';
 import type { StudyKind } from '../engine/types';
 import { fetchEvents, simulatedFeed, FEED_DEFAULTS } from '../io/realFeed';
+import { tenStationModel } from '../model/builder';
 import { useStore } from '../store';
 import { HowTo } from './HowTo';
 import { Modal } from './Modal';
@@ -111,8 +112,22 @@ export function StudyBar({ onPanel }: { onPanel: () => void }) {
           last={last}
           onStart={(cfg) => {
             demoHours.current = 0;
-            setMon(cfg);
             const st = useStore.getState();
+            const hasStations = st.model.nodes.some((n) => n.type === 'machine' || n.type === 'inspection' || n.type === 'rework');
+            if (!hasStations) {
+              // sem linha não há o que comparar: a demonstração abre a linha de 10 postos; com API, pede a linha
+              if (!cfg.demo) {
+                st.setMessage('Monitoramento precisa da linha montada (os nomes dos postos iguais aos da API). Abra o trabalho da linha ou use 🧱 Montar linha a partir das leituras em Dados reais.');
+                return;
+              }
+              st.setModel({ ...tenStationModel(), settings: { ...tenStationModel().settings, study: 'monitoramento' } }, 'Demonstração do monitoramento: linha de 10 postos aberta; a linha simulada faz papel da real e manda 15 min de turno a cada 10 s.');
+            }
+            setMon(cfg);
+            if (!hasStations) {
+              setMonitorOpen(false);
+              onPanel();
+              return;
+            }
             if (st.model.settings.replay) st.setModel(simulationModel(st.model, 'monitoramento'), 'Monitoramento real ligado.');
             else st.updateSettings({ study: 'monitoramento' });
             setMonitorOpen(false);
@@ -163,6 +178,7 @@ function MonitorModal({ running, last, onStart, onStop, onClose, onPanel }: {
         <button
           className="btn primary"
           disabled={!ok}
+          title={ok ? 'Começa a buscar as leituras na API' : 'Informe o endereço da API (começa com http:// ou https://)'}
           onClick={() => {
             lsSet(URL_KEY, url);
             onStart({ url, every, demo: false });
@@ -170,7 +186,7 @@ function MonitorModal({ running, last, onStart, onStop, onClose, onPanel }: {
         >
           ▶ Ligar com a API
         </button>
-        <button className="btn" onClick={() => onStart({ url: '', every: Math.min(every, 10), demo: true })} title="Sem API ainda: a linha simulada faz papel da linha real e manda 15 min de turno a cada atualização">
+        <button className={`btn${ok ? '' : ' primary'}`} onClick={() => onStart({ url: '', every: Math.min(every, 10), demo: true })} title="Sem API ainda: a linha simulada faz papel da linha real e manda 15 min de turno a cada atualização">
           ▶ Demonstração (linha simulada)
         </button>
       </div>
@@ -185,6 +201,7 @@ function MonitorModal({ running, last, onStart, onStop, onClose, onPanel }: {
           <button className="btn" onClick={onStop}>■ Desligar</button>
         </div>
       )}
+      {!ok && <p className="hint">Ainda sem API? Clique em <b>▶ Demonstração</b>: o painel abre e se atualiza sozinho a cada 10 s (se o trabalho estiver vazio, abre a linha de 10 postos).</p>}
       <p className="hint">A API precisa liberar acesso a partir do navegador (CORS). Sem API, use a demonstração para ver como funciona. Nenhum nome de operador é lido (LGPD).</p>
     </Modal>
   );
