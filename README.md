@@ -64,6 +64,7 @@ npm run build:single # gera dist-single/index.html (arquivo único, abre direto 
 - **Top 5 gargalos** no layout e no painel; **pop-up de indicadores** por posto (duplo clique no bloco).
 - **Análises** (`src/engine/analytics.ts`): spaghetti (distâncias, cruzamentos, fluxo de volta), custos diretos e indiretos (por peça, processo e turno), energia (kWh por peça, processo e turno; consumo em espera), carbono (escopos 1, 2 e 3; mapa de calor) e cenários Current State × Future State A/B.
 - **Exemplo de abastecimento e FGI**: linha de 100 UPH (10 montagem, 5 off-line, 4 teste, 5 packing) com supermercado, kitting, milk run por rebocador no corredor, FGI e expedição por empilhadeira, sobre uma planta vetorial genérica.
+- **Montar linha a partir das leituras**: postos, ordem, postos em paralelo, gigas, tempos, variação, fila e mix descobertos das leituras (API ou arquivo). Exemplo: leituras de uma linha nova.
 - **Curva normal por posto** (Dados reais): média, desvio, faixas de 68% e 95%, real × SOE, % acima do takt e confiabilidade por CV; comparação de todos os postos na mesma régua.
 - **Mix de modelos**: produtos com % ou sequência fixa, tempo por posto e modelo (ou fator), tempo de troca de modelo; roda o turno com o mix e cada modelo sozinho. Exemplo: mix de 3 modelos.
 - **Curva do tempo**: lognormal (padrão), normal, triangular, uniforme, exponencial, constante ou empírica por posto; *Ajustar curva* a partir de tempos colados ou dos dados reais, com teste de Kolmogorov-Smirnov.

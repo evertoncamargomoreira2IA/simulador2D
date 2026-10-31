@@ -287,7 +287,7 @@ export class Simulator {
   /** Há um nó marcado como ponto de medição da produção. */
   readonly hasOutputPoint: boolean;
   /** Avisado a cada ciclo concluído (fonte simulada de dados reais: posto, peça, início e fim). */
-  onCycle?: (c: { node: NodeDef; serial: number; start: number; end: number }) => void;
+  onCycle?: (c: { node: NodeDef; serial: number; start: number; end: number; product?: string }) => void;
 
   constructor(model: Model) {
     // Takt zerado: usa o tempo do gargalo planejado como referência.
@@ -1144,7 +1144,7 @@ export class Simulator {
     e.procTime += job.duration * e.qty;
     e.work += n.def.cycleTime;
     n.processed++;
-    this.onCycle?.({ node: n.def, serial: e.id, start: job.start, end: this.now });
+    this.onCycle?.({ node: n.def, serial: e.id, start: job.start, end: this.now, product: e.product });
     if (job.unit) this.releaseUnit(job.unit);
     e.next = this.route(n, e);
     e.blockedSince = this.now;

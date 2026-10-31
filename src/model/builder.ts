@@ -426,3 +426,35 @@ export function mixModel(): Model {
     settings: { ...DEFAULT_SETTINGS, takt: 40, startFull: true, warmup: 0 },
   };
 }
+
+/**
+ * Linha "desconhecida" que gera as leituras do exemplo de montar a linha a partir das leituras:
+ * 6 postos, montagem com 2 gigas, dois bancos de teste em paralelo e 2 modelos (A 70%, B 30%).
+ * O usuário não vê este modelo: só as leituras que ele produz, como viriam da API.
+ */
+export function discoveryDemoModel(): Model {
+  const nd = (id: string, name: string, cycleTime: number, extra: Partial<NodeDef> = {}) =>
+    makeNode(name.startsWith('Teste') ? 'inspection' : 'machine', { ...MANUAL_PATCH, id, name, cycleTime, cv: 0.07, queueCap: 3, availability: 1, ...extra });
+  const nodes: NodeDef[] = [
+    makeNode('source', { id: 'S', name: 'Kits' }),
+    nd('P1', 'Preparação', 38),
+    nd('P2', 'Montagem', 74, { capacity: 2, operators: 2, cv: 0.1 }),
+    nd('P3', 'Aparafusamento', 36, { productTimes: { B: 44 } }),
+    nd('P4', 'Teste A', 76, { cv: 0.05 }),
+    nd('P5', 'Teste B', 80, { cv: 0.15 }),
+    nd('P6', 'Embalagem', 35),
+    makeNode('sink', { id: 'K', name: 'Expedição' }),
+  ];
+  const l = (from: string, to: string, weight = 1): LinkDef => ({ id: newId('L'), from, to, weight });
+  return {
+    name: 'Linha da fábrica (leituras de exemplo)',
+    nodes,
+    links: [l('S', 'P1'), l('P1', 'P2'), l('P2', 'P3'), l('P3', 'P4'), l('P3', 'P5'), l('P4', 'P6'), l('P5', 'P6'), l('P6', 'K')],
+    pools: [],
+    products: [
+      { id: 'A', name: 'A', color: '#22d3ee', share: 70, factor: 1 },
+      { id: 'B', name: 'B', color: '#e8913a', share: 30, factor: 1 },
+    ],
+    settings: { ...DEFAULT_SETTINGS, takt: 40, startFull: true, warmup: 0 },
+  };
+}

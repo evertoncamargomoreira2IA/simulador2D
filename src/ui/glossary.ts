@@ -44,6 +44,7 @@ export const SIGLAS: [string, string, string][] = [
 /** [onde, função, o que faz] */
 export const FUNCOES: [string, string, string][] = [
   ['Análises', 'Curva normal por posto', 'Em Dados reais: curva de cada posto com média, desvio em segundos e em %, faixas de 68% e 95% das peças, real × SOE, % acima do takt e confiabilidade (CV até 5% alta, até 10% média). Comparar postos põe todas as curvas na mesma régua.'],
+  ['Análises', 'Montar linha a partir das leituras', 'Em Dados reais: segue cada número de série de posto em posto e cria blocos, setas (com quanto passa em cada uma), gigas, tempos, variação, fila e mix. Abre como trabalho novo para ajustar a posição na planta.'],
   ['Barra', '🎨 Mix', 'Mix de modelos: produtos com % do mix ou sequência fixa (ex.: A A B), tempo de cada posto por modelo, tempo de troca de modelo, UPH do mix e de cada modelo sozinho. As peças aparecem na cor do modelo.'],
   ['Posto', '📈 Curva do tempo', 'Escolhe a curva do tempo de ciclo (lognormal, normal, triangular, uniforme, exponencial, constante ou empírica). Ajustar curva: cole tempos ou use os dados reais do posto; o teste KS indica a curva que melhor representa.'],
   ['Barra', '📊 Painel', 'Painel real × simulado por posto (SOE, simulado e real, desvios e alertas). Publicar para leitores grava a foto; quem tem o link só como leitor abre direto no painel, sem o editor. 👁 Ver como leitor mostra essa visão.'],

@@ -16,6 +16,8 @@ export interface RealEvent {
   /** Operação do SOE (vazio = ciclo do posto inteiro). */
   operacao?: string;
   turno?: string;
+  /** Modelo do produto (mix). */
+  modelo?: string;
 }
 
 export interface StudyOptions {

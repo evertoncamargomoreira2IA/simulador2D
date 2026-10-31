@@ -30,7 +30,7 @@ export function simulatedFeed(model: Model, o: FeedOptions = FEED_DEFAULTS): Rea
   const out: RealEvent[] = [];
   // cada posto real fica um pouco acima ou abaixo do SOE (método, habilidade, ajuste do posto)
   const bias = new Map(model.nodes.map((n) => [n.id, 1 + (rng.next() * 2 - 1) * o.drift]));
-  sim.onCycle = ({ node, serial, start, end }) => {
+  sim.onCycle = ({ node, serial, start, end, product }) => {
     if (start < sim.t0 || !(node.type === 'machine' || node.type === 'inspection' || node.type === 'rework')) return;
     const a = start - sim.t0;
     let b = a + (end - start) * (bias.get(node.id) ?? 1);
@@ -39,7 +39,7 @@ export function simulatedFeed(model: Model, o: FeedOptions = FEED_DEFAULTS): Rea
     const serie = `SN${String(serial).padStart(6, '0')}`;
     const ops = (node.operations ?? []).filter((op) => op.activities.some((x) => x.time > 0));
     if (!ops.length) {
-      out.push({ posto: node.name, serie, inicio: a, fim: b, turno: 'T1' });
+      out.push({ posto: node.name, serie, inicio: a, fim: b, turno: 'T1', ...(product ? { modelo: model.products?.find((p) => p.id === product)?.name ?? product } : {}) });
       return;
     }
     // reparte o ciclo entre as operações, cada uma com sua variação
@@ -48,7 +48,7 @@ export function simulatedFeed(model: Model, o: FeedOptions = FEED_DEFAULTS): Rea
     let t = a;
     ops.forEach((op, i) => {
       const d = ((b - a) * w[i]) / total;
-      out.push({ posto: node.name, serie, inicio: t, fim: t + d, operacao: op.name, turno: 'T1' });
+      out.push({ posto: node.name, serie, inicio: t, fim: t + d, operacao: op.name, turno: 'T1', ...(product ? { modelo: model.products?.find((p) => p.id === product)?.name ?? product } : {}) });
       t += d;
     });
   };
@@ -92,6 +92,7 @@ export function eventsFromRows(rows: Record<string, unknown>[]): RealEvent[] {
     if (fim === null || !Number.isFinite(fim)) continue;
     const op = pick(r, ['operacao', 'operation', 'op', 'atividade']);
     const turno = pick(r, ['turno', 'shift']);
+    const modelo = pick(r, ['modelo', 'model', 'produto', 'product', 'sku']);
     out.push({
       posto: String(posto),
       serie: String(pick(r, ['serie', 'serial', 'sn', 'numerodeserie', 'peca', 'id']) ?? `${posto}-${out.length}`),
@@ -99,6 +100,7 @@ export function eventsFromRows(rows: Record<string, unknown>[]): RealEvent[] {
       fim,
       ...(op !== undefined && op !== '' ? { operacao: String(op) } : {}),
       ...(turno !== undefined && turno !== '' ? { turno: String(turno) } : {}),
+      ...(modelo !== undefined && modelo !== '' ? { modelo: String(modelo) } : {}),
     });
   }
   return out;
@@ -120,6 +122,7 @@ export function eventsToRows(events: RealEvent[]): Record<string, unknown>[] {
     serie: e.serie,
     operacao: e.operacao ?? '',
     turno: e.turno ?? '',
+    modelo: e.modelo ?? '',
     inicio: Math.round(e.inicio * 10) / 10,
     fim: Math.round(e.fim * 10) / 10,
     duracao: Math.round((e.fim - e.inicio) * 10) / 10,

@@ -14,6 +14,8 @@ import { norm } from './StationDetail';
 import { fmt, pct } from './theme';
 import { curveRows, StationCurves } from './StationCurves';
 import { effectiveTakt } from '../engine/balance';
+import { DiscoverLine } from './DiscoverLine';
+import { discoveryDemoModel } from '../model/builder';
 
 export function RealData() {
   const model = useStore((s) => s.model);
@@ -45,6 +47,16 @@ export function RealData() {
     const scale = span > 0 ? (st.model.settings.duration - (st.model.settings.warmup ?? 0)) / span : 1;
     st.setReal(Object.fromEntries(study.map((r) => [norm(r.name), { name: r.name, produced: Math.round((r.kept + r.out.length) * scale), cycle: r.standard }])), src);
     setStatus(`${ev.length} leituras de ${study.length} postos (${src}).`);
+  }
+
+  /** Leituras de uma linha que o simulador não conhece (exemplo para montar a linha a partir delas). */
+  function fromDemo() {
+    setBusy(true);
+    setStatus('Gerando 4 h de leituras da linha de exemplo…');
+    setTimeout(() => {
+      load(simulatedFeed(discoveryDemoModel(), { ...FEED_DEFAULTS, hours: 4, drift: 0 }), 'exemplo: linha nova, 4 h');
+      setBusy(false);
+    }, 30);
   }
 
   function fromSim() {
@@ -164,7 +176,11 @@ export function RealData() {
         <button className="btn" onClick={fromApi} disabled={busy || !/^https?:\/\//.test(url)}>Buscar da API</button>
         <span className="muted">GET que devolve uma lista JSON: posto, serie, inicio, fim, operacao, turno.</span>
       </div>
+      <div className="row-btns">
+        <button className="btn" onClick={fromDemo} disabled={busy} title="Leituras de uma linha que não está no simulador, como viriam da API: use para testar Montar linha a partir das leituras">Exemplo: leituras de uma linha nova</button>
+      </div>
       {(status || source) && <p className="hint">{status || `Fonte: ${source}`}</p>}
+      <DiscoverLine events={events} source={source} />
 
       <p className="label section">Regras do estudo</p>
       <div className="row-btns">
