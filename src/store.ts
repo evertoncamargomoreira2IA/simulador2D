@@ -7,6 +7,7 @@ import { History } from './engine/history';
 import { lineKpi, type LineKpi } from './engine/metrics';
 import { Simulator } from './engine/simulator';
 import { DEFAULT_SETTINGS, makeNode, newId, type LinkDef, type Model, type NodeDef, type NodeType } from './engine/types';
+import { tenStationModel } from './model/builder';
 
 export type Tool = 'select' | 'connect';
 export type RunState = 'idle' | 'running' | 'paused' | 'done';
@@ -157,7 +158,9 @@ const fresh = (m: Model) => {
 };
 
 // Abre em branco; a tela de início oferece trabalhos salvos, novo ou exemplos.
-const initial: Model = { name: 'Novo trabalho', nodes: [], links: [], settings: { ...DEFAULT_SETTINGS } };
+// A versão offline já abre com a linha de 10 postos.
+const OFFLINE = typeof __OFFLINE__ !== 'undefined' && __OFFLINE__;
+const initial: Model = OFFLINE ? tenStationModel() : { name: 'Novo trabalho', nodes: [], links: [], settings: { ...DEFAULT_SETTINGS } };
 
 /** Área de transferência interna (blocos copiados). */
 let clip: { nodes: NodeDef[]; links: LinkDef[]; times: number } | null = null;
@@ -202,8 +205,8 @@ export const useStore = create<State>((set, get) => {
     ...fresh(initial),
     tick: 0,
     viewCenter: { x: 200, y: 200 },
-    message: 'Escolha um trabalho salvo, comece um novo ou abra um exemplo.',
-    showStart: true,
+    message: OFFLINE ? 'Versão offline: linha de 10 postos pronta (takt 36 s, meta 100 UPH). Clique em ▶ Start.' : 'Escolha um trabalho salvo, comece um novo ou abra um exemplo.',
+    showStart: !OFFLINE,
     pendingPool: null,
     setPendingPool: (pendingPool) => set({ pendingPool }),
     assignPool: (nodeId, poolId) => {

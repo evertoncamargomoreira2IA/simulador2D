@@ -15,10 +15,16 @@ const exampleMain = !pub && existsSync(mainPath) ? readFileSync(mainPath, 'utf8'
 const namePath = new URL('./private/app-name.txt', import.meta.url);
 const appName = !pub && existsSync(namePath) ? readFileSync(namePath, 'utf8').trim() : '';
 
+// SIM_OFFLINE=1: versão offline (backup): abre com a linha de 10 postos e tema cinza e verde.
+const offline = process.env.SIM_OFFLINE === '1';
+// Link do projeto online (fora do git): private/online-url.txt vira o botão 🔗 Projeto online da versão offline.
+const urlPath = new URL('./private/online-url.txt', import.meta.url);
+const onlineUrl = !pub && existsSync(urlPath) ? readFileSync(urlPath, 'utf8').trim() : '';
+
 // `--mode single` gera um único index.html com JS/CSS embutidos (usado no artefato).
 export default defineConfig(({ mode }) => ({
   plugins: mode === 'single' ? [react(), viteSingleFile()] : [react()],
-  define: { __EXAMPLE__: example, __EXAMPLE_MAIN__: exampleMain, __APP_NAME__: JSON.stringify(appName || 'Simulador 2D') },
+  define: { __EXAMPLE__: example, __EXAMPLE_MAIN__: exampleMain, __APP_NAME__: JSON.stringify(appName || 'Simulador 2D'), __OFFLINE__: JSON.stringify(offline), __ONLINE_URL__: JSON.stringify(onlineUrl) },
   build: { outDir: mode === 'single' ? 'dist-single' : 'dist' },
   test: { environment: 'node', include: ['tests/**/*.test.ts'] },
 }));

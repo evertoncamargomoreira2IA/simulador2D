@@ -458,3 +458,33 @@ export function discoveryDemoModel(): Model {
     settings: { ...DEFAULT_SETTINGS, takt: 40, startFull: true, warmup: 0 },
   };
 }
+
+/** Linha em U de 10 postos manuais (takt 36 s = 100 UPH, variação de 15% no tempo), pronta para rodar: modelo inicial da versão offline. */
+export function tenStationModel(): Model {
+  const times = [32, 34, 30, 35, 33, 31, 35, 34, 30, 33];
+  const nodes: NodeDef[] = [makeNode('source', { id: 'E', name: 'Entrada', x: 60, y: 240 })];
+  times.forEach((t, i) =>
+    nodes.push(
+      makeNode(i === 8 ? 'inspection' : 'machine', {
+        ...MANUAL_PATCH,
+        id: `P${i + 1}`,
+        name: i === 8 ? 'Posto 9 · Teste' : `Posto ${i + 1}`,
+        cycleTime: t,
+        cv: 0.15,
+        operators: 1,
+        queueCap: 2,
+        x: i < 5 ? 180 + i * 150 : 780 - (i - 5) * 150,
+        y: i < 5 ? 160 : 340,
+      }),
+    ),
+  );
+  nodes.push(makeNode('sink', { id: 'S', name: 'Saída', x: 60, y: 340 }));
+  const ids = nodes.map((n) => n.id);
+  return {
+    name: 'Linha de 10 postos',
+    nodes,
+    links: ids.slice(1).map((to, i) => ({ id: newId('L'), from: ids[i], to, weight: 1 })),
+    pools: [],
+    settings: { ...DEFAULT_SETTINGS, takt: 36, startFull: true, warmup: 0 },
+  };
+}

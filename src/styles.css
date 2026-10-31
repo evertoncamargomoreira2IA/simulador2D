@@ -782,3 +782,66 @@ td.good { color: var(--st-working); }
 .exp-bar.ok { fill: color-mix(in srgb, var(--st-working) 65%, transparent); }
 .exp-whisker { stroke: var(--ink); stroke-width: 1.5; }
 .pc-label.good { fill: var(--st-working); font-weight: 600; }
+
+/* ---- Versão offline (build SIM_OFFLINE=1): cinza grafite com verde, para não confundir com o link online ---- */
+:root[data-flavor='offline'] {
+  --bg: #16191a;
+  --panel: #1f2324;
+  --raised: #282d2e;
+  --line: #394143;
+  --ink: #e6ebe8;
+  --muted: #9aa5a0;
+  --accent: #3ddc84;
+  --accent-ink: #062012;
+  --canvas: #121516;
+  --grid: #1c2021;
+  --grid-major: #252b2c;
+  --frame-a: #1f5134; --frame-b: #2fbf71; --frame-c: #3ddc84; --navy: #1a1e1f; --navy-2: #22282a;
+}
+:root[data-flavor='offline'][data-theme='light'] {
+  --bg: #e8ebe9;
+  --panel: #f3f5f4;
+  --raised: #ffffff;
+  --line: #cfd6d2;
+  --ink: #1b2420;
+  --muted: #5d6b64;
+  --accent: #1f9d55;
+  --accent-ink: #ffffff;
+  --canvas: #f1f3f2;
+  --grid: #e3e7e5;
+  --grid-major: #d5dbd8;
+}
+[data-flavor='offline'] .app::after,
+[data-flavor='offline'] .modal::before {
+  background:
+    conic-gradient(from var(--spin), transparent 0 72%, rgb(61 220 132 / 0.15) 78%, #3ddc84 88%, #ffffff 90%, #2fbf71 92%, transparent 96%),
+    conic-gradient(from var(--spin2), transparent 0 80%, #2fbf71 90%, #b6f5cf 92%, transparent 95%),
+    linear-gradient(135deg, #3a4245, #5b6669 35%, #3ddc84 50%, #5b6669 65%, #3a4245);
+  filter: drop-shadow(0 0 4px rgb(61 220 132 / 0.7)) drop-shadow(0 0 12px rgb(47 191 113 / 0.4));
+}
+[data-flavor='offline'] .modal { box-shadow: 0 0 0 1px rgb(61 220 132 / 0.25), 0 0 40px rgb(47 191 113 / 0.2), 0 24px 60px rgb(0 0 0 / 0.5); }
+[data-flavor='offline'] .topbar {
+  --panel: #262b2d;
+  --raised: #30373a;
+  --line: #475154;
+  --ink: #eef3f0;
+  --muted: #a7b3ad;
+  --accent: #3ddc84;
+  --accent-ink: #062012;
+  background:
+    linear-gradient(rgb(61 220 132 / 0.06) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(90deg, rgb(61 220 132 / 0.06) 1px, transparent 1px) 0 0 / 24px 24px,
+    radial-gradient(120% 180% at 50% -40%, #3c4548 0%, #23292b 55%, #181c1d 100%);
+}
+[data-flavor='offline'] .topbar::after { background: linear-gradient(90deg, transparent, #2fbf71 20%, #3ddc84 50%, #2fbf71 80%, transparent); box-shadow: 0 0 10px #3ddc84, 0 0 22px rgb(47 191 113 / 0.5); }
+[data-flavor='offline'] .topbar .brand b { background: linear-gradient(90deg, #f1f5f3, #b8c4be 45%, #3ddc84 70%, #8be3b0); -webkit-background-clip: text; background-clip: text; text-shadow: 0 0 18px rgb(61 220 132 / 0.3); }
+[data-flavor='offline'] .topbar .brand .tag { color: #86efac; border-color: rgb(61 220 132 / 0.6); background: rgb(20 40 28 / 0.8); box-shadow: 0 0 10px rgb(61 220 132 / 0.35), inset 0 0 8px rgb(61 220 132 / 0.12); }
+[data-flavor='offline'] .topbar .brand .tag::before { background: #3ddc84; box-shadow: 0 0 8px #3ddc84; }
+[data-flavor='offline'] .btn.primary { background: linear-gradient(135deg, #1f9d55, #2fbf71 60%, #3ddc84); color: #04140a; box-shadow: 0 0 0 1px rgb(61 220 132 / 0.4), 0 4px 18px rgb(47 191 113 / 0.35); }
+[data-flavor='offline'] .btn.primary:hover:not(:disabled) { box-shadow: 0 0 0 1px #86efac, 0 6px 26px rgb(61 220 132 / 0.5); }
+[data-flavor='offline'] .topbar .btn:not(.primary):hover { border-color: #3ddc84; box-shadow: 0 0 10px rgb(61 220 132 / 0.3); }
+[data-flavor='offline'] .tab.on { border-bottom-color: #3ddc84; box-shadow: 0 6px 10px -8px #3ddc84; }
+[data-flavor='offline'] .tile:hover { box-shadow: 0 0 12px rgb(61 220 132 / 0.2); }
+[data-flavor='offline'] .tag.offline { color: #04140a; background: #3ddc84; border-color: #3ddc84; }
+[data-flavor='offline'] .tag.offline::before { display: none; }
+a.btn { text-decoration: none; display: inline-flex; align-items: center; }

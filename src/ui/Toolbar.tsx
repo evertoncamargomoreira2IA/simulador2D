@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { lineKpi } from '../engine/metrics';
 import { exportModelCsv, exportModelJson, exportResultsXlsx } from '../io/exporter';
 import { ACCEPT, importAnyFile } from './fileImport';
-import { elementsModel, lp2Model, simpleModel, combineModel, mixModel, supplyModel, transportModel } from '../model/builder';
+import { elementsModel, lp2Model, simpleModel, combineModel, mixModel, supplyModel, tenStationModel, transportModel } from '../model/builder';
 import { privateExample, useStore } from '../store';
 import { applyTheme, fmtTime, loadTheme } from './theme';
 import { effectiveTakt } from '../engine/balance';
@@ -66,6 +66,19 @@ export function Toolbar() {
       <div className="brand">
         <b>{__APP_NAME__}</b>
         <span className="tag" title="Gêmeo digital centrado nas pessoas">Indústria 5.0</span>
+        {__OFFLINE__ && <span className="tag offline" title="Arquivo offline: salve com Exportar → JSON; painel e IA só no link online">Offline</span>}
+        {__OFFLINE__ && __ONLINE_URL__ && (
+          <a
+            className="btn"
+            href={__ONLINE_URL__}
+            target="_blank"
+            rel="noreferrer"
+            title="Baixa o modelo desta tela (JSON) e abre o projeto online: lá, Importar esse arquivo deixa as duas versões iguais"
+            onClick={() => exportModelJson(useStore.getState().model)}
+          >
+            🔗 Projeto online
+          </a>
+        )}
         <span title={model.name}>{model.name}</span>
       </div>
 
@@ -88,6 +101,7 @@ export function Toolbar() {
             if (e.target.value === 'combine') st().openModel(combineModel(), 'Exemplo: 3 postos, AMR e abastecedor levam as peças ao Posto X, que junta tudo em um produto.');
             if (e.target.value === 'mix') st().setModel(mixModel(), 'Exemplo: linha com 3 modelos (A 60%, B 30%, C 10%), troca de modelo na programação e no teste. Abra 🎨 Mix e clique em ▶ Rodar turno com o mix.');
             if (e.target.value === 'supply') st().setModel(supplyModel(), 'Exemplo: supermercado → kitting → milk run → linha (10 montagem, 5 off-line, 4 teste, 5 packing) → FGI → expedição, meta 100 UPH. Clique em ▶ Start.');
+            if (e.target.value === 'ten') st().openModel(tenStationModel(), 'Linha em U de 10 postos manuais, takt 36 s (meta 100 UPH), variação de 15%: a mesma que abre na versão offline. Clique em ▶ Start.');
             if (e.target.value === 'simple') st().openModel(simpleModel(), 'Linha exemplo simples carregada.');
           }}
         >
@@ -97,6 +111,7 @@ export function Toolbar() {
           <option value="supply">Abastecimento e FGI (100 UPH)</option>
           <option value="mix">Mix de 3 modelos (A, B, C)</option>
           <option value="lp2">Linha LP2 (70 postos)</option>
+          <option value="ten">Linha de 10 postos (espelho do offline)</option>
           <option value="simple">Linha simples</option>
           <option value="elements">Linha com atividades (Yamazumi)</option>
           <option value="combine">Combinar peças com AMR</option>
