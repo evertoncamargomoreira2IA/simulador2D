@@ -5,10 +5,11 @@
 // janela ou computador) ou, no futuro, a API dos postos. O Monitoramento real só espelha: não simula nada.
 
 import { useEffect, useRef } from 'react';
-import { scanCycle, scansToEvents, type ScanRead } from '../engine/scans';
+import { scansToEvents, stationsFromScans, type ScanRead } from '../engine/scans';
 import { Rng } from '../engine/rng';
 import { Simulator } from '../engine/simulator';
 import type { Model } from '../engine/types';
+import type { AndonStop } from '../engine/twinKpi';
 import { useStore } from '../store';
 import { loadRealEvents } from './realLoad';
 import { fmt, fmtTime } from './theme';
@@ -25,15 +26,109 @@ interface Db {
     onSnapshot(next: (s: Snap) => void, err?: (e: unknown) => void): () => void;
   };
 }
+/**
+ * Banco local (arquivo offline ou sem o banco do artefato): guarda no navegador e avisa as outras abas
+ * do mesmo computador. Assim a linha virtual, o gêmeo, o histórico e o andon funcionam também offline.
+ */
+const LS_DB = 'sim2d.db.';
+const localDb = (): Db => {
+  const subs = new Map<string, Set<(s: Snap) => void>>();
+  const snap = (p: string): Snap => {
+    let v: string | null = null;
+    try {
+      v = localStorage.getItem(LS_DB + p);
+    } catch {
+      v = null;
+    }
+    return { exists: !!v, data: () => (v ? (JSON.parse(v) as Record<string, unknown>) : undefined) };
+  };
+  const fire = (p: string) => subs.get(p)?.forEach((f) => f(snap(p)));
+  window.addEventListener('storage', (e) => {
+    if (e.key?.startsWith(LS_DB)) fire(e.key.slice(LS_DB.length));
+  });
+  return {
+    collection: (c) => ({
+      get: async () => {
+        const docs: { id: string; data(): Record<string, unknown> | undefined }[] = [];
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k?.startsWith(`${LS_DB}${c}/`)) docs.push({ id: k.slice(LS_DB.length + c.length + 1), data: () => snap(k.slice(LS_DB.length)).data() });
+          }
+        } catch {
+          /* sem armazenamento */
+        }
+        return { docs };
+      },
+    }),
+    doc: (p) => ({
+      set: async (d) => {
+        try {
+          localStorage.setItem(LS_DB + p, JSON.stringify(d));
+        } catch {
+          /* navegador cheio: segue sem gravar */
+        }
+        fire(p);
+      },
+      get: async () => snap(p),
+      onSnapshot: (next) => {
+        if (!subs.has(p)) subs.set(p, new Set());
+        subs.get(p)!.add(next);
+        setTimeout(() => next(snap(p)), 0);
+        return () => subs.get(p)?.delete(next);
+      },
+    }),
+  };
+};
+let local: Db | null = null;
 const getDb = async (): Promise<Db | null> => {
   const h = (window as unknown as { claude?: { use?: (n: string) => Promise<unknown> } }).claude;
-  return h?.use ? ((await h.use('db').catch(() => null)) as Db | null) : null;
+  const db = h?.use ? ((await h.use('db').catch(() => null)) as Db | null) : null;
+  return db ?? (local ??= localDb());
 };
 
 export const TWIN_DOCS = { modelo: 'gemeo/modelo', estado: 'gemeo/estado', scans: 'gemeo/scans' };
 /** Scans guardados no banco (os mais recentes): cabe folgado no limite de 256 KiB por documento. */
 const MAX_SCANS = 5000;
 const HIST = 'historico';
+const plain = (m: Model): Model => ({ ...m, background: undefined, settings: { ...m.settings, replay: undefined, replayPrev: undefined } });
+
+/** Como retomar a coleta depois (queda de energia, página fechada). */
+export interface MonResume {
+  kind: 'api' | 'gemeo' | 'virtual';
+  url?: string;
+  every?: number;
+  speed?: number;
+}
+
+/** Documentos do histórico no banco (do artefato ou o local do navegador). */
+export const histStore = {
+  async set(id: string, d: Record<string, unknown>) {
+    await (await getDb())?.doc(id).set(d).catch(() => undefined);
+  },
+  async get(id: string): Promise<Record<string, unknown> | undefined> {
+    return (await (await getDb())?.doc(id).get().catch(() => null))?.data();
+  },
+  async list(col: string): Promise<Record<string, unknown>[]> {
+    const db = await getDb();
+    return db ? (await db.collection(col).get()).docs.map((d) => d.data()).filter((d): d is Record<string, unknown> => !!d) : [];
+  },
+};
+
+/** Grava (ou atualiza) uma sessão no histórico: modelo, scans e como retomar. */
+export function saveHistory(h: { sessao: string; fonte: string; model: Model; inicio: number; relogio: number; scans: ScanRead[]; retomar?: MonResume }) {
+  return histStore.set(`${HIST}/${h.sessao}`, {
+    sessao: h.sessao,
+    fonte: h.fonte,
+    nome: h.model.name,
+    inicio: h.inicio,
+    em: Date.now(),
+    relogio: h.relogio,
+    modelo: JSON.stringify(plain(h.model)),
+    ...(h.retomar ? { retomar: JSON.stringify(h.retomar) } : {}),
+    ...packScans(h.scans),
+  });
+}
 
 export interface TwinNode {
   state: string;
@@ -79,7 +174,14 @@ export function unpackScans(p: Packed): ScanRead[] {
 }
 
 const STATION = (t: string) => t === 'machine' || t === 'inspection' || t === 'rework';
-const plain = (m: Model): Model => ({ ...m, background: undefined, settings: { ...m.settings, replay: undefined, replayPrev: undefined } });
+
+/** Continuação de uma coleta gravada (retomar depois de queda de energia). */
+export interface ResumeBase {
+  sessao: string;
+  inicio: number;
+  relogio: number;
+  scans: ScanRead[];
+}
 
 /** Junta os scans de uma linha e publica o estado e os scans no banco. */
 class Emitter {
@@ -87,15 +189,28 @@ class Emitter {
   sessao = `s${Date.now().toString(36)}`;
   inicio = Date.now();
   dirty = false;
+  /** Relógio da coleta anterior (retomada): os scans novos continuam a partir dele. */
+  private offset = 0;
+  private baseFeitas = new Map<string, number>();
   private n = 0;
   constructor(
     private sim: Simulator,
     private model: Model,
     private fonte: string,
+    private retomar?: MonResume,
+    base?: ResumeBase,
   ) {
+    if (base) {
+      this.sessao = base.sessao;
+      this.inicio = base.inicio;
+      this.offset = base.relogio;
+      this.scans = base.scans.slice();
+      for (const [k, v] of stationsFromScans(base.scans)) this.baseFeitas.set(k, v.feitas);
+      this.dirty = true;
+    }
     sim.onCycle = ({ node, serial, end }) => {
       if (!STATION(node.type) || end < sim.t0) return;
-      this.scans.push({ posto: node.name, serie: `SN${String(serial).padStart(6, '0')}`, hora: end - sim.t0 });
+      this.scans.push({ posto: node.name, serie: `SN${String(serial).padStart(6, '0')}`, hora: end - sim.t0 + this.offset });
       if (this.scans.length > MAX_SCANS * 1.5) this.scans = this.scans.slice(-MAX_SCANS);
       this.dirty = true;
     };
@@ -104,33 +219,30 @@ class Emitter {
     const db = await getDb();
     if (!db) return false;
     await db.doc(TWIN_DOCS.modelo).set({ sessao: this.sessao, fonte: this.fonte, json: JSON.stringify(plain(this.model)), em: Date.now() }).catch(() => undefined);
-    await db.doc(TWIN_DOCS.scans).set({ sessao: this.sessao, ...packScans([]), em: Date.now() }).catch(() => undefined);
+    await db.doc(TWIN_DOCS.scans).set({ sessao: this.sessao, ...packScans(this.scans), em: Date.now() }).catch(() => undefined);
     return true;
+  }
+  private relogio() {
+    return this.offset + Math.max(0, this.sim.now - this.sim.t0);
   }
   /** Estado de cada posto + ciclo pelos scans. */
   state(running: boolean): TwinState {
     const s = this.sim;
-    const byName = new Map<string, number[]>();
-    const last = new Map<string, number>();
-    for (const x of this.scans) {
-      const p = last.get(x.posto);
-      if (p !== undefined) {
-        const l = byName.get(x.posto) ?? [];
-        l.push(x.hora - p);
-        byName.set(x.posto, l);
-      }
-      last.set(x.posto, x.hora);
-    }
+    const sc = stationsFromScans(this.scans);
+    const lastIds = new Set(this.model.links.filter((l) => this.model.nodes.find((n) => n.id === l.to)?.type === 'sink').map((l) => l.from));
     const postos: Record<string, TwinNode> = {};
     let pecas = 0;
+    let basePecas = 0;
     for (const r of s.nodes) {
       if (r.def.type === 'sink') pecas += r.processed;
       if (!STATION(r.def.type)) continue;
-      const c = scanCycle(byName.get(r.def.name) ?? []);
-      const lost = c.out.reduce((a, x) => a + Math.max(0, x - c.mean), 0) / 60;
-      postos[r.def.id] = { state: r.state, fila: r.queue.length, fazendo: r.processing.length, feitas: r.processed, ciclo: c.mean || undefined, fora: c.out.length, ult: last.get(r.def.name), paradoMin: Math.round(lost * 10) / 10 };
+      const c = sc.get(r.def.name);
+      const base = this.baseFeitas.get(r.def.name) ?? 0;
+      if (lastIds.has(r.def.id)) basePecas += base;
+      postos[r.def.id] = { state: r.state, fila: r.queue.length, fazendo: r.processing.length, feitas: r.processed + base, ciclo: c?.ciclo, fora: c?.fora ?? 0, ult: c?.ult, paradoMin: c?.paradoMin ?? 0 };
     }
-    const relogio = Math.max(0, s.now - s.t0);
+    pecas += basePecas;
+    const relogio = this.relogio();
     return { sessao: this.sessao, fonte: this.fonte, nome: this.model.name, relogio, rodando: running, pecas, uph: relogio > 0 ? (pecas * 3600) / relogio : 0, em: Date.now(), postos };
   }
   async publish(running: boolean) {
@@ -139,13 +251,9 @@ class Emitter {
     await db.doc(TWIN_DOCS.estado).set({ json: JSON.stringify(this.state(running)), em: Date.now() }).catch(() => undefined);
     if (++this.n % 2 === 0 && this.dirty) {
       this.dirty = false;
-      const packed = packScans(this.scans);
-      await db.doc(TWIN_DOCS.scans).set({ sessao: this.sessao, ...packed, em: Date.now() }).catch(() => undefined);
-      // histórico: cada sessão fica guardada para o estudo depois (reprodução histórica, curvas, Excel)
-      await db
-        .doc(`${HIST}/${this.sessao}`)
-        .set({ sessao: this.sessao, fonte: this.fonte, nome: this.model.name, inicio: this.inicio, em: Date.now(), relogio: Math.max(0, this.sim.now - this.sim.t0), modelo: JSON.stringify(plain(this.model)), ...packed })
-        .catch(() => undefined);
+      await db.doc(TWIN_DOCS.scans).set({ sessao: this.sessao, ...packScans(this.scans), em: Date.now() }).catch(() => undefined);
+      // histórico: cada sessão fica guardada para o estudo e para retomar depois de uma queda
+      await saveHistory({ sessao: this.sessao, fonte: this.fonte, model: this.model, inicio: this.inicio, relogio: this.relogio(), scans: this.scans, retomar: this.retomar });
     }
   }
   stop() {
@@ -160,7 +268,7 @@ export function PhysicalSource() {
   const em = useRef<Emitter | null>(null);
   useEffect(() => {
     if (!on) return;
-    const e = new Emitter(sim, useStore.getState().model, 'linha física');
+    const e = new Emitter(sim, useStore.getState().model, 'linha física', { kind: 'gemeo' });
     em.current = e;
     void e.start().then((ok) => {
       if (!ok) useStore.getState().setMessage('Linha física: a transmissão só funciona no link online (o banco do artefato leva os scans ao gêmeo).');
@@ -181,7 +289,7 @@ export function PhysicalSource() {
  */
 let virtual: { stop: () => void; speed: number } | null = null;
 export const virtualRunning = () => virtual;
-export function startVirtualLine(model: Model, speed: number): Promise<boolean> {
+export function startVirtualLine(model: Model, speed: number, base?: ResumeBase): Promise<boolean> {
   stopVirtualLine();
   const m: Model = { ...plain(model), settings: { ...model.settings, duration: 7 * 24 * 3600, startFull: true, warmup: 0, study: 'simulacao' } };
   const sim = new Simulator(m);
@@ -192,7 +300,7 @@ export function startVirtualLine(model: Model, speed: number): Promise<boolean> 
     if (rng.next() < 0.03) w += w * (2 + rng.next() * 3); // parada curta: falta de peça, dúvida, retrabalho
     return w;
   };
-  const e = new Emitter(sim, model, `linha virtual (servidor de teste, ${speed}×)`);
+  const e = new Emitter(sim, model, `linha virtual (servidor de teste, ${speed}×)`, { kind: 'virtual', speed }, base);
   let last = performance.now();
   const tick = setInterval(() => {
     const t = performance.now();
@@ -300,23 +408,26 @@ export interface HistItem {
   em: number;
   relogio: number;
   scans: number;
+  retomar?: MonResume;
 }
+const parseResume = (v: unknown): MonResume | undefined => {
+  try {
+    return v ? (JSON.parse(String(v)) as MonResume) : undefined;
+  } catch {
+    return undefined;
+  }
+};
 /** Sessões gravadas (o que rodou), mais recentes primeiro. */
 export async function listHistory(): Promise<HistItem[] | null> {
-  const db = await getDb();
-  if (!db) return null;
-  const snap = await db.collection(HIST).get();
-  return snap.docs
-    .map((d) => d.data())
-    .filter((d): d is Record<string, unknown> => !!d && !!d.sessao)
-    .map((d) => ({ sessao: String(d.sessao), fonte: String(d.fonte ?? ''), nome: String(d.nome ?? ''), inicio: Number(d.inicio) || 0, em: Number(d.em) || 0, relogio: Number(d.relogio) || 0, scans: Array.isArray(d.s) ? d.s.length : 0 }))
-    .sort((a, b) => b.inicio - a.inicio);
+  const docs = await histStore.list(HIST);
+  return docs
+    .filter((d) => !!d.sessao)
+    .map((d) => ({ sessao: String(d.sessao), fonte: String(d.fonte ?? ''), nome: String(d.nome ?? ''), inicio: Number(d.inicio) || 0, em: Number(d.em) || 0, relogio: Number(d.relogio) || 0, scans: Array.isArray(d.s) ? d.s.length : 0, retomar: parseResume(d.retomar) }))
+    .sort((a, b) => b.em - a.em);
 }
-/** Abre uma sessão gravada: modelo + scans. */
-export async function loadHistory(sessao: string): Promise<{ model: Model | null; scans: ScanRead[] } | null> {
-  const db = await getDb();
-  if (!db) return null;
-  const d = (await db.doc(`${HIST}/${sessao}`).get()).data();
+/** Abre uma sessão gravada: modelo, scans e como retomar. */
+export async function loadHistory(sessao: string): Promise<{ model: Model | null; scans: ScanRead[]; inicio: number; relogio: number; retomar?: MonResume } | null> {
+  const d = await histStore.get(`${HIST}/${sessao}`);
   if (!d) return null;
   let model: Model | null = null;
   try {
@@ -324,5 +435,22 @@ export async function loadHistory(sessao: string): Promise<{ model: Model | null
   } catch {
     model = null;
   }
-  return { model, scans: unpackScans(d as unknown as Packed) };
+  return { model, scans: unpackScans(d as unknown as Packed), inicio: Number(d.inicio) || Date.now(), relogio: Number(d.relogio) || 0, retomar: parseResume(d.retomar) };
 }
+
+/** Paradas marcadas no andon de uma sessão. */
+export async function loadAndon(sessao: string): Promise<AndonStop[]> {
+  const d = await histStore.get(`andon/${sessao}`);
+  try {
+    return d?.json ? (JSON.parse(String(d.json)) as AndonStop[]) : [];
+  } catch {
+    return [];
+  }
+}
+export function saveAndon(sessao: string, stops: AndonStop[]) {
+  return histStore.set(`andon/${sessao}`, { sessao, json: JSON.stringify(stops), em: Date.now() });
+}
+
+/** Ordens para o monitoramento ligado (vindas do painel): atualizar a conexão, zerar o turno ou retomar uma coleta. */
+export type TwinCmd = { cmd: 'refresh' } | { cmd: 'reset' } | { cmd: 'resume'; sessao: string };
+export const twinCmd = (c: TwinCmd) => window.dispatchEvent(new CustomEvent<TwinCmd>('twin-cmd', { detail: c }));

@@ -1,8 +1,9 @@
 // Rodapé do Monitoramento real: indicadores e gráficos de barras para bater o olho e entender a linha.
-// 1) Produção por posto × meta até agora  2) Ciclo por posto × takt  3) Produção por hora × meta.
+// 1) Produção por posto × meta até agora  2) Ciclo por posto × takt  3) Produção por hora × meta
+// 4) OEE por posto  5) Andon: paradas com motivo e o Pareto das perdas. Mais a previsão de fim de turno.
 // Tudo vem dos scans (nada é simulado). Também abre o histórico das coletas para o estudo depois.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { scansToEvents } from '../engine/scans';
 import { download } from '../io/exporter';
@@ -11,7 +12,9 @@ import { HowTo } from './HowTo';
 import { Modal } from './Modal';
 import { loadRealEvents } from './realLoad';
 import { fmt, fmtTime } from './theme';
-import { listHistory, loadHistory, type HistItem } from './Twin';
+import { listHistory, loadAndon, loadHistory, saveAndon, twinCmd, type HistItem, type TwinState } from './Twin';
+import { ANDON_MOTIVOS, forecast, oee, pareto, recentRate, type AndonStop } from '../engine/twinKpi';
+import type { NodeDef } from '../engine/types';
 
 const STATION = (t: string) => t === 'machine' || t === 'inspection' || t === 'rework';
 
@@ -65,6 +68,15 @@ function Bars({ bars, line, lineLabel, unit, pair }: { bars: Bar[]; line?: numbe
   );
 }
 
+/** Posto parado: em pane ou sem scan há mais de 3 ciclos (já escaneou alguma vez). */
+function isStopped(twin: TwinState, n: NodeDef): boolean {
+  const p = twin.postos[n.id];
+  if (!p) return false;
+  if (p.state === 'down') return true;
+  if (p.ult === undefined) return false;
+  return twin.relogio - p.ult > 3 * (p.ciclo || n.cycleTime || 30);
+}
+
 const short = (n: string) => n.replace(/^Posto\s*/i, 'P').replace(/\s*·.*$/, '');
 
 export function TwinDash() {
@@ -100,6 +112,44 @@ export function TwinDash() {
   const paradas = stations.reduce((a, n) => a + (twin?.postos[n.id]?.fora ?? 0), 0);
   const paradoMin = stations.reduce((a, n) => a + (twin?.postos[n.id]?.paradoMin ?? 0), 0);
 
+  // OEE por posto: ciclo padrão do bloco ÷ capacidade; o da linha é o do posto que limita (maior ciclo padrão)
+  const ideal = (n: NodeDef) => (n.cycleTime || 0) / Math.max(1, n.capacity);
+  const oees = stations.map((n) => ({ n, o: oee({ relogio: twin?.relogio ?? 0, feitas: twin?.postos[n.id]?.feitas ?? 0, ideal: ideal(n), paradoMin: twin?.postos[n.id]?.paradoMin ?? 0 }) }));
+  const limit = oees.reduce<(typeof oees)[number] | null>((a, x) => (!a || ideal(x.n) > ideal(a.n) ? x : a), null);
+  const lastHours = useMemo(() => (lastName ? events.filter((e) => e.posto === lastName).map((e) => e.fim) : []), [events, lastName]);
+  const prev = twin ? forecast({ pecas: twin.pecas, relogio: twin.relogio, duracao: model.settings.duration, takt, recente: recentRate(lastHours, twin.relogio) }) : null;
+
+  // andon: paradas marcadas pelo operador (ficam no histórico da sessão)
+  const [andon, setAndon] = useState<AndonStop[]>([]);
+  const sessao = twin?.sessao ?? '';
+  useEffect(() => {
+    setAndon([]);
+    if (sessao) void loadAndon(sessao).then(setAndon);
+  }, [sessao]);
+  const putAndon = (list: AndonStop[]) => {
+    setAndon(list);
+    if (sessao) void saveAndon(sessao, list);
+  };
+  // posto parado = sem scan há mais de 3 ciclos (ou em pane); fecha a parada aberta quando ele volta a escanear
+  const stopped = twin ? stations.filter((n) => isStopped(twin, n)) : [];
+  const andonRef = useRef(andon);
+  andonRef.current = andon;
+  useEffect(() => {
+    if (!twin) return;
+    const open = andonRef.current.filter((a) => a.fim === undefined);
+    if (!open.length) return;
+    let changed = false;
+    const list = andonRef.current.map((a) => {
+      const n = stations.find((x) => x.name === a.posto);
+      if (a.fim !== undefined || !n || isStopped(twin, n)) return a;
+      changed = true;
+      return { ...a, fim: Math.max(a.inicio, twin.postos[n.id]?.ult ?? twin.relogio) };
+    });
+    if (changed) putAndon(list);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [twin]);
+  const par = twin ? pareto(andon, twin.relogio, paradoMin) : [];
+
   return (
     <section className="dash twin-dash" aria-label="Monitoramento real">
       <div className="twin-head">
@@ -109,7 +159,20 @@ export function TwinDash() {
             <i className="study-live" /> {twin.fonte} · {twin.rodando ? 'coletando' : 'parada'} · {fmtTime(twin.relogio)} de turno · <span className={Date.now() - twin.em > 10000 ? 'bad' : ''}>atraso {fmt(Math.max(0, (Date.now() - twin.em) / 1000), 0)} s</span>
           </span>
         )}
-        <button className="btn" onClick={() => setHist(true)}>📼 Histórico das coletas</button>
+        <span className="row-btns">
+          <button className="btn" onClick={() => twinCmd({ cmd: 'refresh' })} title="Atualizar: reconecta com a linha (use se os números pararem ou algo ficar estranho)">🔄 Atualizar</button>
+          <button
+            className="btn"
+            disabled={!twin}
+            onClick={() => {
+              if (confirm('Zerar o turno? A coleta recomeça do zero numa sessão nova; a atual continua guardada no 📼 Histórico.')) twinCmd({ cmd: 'reset' });
+            }}
+            title="Começa um turno novo do zero (a coleta atual fica no histórico)"
+          >
+            ⟲ Zerar turno
+          </button>
+          <button className="btn" onClick={() => setHist(true)} title="Coletas gravadas: estudar, baixar em Excel ou retomar o monitoramento de onde parou (queda de energia)">📼 Histórico · ⟳ Retomar</button>
+        </span>
       </div>
       {!twin ? (
         <p className="hint">Esperando a linha. Em 📡 Monitoramento real, ligue a linha virtual (servidor de teste), siga a linha física ou ligue a API.</p>
@@ -121,7 +184,19 @@ export function TwinDash() {
             <Kpi k="Aderência" v={ader ? `${fmt(ader, 1)}%` : '–'} tone={ader >= 95 ? 'good' : ader >= 85 ? 'warn' : 'bad'} />
             <Kpi k="UPH real" v={fmt(twin.uph, 1)} tone={meta && twin.uph >= meta ? 'good' : 'bad'} u={meta ? `meta ${fmt(meta, 0)}` : ''} />
             <Kpi k="Gargalo real" v={worst?.name ?? '–'} tone="bad" u={worst && takt ? `${fmt((worst.load / takt) * 100, 0)}% do takt` : ''} />
-            <Kpi k="Paradas" v={`${paradas}`} tone={paradas ? 'warn' : 'good'} u={`${fmt(paradoMin, 1)} min perdidos`} />
+            <Kpi k="Paradas" v={`${paradas}`} tone={paradas ? 'warn' : 'good'} u={`${fmt(paradoMin, 1)} min perdidos (soma dos postos)`} />
+            <Kpi
+              k="OEE da linha"
+              v={limit ? `${fmt(limit.o.oee * 100, 0)}%` : '–'}
+              tone={!limit ? undefined : limit.o.oee >= 0.85 ? 'good' : limit.o.oee >= 0.65 ? 'warn' : 'bad'}
+              u={limit ? `D ${fmt(limit.o.a * 100, 0)} × P ${fmt(limit.o.p * 100, 0)} × Q ${fmt(limit.o.q * 100, 0)} · ${short(limit.n.name)}` : ''}
+            />
+            <Kpi
+              k="Previsão fim de turno"
+              v={prev && twin.relogio > 60 ? `${fmt(prev.fim, 0)} pç` : '–'}
+              tone={!prev || !prev.meta ? undefined : prev.fim >= prev.meta ? 'good' : prev.fim >= prev.meta * 0.9 ? 'warn' : 'bad'}
+              u={prev && prev.meta ? (prev.fim >= prev.meta ? `no ritmo de ${fmt(prev.ritmo, 0)}/h bate a meta de ${fmt(prev.meta, 0)}` : `meta ${fmt(prev.meta, 0)} · precisa de ${fmt(prev.precisa, 0)}/h`) : 'sem takt'}
+            />
           </div>
           <div className="twin-charts">
             <div className="twin-chart">
@@ -167,6 +242,62 @@ export function TwinDash() {
                 <p className="hint">Aparece quando o último posto começar a escanear.</p>
               )}
               <p className="legend"><i className="tb-good" /> bateu a meta <i className="tb-warn" /> até 10% abaixo <i className="tb-bad" /> abaixo <i className="tb-mute" /> hora em andamento</p>
+            </div>
+            <div className="twin-chart">
+              <p className="label">4 · OEE por posto (disponibilidade × performance × qualidade)</p>
+              <Bars
+                unit="%"
+                line={85}
+                lineLabel="classe mundial 85%"
+                bars={oees.map(({ n, o }) => ({ label: short(n.name), value: o.oee * 100, text: `${fmt(o.oee * 100, 0)}`, tone: o.oee >= 0.85 ? 'good' : o.oee >= 0.65 ? 'warn' : 'bad' }))}
+              />
+              <p className="legend"><i className="tb-good" /> ≥ 85% <i className="tb-warn" /> 65–85% <i className="tb-bad" /> abaixo de 65% · qualidade 100% enquanto não houver dado de refugo</p>
+            </div>
+            <div className="twin-chart andon">
+              <p className="label">5 · 🚨 Andon · Pareto das perdas</p>
+              {stopped.length ? (
+                <ul className="andon-open">
+                  {stopped.map((n) => {
+                    const p = twin.postos[n.id];
+                    const open = andon.find((a) => a.posto === n.name && a.fim === undefined);
+                    const since = p?.ult ?? 0;
+                    return (
+                      <li key={n.id}>
+                        <i className="andon-led" aria-hidden />
+                        <b>{n.name}</b> parado há {fmt(Math.max(0, twin.relogio - since) / 60, 0)} min
+                        <select
+                          aria-label={`Motivo da parada de ${n.name}`}
+                          value={open?.motivo ?? ''}
+                          onChange={(e) => {
+                            const motivo = e.target.value;
+                            if (!motivo) return;
+                            putAndon(open ? andon.map((a) => (a === open ? { ...a, motivo } : a)) : [...andon, { id: `a${Date.now().toString(36)}`, posto: n.name, motivo, inicio: since }]);
+                          }}
+                        >
+                          <option value="">Qual o motivo?</option>
+                          {ANDON_MOTIVOS.map((m) => <option key={m}>{m}</option>)}
+                        </select>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="hint">Nenhum posto parado agora. Quando um posto ficar sem escanear, ele aparece aqui para marcar o motivo.</p>
+              )}
+              {par.length > 0 ? (
+                <div className="pareto" role="table" aria-label="Pareto das perdas">
+                  {par.map((r) => (
+                    <div key={r.motivo} className="pareto-row" role="row">
+                      <span role="cell">{r.motivo}</span>
+                      <span role="cell" className="pareto-bar"><i style={{ width: `${(r.min / par[0].min) * 100}%` }} /></span>
+                      <span role="cell">{fmt(r.min, 1)} min</span>
+                      <span role="cell" className="muted">{fmt(r.acum, 0)}%</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="hint">Sem perdas ainda.</p>
+              )}
             </div>
           </div>
         </>
@@ -219,11 +350,11 @@ function HistoryModal({ onClose }: { onClose: () => void }) {
       <HowTo
         title="Estudar o que rodou"
         why="O monitoramento mostra o agora; o histórico guarda os scans de cada turno para estudar depois, com calma."
-        steps={['Escolha a coleta (data, linha e fonte).', 'Abrir para estudo: carrega o modelo e os scans. Depois use ⏪ Reprodução histórica ou Análises → Dados reais (curva normal por posto, desvio, montar a linha).', 'Excel: baixa os scans e os ciclos de cada posto para trabalhar na planilha.']}
+        steps={['Escolha a coleta (data, linha e fonte).', 'Abrir para estudo: carrega o modelo e os scans. Depois use ⏪ Reprodução histórica ou Análises → Dados reais (curva normal por posto, desvio, montar a linha).', 'Excel: baixa os scans e os ciclos de cada posto para trabalhar na planilha.', '⟳ Retomar daqui: acabou a energia ou fechou a página? Retoma o monitoramento de onde parou, somando os scans gravados com os novos.']}
       />
       {items === undefined && <p className="hint">Carregando…</p>}
-      {items === null && <p className="hint">O histórico fica no banco do link online: abra pelo link do artefato.</p>}
-      {items && !items.length && <p className="hint">Nenhuma coleta gravada ainda. Ligue a linha virtual (ou a linha física) no 📡 Monitoramento real.</p>}
+      {items === null && <p className="hint">Não consegui ler o histórico.</p>}
+      {items && !items.length && <p className="hint">Nenhuma coleta gravada ainda. Ligue a linha virtual, a linha física ou a API no 📡 Monitoramento real: a coleta é gravada sozinha.</p>}
       {items && items.length > 0 && (
         <table className="grid-table">
           <thead><tr><th>Início</th><th>Linha</th><th>Fonte</th><th>Turno rodado</th><th>Scans</th><th /></tr></thead>
@@ -238,6 +369,18 @@ function HistoryModal({ onClose }: { onClose: () => void }) {
                 <td className="row-btns">
                   <button className="btn primary" disabled={!!busy} onClick={() => void open(h, false)}>Abrir para estudo</button>
                   <button className="btn" disabled={!!busy} onClick={() => void open(h, true)}>Excel</button>
+                  {h.retomar && h.retomar.kind !== 'gemeo' && (
+                    <button
+                      className="btn"
+                      title="Continua o monitoramento a partir desta coleta (ex.: depois de uma queda de energia): os scans antigos somam com os novos"
+                      onClick={() => {
+                        twinCmd({ cmd: 'resume', sessao: h.sessao });
+                        onClose();
+                      }}
+                    >
+                      ⟳ Retomar daqui
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

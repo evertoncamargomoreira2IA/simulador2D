@@ -46,3 +46,32 @@ export function scanCycle(intervals: number[], k = 2): { mean: number; sd: numbe
   const sd = Math.sqrt(kept.reduce((a, b) => a + (b - mean) ** 2, 0) / Math.max(1, kept.length - 1));
   return { mean, sd, kept, out };
 }
+
+export interface ScanStation {
+  /** Peças escaneadas no posto. */
+  feitas: number;
+  /** Ciclo pelo intervalo entre scans (s), sem os fora do desvio. */
+  ciclo?: number;
+  /** Intervalos descartados (fora de média ± 2 desvios). */
+  fora: number;
+  /** Hora do último scan (s). */
+  ult?: number;
+  /** Minutos perdidos nos intervalos fora do desvio (o que passou da média). */
+  paradoMin: number;
+}
+
+/** Resumo de cada posto pelos scans (chave = nome do posto como veio). */
+export function stationsFromScans(scans: ScanRead[]): Map<string, ScanStation> {
+  const by = new Map<string, number[]>();
+  for (const s of scans) if (Number.isFinite(s.hora)) (by.get(s.posto) ?? by.set(s.posto, []).get(s.posto)!).push(s.hora);
+  const out = new Map<string, ScanStation>();
+  for (const [posto, hs] of by) {
+    hs.sort((a, b) => a - b);
+    const iv: number[] = [];
+    for (let i = 1; i < hs.length; i++) iv.push(hs[i] - hs[i - 1]);
+    const c = scanCycle(iv);
+    const lost = c.out.reduce((a, x) => a + Math.max(0, x - c.mean), 0) / 60;
+    out.set(posto, { feitas: hs.length, ciclo: c.mean || undefined, fora: c.out.length, ult: hs[hs.length - 1], paradoMin: Math.round(lost * 10) / 10 });
+  }
+  return out;
+}

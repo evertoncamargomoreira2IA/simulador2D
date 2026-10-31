@@ -45,11 +45,26 @@ export function App() {
     let raf = 0;
     let last = performance.now();
     let lastKpi = 0;
+    let slow = 0;
     const loop = (t: number) => {
+      raf = requestAnimationFrame(loop); // agenda antes: nada abaixo consegue parar o laço
       const st = useStore.getState();
       if (st.run === 'running') {
         const dt = Math.min(0.1, (t - last) / 1000);
-        st.sim.advanceTo(st.sim.now + dt * st.speed);
+        // um erro dentro da simulação não pode parar o laço da tela (antes a aplicação ficava congelada)
+        try {
+          const a = performance.now();
+          st.sim.advanceTo(st.sim.now + dt * st.speed);
+          slow = performance.now() - a > 200 ? slow + 1 : 0;
+        } catch (e) {
+          st.setRun('paused');
+          st.setMessage(`A simulação parou por um erro (${(e as Error).message}). Clique em ⟲ Reset ou em 🔄 Atualizar; o modelo continua aberto.`);
+        }
+        if (slow > 5 && st.speed > 1) {
+          slow = 0;
+          st.setSpeed(Math.max(1, Math.floor(st.speed / 4)));
+          st.setMessage('A simulação estava pesada para esta velocidade: baixei a velocidade para a tela não travar.');
+        }
         const done = st.sim.finished;
         if (done) st.setRun('done');
         if (st.sim.error) st.setMessage(st.sim.error);
@@ -58,7 +73,6 @@ export function App() {
         st.refresh(kpiDue);
       }
       last = t;
-      raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     // aba escondida (ex.: a linha física atrás do gêmeo): o navegador pausa a animação, então avança por relógio
@@ -67,7 +81,11 @@ export function App() {
       const t = performance.now();
       const st = useStore.getState();
       if (st.run === 'running') {
-        st.sim.advanceTo(st.sim.now + ((t - last) / 1000) * st.speed);
+        try {
+          st.sim.advanceTo(st.sim.now + ((t - last) / 1000) * st.speed);
+        } catch {
+          st.setRun('paused');
+        }
         if (st.sim.finished) st.setRun('done');
         st.refresh(true);
       }

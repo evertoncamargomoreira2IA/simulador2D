@@ -1,5 +1,6 @@
 // Barra superior: arquivo (modelos, importar, exportar) e controle da simulação.
 
+import { refreshKeepingWork } from './Recover';
 import { useRef, useState } from 'react';
 import { lineKpi } from '../engine/metrics';
 import { exportModelCsv, exportModelJson, exportResultsXlsx } from '../io/exporter';
@@ -70,7 +71,7 @@ export function Toolbar() {
         <b>{__APP_NAME__}</b>
         <span className="tag" title="Gêmeo digital centrado nas pessoas">Indústria 5.0</span>
         {physical && <span className="tag offline" title="Esta aba transmite para o gêmeo digital">Linha física</span>}
-        {__OFFLINE__ && <span className="tag offline" title="Arquivo offline: salve com Exportar → JSON; painel e IA só no link online">Offline</span>}
+        {__OFFLINE__ && <span className="tag offline" title="Arquivo offline: salve com Exportar → JSON; painel e IA só no link online. Gêmeo digital, histórico e andon ficam guardados neste navegador">Offline</span>}
         {__OFFLINE__ && __ONLINE_URL__ && (
           <a
             className="btn"
@@ -89,6 +90,9 @@ export function Toolbar() {
       <div className="group" role="group" aria-label="Arquivo">
         <button className="btn" onClick={() => st().setShowStart(true)} title="Novo trabalho, trabalhos salvos ou exemplos">
           Início
+        </button>
+        <button className="btn" onClick={refreshKeepingWork} title="Atualizar: se algo travar ou ficar estranho, recarrega a página e abre o mesmo modelo de novo (nada se perde)">
+          🔄
         </button>
         <select
           className="btn"
@@ -194,15 +198,15 @@ export function Toolbar() {
         <button className="btn" onClick={() => st().resetSim()} disabled={sim.clock === 0 || monitoring} title="Zera o relógio, as peças e os indicadores (o modelo não muda)">⟲ Reset</button>
         <button className="btn" onClick={replay} disabled={sim.clock === 0 || monitoring} title="Reinicia com a mesma semente: mesma sequência de eventos">↺ Replay</button>
         <button className="btn" onClick={runToEnd} disabled={model.nodes.length === 0 || run === 'done' || monitoring} title="Calcula até o fim do turno sem animação">⏭ Fim</button>
-        {!__OFFLINE__ && (
+        {(
           <button
             className={`btn${physical ? ' on' : ''}`}
             disabled={monitoring}
             onClick={() => {
               const on = !physical;
               st().setPhysical(on);
-              document.documentElement.dataset.flavor = on ? 'offline' : '';
-              st().setMessage(on ? 'Esta aba agora é a 🏭 linha física: clique em ▶ Start e ela transmite cada ciclo e o estado dos postos. Em outra aba ou computador, 📡 Monitoramento real → Seguir a linha física mostra o gêmeo digital.' : 'Linha física desligada: esta aba volta a ser o simulador.');
+              document.documentElement.dataset.flavor = on || __OFFLINE__ ? 'offline' : '';
+              st().setMessage(on ? 'Esta aba agora é a 🏭 linha física: clique em ▶ Start e ela transmite cada ciclo e o estado dos postos. Em outra aba (no arquivo offline: outra aba do mesmo navegador) ou computador, 📡 Monitoramento real → Seguir a linha física mostra o gêmeo digital.' : 'Linha física desligada: esta aba volta a ser o simulador.');
             }}
             title="Faz esta aba (ou este computador) fazer papel da linha de verdade e transmitir para o gêmeo digital"
           >

@@ -6,13 +6,14 @@ import { replayModel, simulationModel, STUDY_LABEL, STUDY_WHY } from '../engine/
 import type { StudyKind } from '../engine/types';
 import { fetchEvents } from '../io/realFeed';
 import type { RealEvent } from '../engine/timeStudy';
-import { followTwin, startVirtualLine, stopVirtualLine, type TwinState } from './Twin';
+import { followTwin, listHistory, twinCmd, type HistItem, loadHistory, saveHistory, startVirtualLine, stopVirtualLine, type TwinCmd, type TwinState } from './Twin';
+import { scansToEvents, stationsFromScans, type ScanRead } from '../engine/scans';
 import { tenStationModel } from '../model/builder';
 import { useStore } from '../store';
 import { HowTo } from './HowTo';
 import { Modal } from './Modal';
 import { loadRealEvents } from './realLoad';
-import { fmt } from './theme';
+import { fmt, fmtTime } from './theme';
 
 const ICON: Record<StudyKind, string> = { simulacao: '🎲', historico: '⏪', monitoramento: '📡' };
 const URL_KEY = 'sim2d.monitorUrl';
@@ -31,31 +32,57 @@ const lsSet = (k: string, v: string) => {
   }
 };
 
-type MonCfg = { kind: 'api' | 'gemeo' | 'virtual'; url: string; every: number; speed?: number };
+type MonCfg = {
+  kind: 'api' | 'gemeo' | 'virtual';
+  url: string;
+  every: number;
+  speed?: number;
+  /** Sessão gravada no histórico (a API grava a cada leitura). */
+  sessao?: string;
+  inicio?: number;
+  /** Scans de uma coleta retomada: somam com os novos. */
+  base?: ScanRead[];
+  /** Muda a cada 🔄 Atualizar para reconectar. */
+  n?: number;
+};
 
-/** Estado dos postos a partir das leituras da API (quando a fonte não manda o estado pronto). */
-function twinFromEvents(ev: RealEvent[]): TwinState | null {
+/** Scans a partir das leituras da API (o scan é o fim de cada leitura). */
+const eventsToScans = (ev: RealEvent[]): ScanRead[] => ev.map((e) => ({ posto: e.posto, serie: e.serie, hora: e.fim }));
+/** Junta scans antigos (retomada) com os novos, sem repetir posto + série. */
+function mergeScans(a: ScanRead[], b: ScanRead[]): ScanRead[] {
+  const seen = new Set<string>();
+  const out: ScanRead[] = [];
+  for (const x of [...a, ...b]) {
+    const k = `${x.posto}|${x.serie}|${x.hora}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(x);
+  }
+  return out.sort((x, y) => x.hora - y.hora);
+}
+
+/** Estado dos postos a partir dos scans da API (quando a fonte não manda o estado pronto). */
+function twinFromScans(scans: ScanRead[], sessao: string): TwinState | null {
   const m = useStore.getState().model;
-  if (!ev.length) return null;
-  const t0 = Math.min(...ev.map((e) => e.inicio));
-  const now = Math.max(...ev.map((e) => e.fim));
+  if (!scans.length) return null;
+  const t0 = Math.min(...scans.map((e) => e.hora));
+  const now = Math.max(...scans.map((e) => e.hora));
   const key = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const sc = new Map([...stationsFromScans(scans)].map(([k, v]) => [key(k), v]));
+  const lastIds = new Set(m.links.filter((l) => m.nodes.find((n) => n.id === l.to)?.type === 'sink').map((l) => l.from));
   const postos: TwinState['postos'] = {};
-  let lastCount = 0;
+  let pecas = 0;
   for (const n of m.nodes) {
     if (!(n.type === 'machine' || n.type === 'inspection' || n.type === 'rework')) continue;
-    const mine = ev.filter((e) => key(e.posto) === key(n.name));
-    if (!mine.length) continue;
-    const series = new Set(mine.map((e) => e.serie));
-    const lastEnd = Math.max(...mine.map((e) => e.fim));
-    const busy = mine.filter((e) => e.fim >= now - 1 && e.inicio <= now).length;
-    // sem leitura há mais de 2 ciclos: o posto está esperando peça (ou parado)
-    const idle = now - lastEnd > 2 * (n.cycleTime || 30);
-    postos[n.id] = { state: busy ? 'working' : idle ? 'starved' : 'working', fila: 0, fazendo: busy, feitas: series.size };
-    lastCount = series.size;
+    const c = sc.get(key(n.name));
+    if (!c) continue;
+    // sem scan há mais de 3 ciclos: o posto está parado (ou esperando peça)
+    const idle = c.ult !== undefined && now - c.ult > 3 * (c.ciclo || n.cycleTime || 30);
+    postos[n.id] = { state: idle ? 'starved' : 'working', fila: 0, fazendo: idle ? 0 : 1, feitas: c.feitas, ciclo: c.ciclo, fora: c.fora, ult: c.ult !== undefined ? c.ult - t0 : undefined, paradoMin: c.paradoMin };
+    if (lastIds.has(n.id)) pecas += c.feitas;
   }
   const span = Math.max(1, now - t0);
-  return { sessao: 'api', fonte: 'API dos postos', nome: m.name, relogio: span, rodando: true, pecas: lastCount, uph: (lastCount * 3600) / span, em: Date.now(), postos };
+  return { sessao, fonte: 'API dos postos', nome: m.name, relogio: span, rodando: true, pecas, uph: (pecas * 3600) / span, em: Date.now(), postos };
 }
 
 export function StudyBar({ onPanel }: { onPanel: () => void }) {
@@ -68,21 +95,21 @@ export function StudyBar({ onPanel }: { onPanel: () => void }) {
   // monitoramento: só espelha a linha real (API ou linha física), não simula nada
   useEffect(() => {
     if (!mon) return;
-    if (mon.kind === 'gemeo' || mon.kind === 'virtual') {
-      const stop = followTwin((text) => setLast({ at: Date.now(), n: 0, text }));
-      return () => {
-        stop();
-        if (mon.kind === 'virtual') stopVirtualLine();
-      };
-    }
+    if (mon.kind === 'gemeo' || mon.kind === 'virtual') return followTwin((text) => setLast({ at: Date.now(), n: 0, text }));
     let alive = true;
+    const sessao = mon.sessao ?? `api${Date.now().toString(36)}`;
+    const inicio = mon.inicio ?? Date.now();
     const tick = async () => {
       try {
-        const ev = await fetchEvents(mon.url);
+        const scans = mergeScans(mon.base ?? [], eventsToScans(await fetchEvents(mon.url)));
         if (!alive) return;
-        loadRealEvents(ev, `monitoramento ${mon.url}`);
-        useStore.getState().setTwin(twinFromEvents(ev));
-        setLast({ at: Date.now(), n: ev.length });
+        const t0 = scans.length ? scans[0].hora : 0;
+        loadRealEvents(scansToEvents(scans.map((x) => ({ ...x, hora: x.hora - t0 }))), `monitoramento ${mon.url}`);
+        const t = twinFromScans(scans, sessao);
+        useStore.getState().setTwin(t);
+        setLast({ at: Date.now(), n: scans.length });
+        // coleta histórica: cada leitura da API fica gravada; dá para retomar depois de uma queda
+        if (scans.length) void saveHistory({ sessao, fonte: 'API dos postos', model: useStore.getState().model, inicio, relogio: t?.relogio ?? 0, scans, retomar: { kind: 'api', url: mon.url, every: mon.every } });
       } catch (e) {
         if (alive) setLast({ at: Date.now(), n: 0, err: (e as Error).message });
       }
@@ -96,10 +123,50 @@ export function StudyBar({ onPanel }: { onPanel: () => void }) {
     };
   }, [mon]);
 
+  // ordens do painel: 🔄 atualizar, ⟲ zerar turno, ⟳ retomar uma coleta gravada
+  useEffect(() => {
+    const on = (e: Event) => {
+      const c = (e as CustomEvent<TwinCmd>).detail;
+      const st = useStore.getState();
+      if (c.cmd === 'refresh') {
+        setMon((m) => (m ? { ...m, n: (m.n ?? 0) + 1 } : m));
+        st.setMessage('🔄 Conexão com a linha atualizada.');
+        return;
+      }
+      if (c.cmd === 'reset') {
+        if (!mon) return;
+        if (mon.kind === 'virtual') void startVirtualLine(st.model, mon.speed ?? 10);
+        setMon({ ...mon, sessao: undefined, inicio: undefined, base: undefined, n: (mon.n ?? 0) + 1 });
+        st.setMessage('⟲ Turno zerado: a coleta começa do zero numa sessão nova (a anterior continua no 📼 Histórico).');
+        return;
+      }
+      void loadHistory(c.sessao).then((h) => {
+        if (!h || !h.model) return st.setMessage('Não achei essa coleta no histórico.');
+        const r = h.retomar ?? { kind: 'virtual' as const, speed: 10 };
+        st.setRun('idle');
+        st.setModel({ ...h.model, settings: { ...h.model.settings, study: 'monitoramento' } }, `⟳ Retomando a coleta de ${fmtTime(h.relogio)}: ${h.scans.length} scans recuperados do histórico.`);
+        if (r.kind === 'virtual') {
+          void startVirtualLine(h.model, r.speed ?? 10, { sessao: c.sessao, inicio: h.inicio, relogio: h.relogio, scans: h.scans });
+          setMon({ kind: 'virtual', url: '', every: 60, speed: r.speed ?? 10, n: Date.now() });
+        } else if (r.kind === 'api' && r.url) {
+          setMon({ kind: 'api', url: r.url, every: r.every ?? 60, sessao: c.sessao, inicio: h.inicio, base: h.scans, n: Date.now() });
+        } else {
+          setMon({ kind: 'gemeo', url: '', every: 60, n: Date.now() });
+          st.setMessage('Coleta da linha física: ligue a 🏭 Linha física na outra janela de novo; o histórico anterior continua no 📼.');
+        }
+      });
+    };
+    window.addEventListener('twin-cmd', on);
+    return () => window.removeEventListener('twin-cmd', on);
+  }, [mon]);
+
   const choose = (k: StudyKind) => {
     const st = useStore.getState();
     const m = st.model;
-    if (k !== 'monitoramento') setMon(null);
+    if (k !== 'monitoramento') {
+      setMon(null);
+      stopVirtualLine();
+    }
     if (k === 'simulacao') {
       if (m.settings.replay) st.setModel(simulationModel(m), 'Simulação: os tempos voltam a ser sorteados das curvas de cada posto.');
       else st.updateSettings({ study: 'simulacao' });
@@ -165,7 +232,10 @@ export function StudyBar({ onPanel }: { onPanel: () => void }) {
                 : 'Gêmeo digital: cada posto escaneia as peças; os blocos mostram o estado real e o ciclo pelo intervalo entre scans (selo 🏭). A simulação fica desligada no monitoramento.',
             );
           }}
-          onStop={() => setMon(null)}
+          onStop={() => {
+            setMon(null);
+            stopVirtualLine();
+          }}
           onClose={() => setMonitorOpen(false)}
           onPanel={() => {
             setMonitorOpen(false);
@@ -197,6 +267,7 @@ function MonitorModal({ running, last, onStart, onStop, onClose, onPanel }: {
         steps={[`🎲 Simulação: ${STUDY_WHY.simulacao}`, `⏪ Reprodução histórica: ${STUDY_WHY.historico}`, `📡 Monitoramento real: ${STUDY_WHY.monitoramento}`]}
         tip="Ordem natural: monte e valide o modelo com a reprodução histórica, use a simulação para decidir e o monitoramento para acompanhar."
       />
+      <ResumeLast onPick={onClose} />
       <div className="mon-src">
         <p className="label">1 · Linha virtual (servidor de teste) — comece por aqui</p>
         <p className="hint">Roda a linha em segundo plano como se fosse a fábrica: cada posto escaneia a peça quando ela sai, os scans vão para o servidor (banco do artefato) e este gêmeo mostra tudo. Ciclo de cada posto = intervalo entre scans, sem os que ficam fora de média ± 2 desvios.</p>
@@ -254,5 +325,31 @@ function MonitorModal({ running, last, onStart, onStop, onClose, onPanel }: {
       )}
       <p className="hint">A API precisa liberar acesso a partir do navegador (CORS). Nenhum nome de operador é lido (LGPD).</p>
     </Modal>
+  );
+}
+
+/** Retomar de onde parou: a última coleta gravada que dá para continuar (queda de energia, página fechada). */
+function ResumeLast({ onPick }: { onPick: () => void }) {
+  const [h, setH] = useState<HistItem | null>(null);
+  useEffect(() => {
+    void listHistory().then((l) => setH(l?.find((x) => x.retomar && x.retomar.kind !== 'gemeo' && x.scans > 0) ?? null));
+  }, []);
+  if (!h) return null;
+  return (
+    <div className="mon-src resume">
+      <p className="label">⟳ Retomar de onde parou</p>
+      <p className="hint">
+        Última coleta: {h.nome} · {h.fonte} · {fmtTime(h.relogio)} de turno · {h.scans} scans (gravada às {new Date(h.em).toLocaleTimeString('pt-BR')}). Acabou a energia ou fechou a página? Continue daqui: os scans gravados somam com os novos.
+      </p>
+      <button
+        className="btn primary"
+        onClick={() => {
+          twinCmd({ cmd: 'resume', sessao: h.sessao });
+          onPick();
+        }}
+      >
+        ⟳ Retomar esta coleta
+      </button>
+    </div>
   );
 }
