@@ -135,6 +135,8 @@ export interface NodeRt {
   lastProduct?: string;
   changeovers: number;
   changeoverTime: number;
+  /** Reprodução histórica: próximo tempo gravado a usar. */
+  replayIdx: number;
 }
 
 export interface Move {
@@ -287,6 +289,8 @@ export class Simulator {
   /** Há um nó marcado como ponto de medição da produção. */
   readonly hasOutputPoint: boolean;
   /** Avisado a cada ciclo concluído (fonte simulada de dados reais: posto, peça, início e fim). */
+  /** Ajuste do tempo de trabalho de cada ciclo (usado pela linha simulada que faz papel de linha real). */
+  tweak?: (node: NodeDef, work: number) => number;
   onCycle?: (c: { node: NodeDef; serial: number; start: number; end: number; product?: string }) => void;
 
   constructor(model: Model) {
@@ -335,6 +339,7 @@ export class Simulator {
         setupUntil: def.setupTime > 0 ? def.setupTime : 0,
         changeovers: 0,
         changeoverTime: 0,
+        replayIdx: 0,
         state: 'off',
         stateSince: 0,
         stateTime: zeroStates(),
@@ -948,7 +953,10 @@ export class Simulator {
         n.changeoverTime += change;
       }
       if (e.product) n.lastProduct = e.product;
-      const duration = walk + change + (unit ? handling : 0) + sampleTime(this.rng, this.meanTime(n, e.product) / (n.def.efficiency || 1), n.def.cv, n.def.dist);
+      // reprodução histórica: o tempo gravado do posto, na ordem (já inclui troca, ritmo e eficiência reais)
+      const rec = this.model.settings.replay?.[n.def.id];
+      const work = rec?.length ? rec[n.replayIdx++ % rec.length] : change + sampleTime(this.rng, this.meanTime(n, e.product) / (n.def.efficiency || 1), n.def.cv, n.def.dist);
+      const duration = walk + (unit ? handling : 0) + (this.tweak ? this.tweak(n.def, work) : work);
       const job: Job = { entity: e, start: this.now, end: this.now + duration, duration, remaining: duration, token: 0 };
       if (unit) {
         if (handling > 0) this.schedule(this.now + walk + handling, 'unitFree', { unit });

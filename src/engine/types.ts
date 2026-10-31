@@ -233,7 +233,18 @@ export interface SimSettings {
   /** Carbono: fator da rede elétrica (kg CO2e/kWh, escopo 2) e da matéria-prima por peça (escopo 3). */
   gridCo2?: number;
   materialCo2?: number;
+  /** Tipo de estudo: simulação (tempos sorteados das curvas), reprodução histórica (tempos gravados, na ordem)
+   *  ou monitoramento real (leituras da API chegando ao vivo). */
+  study?: StudyKind;
+  /** Reprodução histórica: tempos gravados de cada posto (id do nó → segundos, na ordem em que aconteceram). */
+  replay?: Record<string, number[]>;
+  /** De onde vieram as leituras da reprodução (arquivo, API, período). */
+  replaySource?: string;
+  /** Duração, aquecimento e linha cheia antes da reprodução (voltam ao sair dela). */
+  replayPrev?: { duration: number; warmup: number; startFull?: boolean };
 }
+
+export type StudyKind = 'simulacao' | 'historico' | 'monitoramento';
 
 /** Área desenhada no canvas (ex.: expedição fora do layout). */
 export interface ZoneDef {

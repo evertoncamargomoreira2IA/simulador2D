@@ -845,3 +845,15 @@ td.good { color: var(--st-working); }
 [data-flavor='offline'] .tag.offline { color: #04140a; background: #3ddc84; border-color: #3ddc84; }
 [data-flavor='offline'] .tag.offline::before { display: none; }
 a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* Tipo de estudo: Simulação / Reprodução histórica / Monitoramento real */
+.study-bar { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--raised); }
+.study-opt { border: 0; background: transparent; color: var(--muted); padding: 5px 11px; font: inherit; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.study-opt + .study-opt { border-left: 1px solid var(--line); }
+.study-opt:hover { color: var(--ink); }
+.study-opt.on { color: #04121f; font-weight: 600; }
+.s-simulacao .study-opt.on { background: var(--accent); }
+.s-historico .study-opt.on { background: var(--st-starved); }
+.s-monitoramento .study-opt.on { background: var(--st-working); }
+.study-live { width: 8px; height: 8px; border-radius: 50%; background: var(--st-working); box-shadow: 0 0 8px var(--st-working); display: inline-block; animation: live-dot 1.4s ease-in-out infinite; }
+.study-opt.on .study-live { background: #04121f; box-shadow: none; }

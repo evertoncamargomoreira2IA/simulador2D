@@ -10,11 +10,11 @@ import { eventsFromRows, eventsToRows, fetchEvents, simulatedFeed, FEED_DEFAULTS
 import { useStore } from '../store';
 import { HowTo } from './HowTo';
 import { Kpi } from './Modal';
-import { norm } from './StationDetail';
 import { fmt, pct } from './theme';
 import { curveRows, StationCurves } from './StationCurves';
 import { effectiveTakt } from '../engine/balance';
 import { DiscoverLine } from './DiscoverLine';
+import { loadRealEvents } from './realLoad';
 import { discoveryDemoModel } from '../model/builder';
 
 export function RealData() {
@@ -39,14 +39,8 @@ export function RealData() {
 
   /** Novas leituras: guarda e alimenta a aba Real × simulado (produzidas e ciclo padrão por posto). */
   function load(ev: typeof events, src: string) {
-    const st = useStore.getState();
-    st.setRealEvents(ev, src);
-    const study = studyEvents(ev, st.model, o);
-    // peças reais levadas para a duração do turno simulado (2 h de leituras × 8 h de simulação comparam por ritmo)
-    const span = ev.length ? Math.max(...ev.map((e) => e.fim)) - Math.min(...ev.map((e) => e.inicio)) : 0;
-    const scale = span > 0 ? (st.model.settings.duration - (st.model.settings.warmup ?? 0)) / span : 1;
-    st.setReal(Object.fromEntries(study.map((r) => [norm(r.name), { name: r.name, produced: Math.round((r.kept + r.out.length) * scale), cycle: r.standard }])), src);
-    setStatus(`${ev.length} leituras de ${study.length} postos (${src}).`);
+    const n = loadRealEvents(ev, src, o);
+    setStatus(`${ev.length} leituras de ${n} postos (${src}).`);
   }
 
   /** Leituras de uma linha que o simulador não conhece (exemplo para montar a linha a partir delas). */

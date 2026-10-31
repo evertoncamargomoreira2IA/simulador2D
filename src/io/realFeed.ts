@@ -30,12 +30,17 @@ export function simulatedFeed(model: Model, o: FeedOptions = FEED_DEFAULTS): Rea
   const out: RealEvent[] = [];
   // cada posto real fica um pouco acima ou abaixo do SOE (método, habilidade, ajuste do posto)
   const bias = new Map(model.nodes.map((n) => [n.id, 1 + (rng.next() * 2 - 1) * o.drift]));
+  // o viés e as paradas entram no tempo de verdade da linha (a produção gravada é coerente com os tempos)
+  sim.tweak = (node, work) => {
+    let w = work * (bias.get(node.id) ?? 1);
+    // chão de fábrica: de vez em quando a peça fica parada no posto (falta de material, dúvida, retrabalho rápido)
+    if (rng.next() < o.glitch) w += w * (2 + rng.next() * 3);
+    return w;
+  };
   sim.onCycle = ({ node, serial, start, end, product }) => {
     if (start < sim.t0 || !(node.type === 'machine' || node.type === 'inspection' || node.type === 'rework')) return;
     const a = start - sim.t0;
-    let b = a + (end - start) * (bias.get(node.id) ?? 1);
-    // chão de fábrica: de vez em quando a peça fica parada no posto (falta de material, dúvida, retrabalho rápido)
-    if (rng.next() < o.glitch) b += (b - a) * (2 + rng.next() * 3);
+    const b = end - sim.t0;
     const serie = `SN${String(serial).padStart(6, '0')}`;
     const ops = (node.operations ?? []).filter((op) => op.activities.some((x) => x.time > 0));
     if (!ops.length) {

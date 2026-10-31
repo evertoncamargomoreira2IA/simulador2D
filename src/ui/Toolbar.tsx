@@ -11,6 +11,7 @@ import { effectiveTakt } from '../engine/balance';
 import { Tutorial, downloadSoeForm, downloadTemplate } from './Tutorial';
 import { Library } from './Library';
 import { PanelModal } from './Panel';
+import { StudyBar } from './StudyMode';
 import { RecentSelect, SavedModels, saveAsLocal, saveCurrent } from './SaveDialog';
 
 const SPEEDS = [1, 2, 5, 10, 30, 60, 120, 300, 600];
@@ -177,6 +178,8 @@ export function Toolbar() {
       </div>
 
       <span className="sep" />
+
+      <StudyBar onPanel={() => setPanel(true)} />
 
       <div className="group" role="group" aria-label="Simulação">
         {run === 'running' ? (
