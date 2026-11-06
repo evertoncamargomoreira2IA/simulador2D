@@ -21,10 +21,14 @@ const offline = process.env.SIM_OFFLINE === '1';
 const urlPath = new URL('./private/online-url.txt', import.meta.url);
 const onlineUrl = !pub && existsSync(urlPath) ? readFileSync(urlPath, 'utf8').trim() : '';
 
+// Empresa no cabeçalho dos documentos (fora do git): private/company.txt.
+const companyPath = new URL('./private/company.txt', import.meta.url);
+const company = !pub && existsSync(companyPath) ? readFileSync(companyPath, 'utf8').trim() : '';
+
 // `--mode single` gera um único index.html com JS/CSS embutidos (usado no artefato).
 export default defineConfig(({ mode }) => ({
   plugins: mode === 'single' ? [react(), viteSingleFile()] : [react()],
-  define: { __EXAMPLE__: example, __EXAMPLE_MAIN__: exampleMain, __APP_NAME__: JSON.stringify(appName || 'Simulador 2D'), __OFFLINE__: JSON.stringify(offline), __ONLINE_URL__: JSON.stringify(onlineUrl) },
+  define: { __EXAMPLE__: example, __EXAMPLE_MAIN__: exampleMain, __APP_NAME__: JSON.stringify(appName || 'Simulador 2D'), __OFFLINE__: JSON.stringify(offline), __ONLINE_URL__: JSON.stringify(onlineUrl), __COMPANY__: JSON.stringify(company) },
   build: { outDir: mode === 'single' ? 'dist-single' : 'dist' },
   test: { environment: 'node', include: ['tests/**/*.test.ts'] },
 }));

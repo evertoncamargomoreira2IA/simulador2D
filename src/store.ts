@@ -93,6 +93,8 @@ interface State {
   toggleLayer: (k: keyof Layers) => void;
   updateSettings: (patch: Partial<Model['settings']>) => void;
   setFrozen: (frozen: boolean) => void;
+  /** Mão de obra indireta do roteiro de produção (não zera a simulação). */
+  setStaff: (staff: NonNullable<Model['settings']['staff']>) => void;
   /** Troca partes do modelo (recursos, planta) sem mexer na seleção. */
   patchModel: (patch: Partial<Model>) => void;
   /** Posto de referência do UPH (só visual: não zera a simulação). */
@@ -390,6 +392,10 @@ export const useStore = create<State>((set, get) => {
     setFrozen: (frozen) => {
       history.push(get().model, undefined, Date.now(), frozen ? 'congelar blocos' : 'descongelar blocos');
       set({ model: { ...get().model, settings: { ...get().model.settings, frozen } }, ...labels() });
+    },
+    setStaff: (staff) => {
+      history.push(get().model, undefined, Date.now(), 'roteiro de produção');
+      set({ model: { ...get().model, settings: { ...get().model.settings, staff } }, ...labels() });
     },
     // Só muda a vista dos gráficos: não zera a simulação.
     setChartView: (chartOrder, chartHidden) => {

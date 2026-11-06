@@ -188,3 +188,12 @@ tests        testes (vitest)
 - **Meta UPH zerada** ao abrir um trabalho: o takt vem da operação (gargalo planejado).
 - **Como usar** didático em cada tela nova e moldura azul cintilante.
 - **Como usar → Siglas / Funções**: tabelas com todas as siglas (significado e uso) e as funções da aplicação.
+
+## Roteiro de produção
+
+Botão **📋 Roteiro** na barra: junta a sequência dos postos (do modelo) com a mão de obra direta, a indireta
+(multifuncional, coordenador, reparo, líder, abastecedor, qualidade ou outra função) e o allowance pessoal.
+Allowance = minutos pessoais ÷ (tempo disponível − minutos pessoais) + fadiga. A cobertura mostra quantos
+multifuncionais são precisos para as pausas pessoais (ocupação útil de 85%). O documento sai para impressão/PDF
+(A4 paisagem), HTML ou Excel (abas Roteiro, Indiretos e Allowance). O nome da empresa no cabeçalho vem de
+`private/company.txt` (opcional, fora do git). Cálculo em `src/engine/routing.ts`; documento em `src/io/routingDoc.ts`.

@@ -912,3 +912,15 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .pareto-bar { height: 10px; background: color-mix(in srgb, var(--line) 60%, transparent); border-radius: 3px; overflow: hidden; }
 .pareto-bar i { display: block; height: 100%; background: var(--st-down); border-radius: 3px; }
 .pareto-row:nth-child(n+3) .pareto-bar i { background: var(--st-blocked); }
+
+/* Roteiro de produção */
+.routing h4 { margin: 14px 0 6px; font-size: 13px; }
+.routing .grid-table input, .routing .grid-table select { font: inherit; padding: 3px 5px; }
+.routing .grid-table tr.gar td { background: color-mix(in srgb, orange 12%, transparent); }
+.routing td.bad { color: var(--st-down); font-weight: 700; }
+.routing label { font-size: 12px; display: inline-flex; gap: 6px; align-items: center; margin-right: 10px; }
+.verdict-line { padding: 6px 10px; border-radius: 4px; font-weight: 600; margin: 6px 0; }
+.verdict-line.ok { background: color-mix(in srgb, #2f9e44 18%, transparent); }
+.verdict-line.bad { background: color-mix(in srgb, #e03131 18%, transparent); }
+.routing-frame { width: 100%; height: 68vh; border: 1px solid var(--line); background: #fff; border-radius: 4px; }
+.btn.small { font-size: 11.5px; padding: 3px 8px; }

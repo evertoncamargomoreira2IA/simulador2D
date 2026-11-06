@@ -8,3 +8,4 @@ declare const __EXAMPLE_MAIN__: import('./engine/types').Model | null;
 declare const __OFFLINE__: boolean;
 /** Link do projeto online (private/online-url.txt), usado no botão da versão offline. */
 declare const __ONLINE_URL__: string;
+declare const __COMPANY__: string;

@@ -13,6 +13,7 @@ import { effectiveTakt } from '../engine/balance';
 import { Tutorial, downloadSoeForm, downloadTemplate } from './Tutorial';
 import { Library } from './Library';
 import { PanelModal } from './Panel';
+import { RoutingModal } from './Routing';
 import { StudyBar } from './StudyMode';
 import { RecentSelect, SavedModels, saveAsLocal, saveCurrent } from './SaveDialog';
 
@@ -23,6 +24,7 @@ export function Toolbar() {
   const [help, setHelp] = useState(false);
   const [lib, setLib] = useState(false);
   const [panel, setPanel] = useState(false);
+  const [routing, setRouting] = useState(false);
   const physical = useStore((s) => s.physical);
   const monitoring = useStore((s) => s.model.settings.study === 'monitoramento');
   const showSaved = useStore((s) => s.showSaved);
@@ -229,6 +231,7 @@ export function Toolbar() {
         <button className="btn" onClick={() => st().setAnalysis('ciclo')} title="Cycle × takt, gargalos, spaghetti, custos, energia, carbono, cenários e real × simulado">Análises</button>
         <button className="btn" onClick={() => st().setOpsFor(st().selected[0] ?? '')} title="Operações e atividades de cada posto (estudo por elemento e Yamazumi)">Operações</button>
         <button className="btn" onClick={() => st().setShowMix(true)} title="Mix de modelos: % de cada produto ou sequência fixa, tempo por modelo e troca de modelo">🎨 Mix</button>
+        <button className="btn" onClick={() => setRouting(true)} title="Roteiro de produção: postos, mão de obra direta e indireta, allowance e documento para imprimir/Excel">📋 Roteiro</button>
         <button className="btn" onClick={() => setPanel(true)} title="Painel real × simulado por posto e publicação para leitores (link só leitura)">📊 Painel</button>
         <button className="btn ai" onClick={() => st().setAnalysis('ia')} title="Sugestões de melhoria com IA">✦ IA</button>
         <button className="btn" onClick={() => setHelp(true)} title="Passo a passo, siglas e funções">? Como usar</button>
@@ -237,6 +240,7 @@ export function Toolbar() {
       {help && <Tutorial onClose={() => setHelp(false)} />}
       {lib && <Library onClose={() => setLib(false)} />}
       {panel && <PanelModal onClose={() => setPanel(false)} />}
+      {routing && <RoutingModal onClose={() => setRouting(false)} />}
       {showSaved && <SavedModels onClose={() => st().setShowSaved(false)} />}
       <span className={`live${run === 'running' ? ' on' : ''}`}><i />{run === 'running' ? 'Ao vivo' : run === 'done' ? (sim.clock < model.settings.duration ? 'Parado' : 'Concluído') : run === 'paused' ? 'Pausado' : 'Pronto'}</span>
       <UphField />
