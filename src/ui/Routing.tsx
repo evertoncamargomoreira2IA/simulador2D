@@ -30,6 +30,15 @@ export function RoutingModal({ onClose }: { onClose: () => void }) {
   const close = () => (save(), onClose());
   const name = `roteiro-producao-${safe(model.name)}`;
   // Organizar a sequência: mover um posto, ou reordenar tudo de uma vez.
+  // arrastar com o botão esquerdo: solta o posto em cima de outro e ele fica nessa posição
+  const [drag, setDrag] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const dropOn = (target: string) => {
+    if (!drag || drag === target) return;
+    const ids = r.rows.map((x) => x.id).filter((id) => id !== drag);
+    ids.splice(ids.indexOf(target) + (r.rows.findIndex((x) => x.id === drag) < r.rows.findIndex((x) => x.id === target) ? 1 : 0), 0, drag);
+    put({ ordem: ids });
+  };
   const move = (id: string, d: number) => {
     const ids = r.rows.map((x) => x.id);
     const i = ids.indexOf(id);
@@ -158,14 +167,23 @@ export function RoutingModal({ onClose }: { onClose: () => void }) {
             <button className={`btn small${!staff.ordem ? ' primary' : ''}`} onClick={() => sortBy('fluxo')} title="Linha principal na ordem do fluxo e depois os off-lines">Fluxo (principal → off-lines)</button>
             <button className="btn small" onClick={() => sortBy('setor')} title="Linha principal primeiro; off-lines agrupados por setor e nome">Por setor</button>
             <button className="btn small" onClick={() => sortBy('nome')} title="Ordem alfabética e numérica (Posto 2 antes de Posto 10)">Por nome</button>
-            <span className="muted">ou use ▲ ▼ em cada posto.</span>
+            <span className="muted">ou arraste a linha do posto com o botão esquerdo (⠿), ou use ▲ ▼.</span>
           </div>
           <table className="grid-table">
             <thead><tr><th /><th>Seq.</th><th>Setor</th><th>Posto</th><th>Gigas</th><th>Operadores</th><th>Ciclo (s)</th><th>Carga c/ allowance (s)</th><th>÷ takt</th><th>Ocupação sim.</th></tr></thead>
             <tbody>
               {r.rows.map((x) => (
-                <tr key={x.id} className={x.gargalo ? 'gar' : ''}>
+                <tr
+                  key={x.id}
+                  className={`${x.gargalo ? 'gar' : ''}${drag === x.id ? ' dragging' : ''}${over === x.id && drag && drag !== x.id ? ' drop-here' : ''}`}
+                  draggable
+                  onDragStart={(e) => (setDrag(x.id), (e.dataTransfer.effectAllowed = 'move'), e.dataTransfer.setData('text/plain', x.id))}
+                  onDragOver={(e) => (e.preventDefault(), over !== x.id && setOver(x.id))}
+                  onDrop={(e) => (e.preventDefault(), dropOn(x.id), setDrag(null), setOver(null))}
+                  onDragEnd={() => (setDrag(null), setOver(null))}
+                >
                   <td style={{ whiteSpace: 'nowrap' }}>
+                    <span className="drag-handle" title="Arraste com o botão esquerdo para mudar a posição" aria-hidden>⠿</span>
                     <button className="btn icon small" disabled={x.seq === 1} onClick={() => move(x.id, -1)} aria-label={`Subir ${x.posto}`}>▲</button>
                     <button className="btn icon small" disabled={x.seq === r.rows.length} onClick={() => move(x.id, 1)} aria-label={`Descer ${x.posto}`}>▼</button>
                   </td>
