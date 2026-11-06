@@ -48,6 +48,7 @@ export function App() {
     let last = performance.now();
     let lastKpi = 0;
     let slow = 0;
+    let lastDraw = 0;
     const loop = (t: number) => {
       raf = requestAnimationFrame(loop); // agenda antes: nada abaixo consegue parar o laço
       const st = useStore.getState();
@@ -72,7 +73,13 @@ export function App() {
         if (st.sim.error) st.setMessage(st.sim.error);
         const kpiDue = done || t - lastKpi > 300;
         if (kpiDue) lastKpi = t;
-        st.refresh(kpiDue);
+        // com uma janela aberta por cima (Análises, Roteiro...), a linha atrás só redesenha 2× por segundo:
+        // em linha grande o redesenho a cada quadro deixava a janela travada
+        const covered = !!document.querySelector('.modal-back');
+        if (!covered || done || t - lastDraw > 500) {
+          lastDraw = t;
+          st.refresh(kpiDue);
+        }
       }
       last = t;
     };

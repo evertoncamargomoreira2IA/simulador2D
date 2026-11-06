@@ -58,7 +58,13 @@ export function Yamazumi() {
   const [dragMode, setDragMode] = useState(false);
   const byId = useMemo(() => new Map(model.nodes.map((n) => [n.id, n])), [model]);
   const all = useMemo(() => lineSequence(model, cycleRows(model)), [model]);
-  const [pick, setPick] = useState<Set<string> | null>(null);
+  // linha grande (muitos off-lines): abre só com a linha principal para o gráfico caber na tela
+  const [pick, setPick] = useState<Set<string> | null>(() =>
+    all.length > 30 && all.some((r) => r.offline) ? new Set(all.filter((r) => !r.offline).map((r) => r.id)) : null,
+  );
+  // setores (camadas dos blocos) para filtrar de uma vez
+  const setores = useMemo(() => [...new Set(all.map((r) => byId.get(r.id)?.layer ?? '').filter(Boolean))], [all, byId]);
+  const [fit, setFit] = useState(true);
   const withOps = all.filter((r) => byId.get(r.id)?.operations?.length);
 
   const cols: Col[] = useMemo(
@@ -112,7 +118,17 @@ export function Yamazumi() {
           },
         },
         scales: {
-          x: { stacked: true, ticks: { autoSkip: false, maxRotation: 70, minRotation: 45, font: { size: 10 } }, grid: { display: false } },
+          x: { stacked: true, ticks: {
+              autoSkip: false,
+              maxRotation: 70,
+              minRotation: 45,
+              font: { size: 10 },
+              // nome longo encurtado no eixo (o nome inteiro aparece ao passar o mouse)
+              callback(v) {
+                const l = String(this.getLabelForValue(Number(v)));
+                return l.length > 16 ? `${l.slice(0, 15)}…` : l;
+              },
+            }, grid: { display: false } },
           y: { stacked: true, beginAtZero: true, title: { display: true, text: 'segundos', font: { size: 11 } }, ticks: { font: { size: 10 } } },
         },
       },
@@ -153,7 +169,8 @@ export function Yamazumi() {
   const maxT = Math.max(0, ...cols.map((x) => x.total));
   const va = cols.reduce((s, x) => s + x.segs.filter((g) => g.kind === 'va').reduce((a, g) => a + g.time, 0), 0);
   const tot = cols.reduce((s, x) => s + x.total, 0);
-  const width = Math.max(640, cols.length * 34);
+  // Ajustar à tela: as barras dividem a largura da janela; senão 34 px por posto (rolagem lateral)
+  const width = fit ? '100%' : Math.max(640, cols.length * 34);
   const toggle = (id: string) => {
     const s = new Set(pick ?? all.map((r) => r.id));
     if (s.has(id)) s.delete(id);
@@ -183,6 +200,9 @@ export function Yamazumi() {
         </button>
         <button className="btn primary" onClick={() => useStore.getState().setOpsFor('')}>Editar atividades</button>
         <button className={`btn${onlyOps ? ' on' : ''}`} onClick={() => setOnlyOps(!onlyOps)}>Só postos com atividades</button>
+        <button className={`btn${fit ? ' on' : ''}`} aria-pressed={fit} onClick={() => setFit(!fit)} title="Ajustar à tela: todas as barras cabem na janela. Desligado: barras largas com rolagem para o lado.">
+          ⤢ Ajustar à tela
+        </button>
         <details className="pick">
           <summary className="btn">Postos ({pick ? pick.size : all.length}/{all.length}) ▾</summary>
           <div className="pick-list">
@@ -190,7 +210,17 @@ export function Yamazumi() {
               <button className="btn small" onClick={() => setPick(null)}>Todos</button>
               <button className="btn small" onClick={() => setPick(new Set())}>Nenhum</button>
               <button className="btn small" onClick={() => setPick(new Set(all.filter((r) => !r.offline).map((r) => r.id)))}>Linha principal</button>
+              <button className="btn small" onClick={() => setPick(new Set(all.filter((r) => r.offline).map((r) => r.id)))}>Off-lines</button>
             </div>
+            {setores.length > 1 && (
+              <div className="row-btns">
+                {setores.map((g) => (
+                  <button key={g} className="btn small" onClick={() => setPick(new Set(all.filter((r) => byId.get(r.id)?.layer === g).map((r) => r.id)))}>
+                    {g}
+                  </button>
+                ))}
+              </div>
+            )}
             {all.map((r) => (
               <label key={r.id}>
                 <input type="checkbox" checked={pick ? pick.has(r.id) : true} onChange={() => toggle(r.id)} />
@@ -215,7 +245,7 @@ export function Yamazumi() {
         </div>
       )}
       <div className="chart-scroll section" style={dragMode ? { display: 'none' } : undefined}>
-        <div style={{ width, minWidth: '100%', height: 360 }}>
+        <div style={{ width, minWidth: '100%', height: 'min(360px, 48vh)' }}>
           <canvas ref={ref} role="img" aria-label="Yamazumi: atividades empilhadas por posto com a linha do takt" />
         </div>
       </div>
