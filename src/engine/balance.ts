@@ -31,7 +31,8 @@ export function cycleRows(model: Model, kpi?: LineKpi): CtRow[] {
     rank.set(id, order.length);
     const n = byId.get(id);
     if (n) order.push(n);
-    for (const l of model.links) if (l.from === id && !rank.has(l.to)) queue.push(l.to);
+    // componentes não dão a ordem do fluxo (senão um off-line "puxa" o posto de montagem para antes da linha)
+    for (const l of model.links) if (l.from === id && !rank.has(l.to) && l.role !== 'part') queue.push(l.to);
   }
   for (const n of model.nodes) if (!rank.has(n.id)) (rank.set(n.id, order.length), order.push(n));
 

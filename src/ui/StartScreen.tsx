@@ -38,7 +38,7 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
     const ex = privateExample();
     const main = k === 'main' ? privateExample('main') : null;
     if (main) st().openModel(main, 'Main line com operações e atividades de cada posto. Veja Análises → Yamazumi.');
-    if (k === 'real' && ex) st().openModel(ex, 'Linha real carregada sobre o layout DXF. Clique em ▶ Start.');
+    if (k === 'real' && ex) st().setModel(ex, 'Linha completa carregada sobre o layout: blocos com os nomes do SOE, um por operador. Clique em ▶ Start e depois 📋 Roteiro.');
     if (k === 'lp2') st().openModel(lp2Model(), 'Exemplo LP2 carregado (70 postos, 12 s por posto).');
     if (k === 'elements') st().openModel(elementsModel(), 'Linha exemplo com operações e atividades: estudo por elemento. Veja Análises → Yamazumi.');
     if (k === 'transport') st().openModel(transportModel(), 'Exemplo: dois buffers abastecem o Posto destino; o abastecedor leva 4 peças por viagem. Clique em ▶ Start.');
@@ -86,16 +86,20 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
                 onClose();
               }}
             />
-            {privateExample() && <button className="btn" onClick={() => example('real')}>Exemplo: linha real</button>}
-            {__EXAMPLE_MAIN__ && <button className="btn" onClick={() => example('main')}>Exemplo: main line com atividades</button>}
-            <button className="btn" onClick={() => example('lp2')}>Exemplo: LP2</button>
-            <button className="btn" onClick={() => example('simple')}>Exemplo: linha simples</button>
-            <button className="btn" onClick={() => example('elements')}>Exemplo: linha com atividades (Yamazumi)</button>
-            <button className="btn" onClick={() => example('supply')}>Exemplo: abastecimento e FGI (100 UPH)</button>
-            <button className="btn" onClick={() => example('ten')}>Exemplo: linha de 10 postos (espelho do offline)</button>
-            <button className="btn" onClick={() => example('mix')}>Exemplo: mix de 3 modelos</button>
-            <button className="btn" onClick={() => example('combine')}>Exemplo: combinar peças com AMR</button>
-            <button className="btn" onClick={() => example('transport')}>Exemplo: operador levando peças</button>
+            {privateExample() ? (
+              <button className="btn" onClick={() => example('real')}>Exemplo: linha completa (SOE + layout)</button>
+            ) : (
+              <>
+                <button className="btn" onClick={() => example('lp2')}>Exemplo: LP2</button>
+                <button className="btn" onClick={() => example('simple')}>Exemplo: linha simples</button>
+                <button className="btn" onClick={() => example('elements')}>Exemplo: linha com atividades (Yamazumi)</button>
+                <button className="btn" onClick={() => example('supply')}>Exemplo: abastecimento e FGI (100 UPH)</button>
+                <button className="btn" onClick={() => example('ten')}>Exemplo: linha de 10 postos (espelho do offline)</button>
+                <button className="btn" onClick={() => example('mix')}>Exemplo: mix de 3 modelos</button>
+                <button className="btn" onClick={() => example('combine')}>Exemplo: combinar peças com AMR</button>
+                <button className="btn" onClick={() => example('transport')}>Exemplo: operador levando peças</button>
+              </>
+            )}
           </div>
         </section>
         <section className="section">

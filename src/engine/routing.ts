@@ -42,6 +42,8 @@ export interface StaffConfig {
   elaborado?: string;
   revisado?: string;
   aprovado?: string;
+  /** Sequência do roteiro (ids dos postos). Vazio = linha principal na ordem do fluxo e depois os off-lines. */
+  ordem?: string[];
 }
 
 export const DEFAULT_STAFF: StaffConfig = {
@@ -60,6 +62,8 @@ export interface RoutingRow {
   seq: number;
   id: string;
   posto: string;
+  /** Setor / camada do bloco (ex.: Main Line, Feed Shaft). */
+  setor: string;
   tipo: string;
   /** Gigas / postos em paralelo. */
   gigas: number;
@@ -140,7 +144,10 @@ export function buildRouting(model: Model, staff: StaffConfig = DEFAULT_STAFF, k
   const maxPlan = Math.max(0, ...main.map((r) => r.plan));
   const gargaloId = main.find((r) => r.plan === maxPlan && maxPlan > 0)?.id;
 
-  const rows: RoutingRow[] = ct.map((r, i) => {
+  // Sequência: a escolhida pelo usuário; senão a linha principal primeiro e os off-lines depois.
+  const pos = new Map((staff.ordem ?? []).map((id, i) => [id, i]));
+  const sorted = [...ct.filter((r) => !r.offline), ...ct.filter((r) => r.offline)].sort((a, b) => (pos.get(a.id) ?? 1e9) - (pos.get(b.id) ?? 1e9));
+  const rows: RoutingRow[] = sorted.map((r, i) => {
     const n = byId.get(r.id)!;
     const k = kpi?.nodes.find((x) => x.id === r.id);
     const ops = n.poolId ? 0 : Math.max(0, n.operators);
@@ -149,6 +156,7 @@ export function buildRouting(model: Model, staff: StaffConfig = DEFAULT_STAFF, k
       seq: i + 1,
       id: n.id,
       posto: n.name,
+      setor: n.layer ?? '',
       tipo: n.manual ? 'Manual' : TIPO[n.type] ?? n.type,
       gigas: Math.max(1, n.capacity),
       operadores: ops,

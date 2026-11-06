@@ -29,6 +29,30 @@ export function RoutingModal({ onClose }: { onClose: () => void }) {
   const save = () => useStore.getState().setStaff(staff);
   const close = () => (save(), onClose());
   const name = `roteiro-producao-${safe(model.name)}`;
+  // Organizar a sequência: mover um posto, ou reordenar tudo de uma vez.
+  const move = (id: string, d: number) => {
+    const ids = r.rows.map((x) => x.id);
+    const i = ids.indexOf(id);
+    const j = i + d;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    put({ ordem: ids });
+  };
+  const sortBy = (k: 'fluxo' | 'nome' | 'setor') => {
+    if (k === 'fluxo') return put({ ordem: undefined });
+    const layer = new Map(model.nodes.map((n) => [n.id, n.layer ?? '']));
+    const col = new Intl.Collator('pt-BR', { numeric: true });
+    // por setor: setores na ordem em que aparecem no fluxo (principal primeiro), postos na ordem do fluxo dentro do setor
+    const flow = buildRouting(model, { ...staff, ordem: undefined }).rows;
+    const first = new Map<string, number>();
+    flow.forEach((x, i) => first.has(layer.get(x.id) ?? '') || first.set(layer.get(x.id) ?? '', i));
+    const at = new Map(flow.map((x, i) => [x.id, i]));
+    const rows =
+      k === 'setor'
+        ? [...flow].sort((a, b) => first.get(layer.get(a.id) ?? '')! - first.get(layer.get(b.id) ?? '')! || at.get(a.id)! - at.get(b.id)!)
+        : [...flow].sort((a, b) => col.compare(a.posto, b.posto));
+    put({ ordem: rows.map((x) => x.id) });
+  };
   const print = () => {
     save();
     setView('documento');
@@ -129,12 +153,24 @@ export function RoutingModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <h4>Sequência dos postos (do modelo)</h4>
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+            <span className="muted">Organizar:</span>
+            <button className={`btn small${!staff.ordem ? ' primary' : ''}`} onClick={() => sortBy('fluxo')} title="Linha principal na ordem do fluxo e depois os off-lines">Fluxo (principal → off-lines)</button>
+            <button className="btn small" onClick={() => sortBy('setor')} title="Linha principal primeiro; off-lines agrupados por setor e nome">Por setor</button>
+            <button className="btn small" onClick={() => sortBy('nome')} title="Ordem alfabética e numérica (Posto 2 antes de Posto 10)">Por nome</button>
+            <span className="muted">ou use ▲ ▼ em cada posto.</span>
+          </div>
           <table className="grid-table">
-            <thead><tr><th>Seq.</th><th>Posto</th><th>Gigas</th><th>Operadores</th><th>Ciclo (s)</th><th>Carga c/ allowance (s)</th><th>÷ takt</th><th>Ocupação sim.</th></tr></thead>
+            <thead><tr><th /><th>Seq.</th><th>Setor</th><th>Posto</th><th>Gigas</th><th>Operadores</th><th>Ciclo (s)</th><th>Carga c/ allowance (s)</th><th>÷ takt</th><th>Ocupação sim.</th></tr></thead>
             <tbody>
               {r.rows.map((x) => (
                 <tr key={x.id} className={x.gargalo ? 'gar' : ''}>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button className="btn icon small" disabled={x.seq === 1} onClick={() => move(x.id, -1)} aria-label={`Subir ${x.posto}`}>▲</button>
+                    <button className="btn icon small" disabled={x.seq === r.rows.length} onClick={() => move(x.id, 1)} aria-label={`Descer ${x.posto}`}>▼</button>
+                  </td>
                   <td>{x.seq}</td>
+                  <td className="muted">{x.setor}</td>
                   <td>{x.posto}{x.gargalo ? ' 🔶' : ''}{x.offline ? ' (off-line)' : ''}</td>
                   <td>{x.gigas}</td>
                   <td>{x.equipe ?? x.operadores}</td>

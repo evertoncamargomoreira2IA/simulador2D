@@ -103,7 +103,7 @@ export function Toolbar() {
           value=""
           onChange={(e) => {
             const ex = privateExample();
-            if (e.target.value === 'real' && ex) st().openModel(ex, 'Linha real carregada sobre o layout DXF.');
+            if (e.target.value === 'real' && ex) st().setModel(ex, 'Linha completa carregada sobre o layout: blocos com os nomes do SOE, um por operador. Clique em ▶ Start e depois 📋 Roteiro.');
             const main = e.target.value === 'main' ? privateExample('main') : null;
             if (main) st().openModel(main, 'Main line com operações e atividades de cada posto. Veja Análises → Yamazumi.');
             if (e.target.value === 'lp2') st().openModel(lp2Model(), 'Exemplo LP2 carregado (70 postos, 12 s por posto).');
@@ -117,16 +117,22 @@ export function Toolbar() {
           }}
         >
           <option value="" disabled>Exemplos…</option>
-          {__EXAMPLE__ && <option value="real">Linha real (layout DXF)</option>}
-          {__EXAMPLE_MAIN__ && <option value="main">Linha real: main line com atividades</option>}
-          <option value="supply">Abastecimento e FGI (100 UPH)</option>
-          <option value="mix">Mix de 3 modelos (A, B, C)</option>
-          <option value="lp2">Linha LP2 (70 postos)</option>
-          <option value="ten">Linha de 10 postos (espelho do offline)</option>
-          <option value="simple">Linha simples</option>
-          <option value="elements">Linha com atividades (Yamazumi)</option>
-          <option value="combine">Combinar peças com AMR</option>
-          <option value="transport">Operador levando peças</option>
+          {__EXAMPLE__ ? (
+            // com a linha real embutida, ela é o único exemplo (linha completa do SOE no layout)
+            <option value="real">Linha completa (SOE + layout)</option>
+          ) : (
+            <>
+            {__EXAMPLE_MAIN__ && <option value="main">Linha real: main line com atividades</option>}
+            <option value="supply">Abastecimento e FGI (100 UPH)</option>
+            <option value="mix">Mix de 3 modelos (A, B, C)</option>
+            <option value="lp2">Linha LP2 (70 postos)</option>
+            <option value="ten">Linha de 10 postos (espelho do offline)</option>
+            <option value="simple">Linha simples</option>
+            <option value="elements">Linha com atividades (Yamazumi)</option>
+            <option value="combine">Combinar peças com AMR</option>
+            <option value="transport">Operador levando peças</option>
+            </>
+          )}
         </select>
         <button className="btn icon" disabled={!undoLabel} onClick={() => st().undo()} title={undoLabel ? `Desfazer ${undoLabel} (Ctrl+Z)` : 'Nada para desfazer'} aria-label="Desfazer">↶</button>
         <button className="btn icon" disabled={!redoLabel} onClick={() => st().redo()} title={redoLabel ? `Refazer ${redoLabel} (Ctrl+Y)` : 'Nada para refazer'} aria-label="Refazer">↷</button>

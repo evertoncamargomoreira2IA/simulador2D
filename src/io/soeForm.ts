@@ -4,6 +4,7 @@
 import * as XLSX from 'xlsx';
 import type { ActivityKind, Model, Operation } from '../engine/types';
 import { elementsModel } from '../model/builder';
+import { appendLineSheets } from './lineForm';
 
 export interface FormStation {
   name: string;
@@ -79,7 +80,13 @@ export function soeFormWorkbook(stations: FormStation[], opts: { line?: string; 
   XLSX.utils.book_append_sheet(wb, ws, 'SOE');
   XLSX.utils.book_append_sheet(wb, how, 'Como preencher');
   XLSX.utils.book_append_sheet(wb, tipos, 'Tipos');
-  return wb;
+  // abas do roteiro: postos (gigas, operadores, destino), indiretos e configuração do turno
+  const sector = opts.sector ?? 'MONTAGEM';
+  return appendLineSheets(
+    wb,
+    stations.map((s) => ({ setor: sector, posto: s.name, tipo: 'manual', gigas: 1, operadores: 1, ligacao: 'fluxo', tempo: 0, operations: s.operations })),
+    { line: opts.line, takt: opts.takt },
+  );
 }
 
 /** Formulário a partir do modelo aberto (postos com atividades) ou, sem atividades, com o exemplo genérico. */

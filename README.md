@@ -197,3 +197,12 @@ Allowance = minutos pessoais ÷ (tempo disponível − minutos pessoais) + fadig
 multifuncionais são precisos para as pausas pessoais (ocupação útil de 85%). O documento sai para impressão/PDF
 (A4 paisagem), HTML ou Excel (abas Roteiro, Indiretos e Allowance). O nome da empresa no cabeçalho vem de
 `private/company.txt` (opcional, fora do git). Cálculo em `src/engine/routing.ts`; documento em `src/io/routingDoc.ts`.
+
+### Formulário da linha completa
+
+O formulário (Exportar → Formulário Yamazumi) agora tem, além das abas de SOE, as abas **Postos** (setor, tipo, gigas,
+operadores, para onde o posto manda e se é fluxo ou componente, tempo de teste, reprova e reparo), **Indiretos** e
+**Config** (takt, turno, pausas, minutos pessoais, fadiga, turnos por dia). Pode ter uma aba de SOE por setor.
+No Importar aparece **📚 Linha completa (todas as abas)**: monta a linha inteira de uma vez, com um bloco por operador nos
+postos manuais (ex.: "FS2 · Op 1" e "FS2 · Op 2") e, com um layout aberto, cada bloco de mesmo nome fica na posição do desenho.
+O 📋 Roteiro tem a opção **Organizar** (fluxo, por setor, por nome ou ▲ ▼ em cada posto). Código em `src/io/lineForm.ts`.

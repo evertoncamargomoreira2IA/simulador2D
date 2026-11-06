@@ -31,7 +31,7 @@ export function routingHtml(r: Routing, staff: StaffConfig, meta: DocMeta): stri
     .map((x) => {
       const st = status(x.ocupacaoAllow);
       return `<tr class="${x.gargalo ? 'gar' : ''}">
-<td class="c">${x.seq}</td><td>${esc(x.posto)}${x.gargalo ? ' <span class="tag">GARGALO</span>' : ''}${x.offline ? ' <span class="tag off">OFF-LINE</span>' : ''}</td>
+<td class="c">${x.seq}</td><td>${esc(x.setor)}</td><td>${esc(x.posto)}${x.gargalo ? ' <span class="tag">GARGALO</span>' : ''}${x.offline ? ' <span class="tag off">OFF-LINE</span>' : ''}</td>
 <td>${esc(x.tipo)}</td><td class="c">${x.gigas}</td><td class="c">${x.equipe ? `<small>${esc(x.equipe)}</small>` : x.operadores}</td>
 <td class="n">${n1(x.ciclo)}</td><td class="n">${n1(x.carga)}</td><td class="n">${n1(x.cargaAllow)}</td>
 <td class="n">${pct(x.ocupacaoAllow)}</td><td class="n">${n0(x.uph)}</td>
@@ -93,9 +93,9 @@ ${kpi('UPH planejado', n0(r.uphPlan))}${kpi('UPH simulado', r.uphSim !== undefin
 ${kpi('UPPH', n1(r.uphPorPessoa), 'peças/h por pessoa')}${kpi('Peças/turno', n0(r.pecasTurno))}${kpi('Allowance', pct(r.allowance), 'pessoal + fadiga')}
 </div>
 <h3>1. SEQUÊNCIA DE OPERAÇÕES E MÃO DE OBRA DIRETA</h3>
-<table class="grid"><thead><tr><th>Seq.</th><th>Posto</th><th>Tipo</th><th>Gigas</th><th>Operadores</th><th>Ciclo (s)</th><th>Carga/peça (s)</th><th>Carga c/ allowance (s)</th><th>Carga ÷ takt</th><th>Cap. (UPH)</th><th>Ocupação simulada</th><th>Situação</th></tr></thead>
+<table class="grid"><thead><tr><th>Seq.</th><th>Setor</th><th>Posto</th><th>Tipo</th><th>Gigas</th><th>Operadores</th><th>Ciclo (s)</th><th>Carga/peça (s)</th><th>Carga c/ allowance (s)</th><th>Carga ÷ takt</th><th>Cap. (UPH)</th><th>Ocupação simulada</th><th>Situação</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr><td colspan="4">Total mão de obra direta</td><td class="c">${n0(r.diretos)}</td><td colspan="7"></td></tr></tfoot></table>
+<tfoot><tr><td colspan="5">Total mão de obra direta</td><td class="c">${n0(r.diretos)}</td><td colspan="7"></td></tr></tfoot></table>
 <div class="two">
 <div><h3>2. MÃO DE OBRA INDIRETA E DE APOIO</h3>
 <table class="grid"><thead><tr><th>Grupo</th><th>Função</th><th>Qtd.</th><th>Responsabilidade</th></tr></thead><tbody>${ind || '<tr><td colspan="4" class="c">Nenhuma função indireta informada</td></tr>'}</tbody>
@@ -128,15 +128,15 @@ export function routingXlsx(r: Routing, staff: StaffConfig, meta: DocMeta): Arra
     ['Linha', r.linha, 'Produto', staff.produto ?? '', 'Doc. nº', staff.docNo ?? '', 'Revisão', staff.rev ?? '00', 'Data', meta.data],
     ['Takt (s)', +r.takt.toFixed(2), 'Disponível (min)', Math.round(r.disponivelMin), 'Gargalo', r.gargalo ?? '', 'HC total', r.hc, 'UPH', Math.round(r.uphSim ?? r.uphPlan)],
     [],
-    ['Seq.', 'Posto', 'Tipo', 'Gigas', 'Operadores', 'Equipe', 'Ciclo (s)', 'Carga/peça (s)', 'Carga c/ allowance (s)', 'Carga ÷ takt', 'Cap. (UPH)', 'Ocupação simulada', 'Situação'],
+    ['Seq.', 'Setor', 'Posto', 'Tipo', 'Gigas', 'Operadores', 'Equipe', 'Ciclo (s)', 'Carga/peça (s)', 'Carga c/ allowance (s)', 'Carga ÷ takt', 'Cap. (UPH)', 'Ocupação simulada', 'Situação'],
     ...r.rows.map((x) => [
-      x.seq, x.posto + (x.gargalo ? ' (gargalo)' : ''), x.tipo, x.gigas, x.operadores, x.equipe ?? '', +x.ciclo.toFixed(2), +x.carga.toFixed(2), +x.cargaAllow.toFixed(2),
+      x.seq, x.setor, x.posto + (x.gargalo ? ' (gargalo)' : ''), x.tipo, x.gigas, x.operadores, x.equipe ?? '', +x.ciclo.toFixed(2), +x.carga.toFixed(2), +x.cargaAllow.toFixed(2),
       +x.ocupacaoAllow.toFixed(3), Math.round(x.uph), x.utilSim !== undefined ? +x.utilSim.toFixed(3) : '', status(x.ocupacaoAllow).txt,
     ]),
-    ['', 'Total direto', '', '', r.diretos],
+    ['', '', 'Total direto', '', '', r.diretos],
   ];
   const ws = XLSX.utils.aoa_to_sheet(head);
-  ws['!cols'] = [6, 26, 14, 7, 10, 18, 10, 13, 18, 11, 10, 15, 13].map((w) => ({ wch: w }));
+  ws['!cols'] = [6, 14, 26, 14, 7, 10, 18, 10, 13, 18, 11, 10, 15, 13].map((w) => ({ wch: w }));
   XLSX.utils.book_append_sheet(wb, ws, 'Roteiro');
   const ind = XLSX.utils.aoa_to_sheet([
     ['Grupo', 'Função', 'Qtd.', 'Responsabilidade'],

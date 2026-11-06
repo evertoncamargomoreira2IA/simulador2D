@@ -33,6 +33,7 @@ export const SIGLAS: [string, string, string][] = [
   ['Fila de entrada', 'Buffer do posto (queueCap)', 'Quantas peças esperam antes do posto. Dimensione para cobrir variação e paradas (≥ 2, ou ≈ tempo de reparo ÷ takt) e confirme simulando.'],
   ['Peças por viagem', 'Trip quantity', 'No vínculo de transporte: o operador/AGV/AMR espera juntar N peças prontas e leva todas de uma vez. Menos viagens, mais WIP.'],
   ['Combinar peças', 'Kit / integração', 'Posto recebe peças de vários postos: uma entrada Principal vira o produto e as Componentes são consumidas na quantidade por produto.'],
+  ['Linha completa (formulário)', 'Importar → 📚 Linha completa (todas as abas)', 'Várias abas de SOE + abas Postos, Indiretos e Config: monta a linha inteira, um bloco por operador, no layout aberto.'],
   ['Roteiro de produção', 'Roteiro de produção (📋 Roteiro)', 'Sequência dos postos com mão de obra direta, indireta (multifuncional, coordenador, reparo) e allowance pessoal; exporta para impressão/PDF, HTML e Excel.'],
   ['Allowance', 'Folga (fadiga e necessidades)', 'Acréscimo sobre o tempo observado no SOE (ex.: +10%).'],
   ['DXF', 'Drawing exchange format (desenho CAD)', 'Planta da fábrica usada como fundo do layout, em escala real.'],
