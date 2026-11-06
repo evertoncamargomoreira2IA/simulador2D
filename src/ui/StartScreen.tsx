@@ -87,7 +87,11 @@ export function StartScreen({ onClose }: { onClose: () => void }) {
               }}
             />
             {privateExample() ? (
-              <button className="btn" onClick={() => example('real')}>Exemplo: linha completa (SOE + layout)</button>
+              <>
+                <button className="btn" onClick={() => example('real')}>Exemplo: linha completa (SOE + layout)</button>
+                <button className="btn" onClick={() => example('combine')}>Exemplo: AMR e pessoas transportando</button>
+                <button className="btn" onClick={() => example('supply')}>Exemplo: ponta a ponta (WH → linha → expedição)</button>
+              </>
             ) : (
               <>
                 <button className="btn" onClick={() => example('lp2')}>Exemplo: LP2</button>

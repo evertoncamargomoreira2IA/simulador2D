@@ -119,7 +119,11 @@ export function Toolbar() {
           <option value="" disabled>Exemplos…</option>
           {__EXAMPLE__ ? (
             // com a linha real embutida, ela é o único exemplo (linha completa do SOE no layout)
-            <option value="real">Linha completa (SOE + layout)</option>
+            <>
+              <option value="real">Linha completa (SOE + layout)</option>
+              <option value="combine">AMR e pessoas transportando</option>
+              <option value="supply">Ponta a ponta: WH → linha → expedição</option>
+            </>
           ) : (
             <>
             {__EXAMPLE_MAIN__ && <option value="main">Linha real: main line com atividades</option>}
